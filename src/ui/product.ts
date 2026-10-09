@@ -104,7 +104,7 @@ export const POSITIONS: Position[] = [
     target: 30,
     actual: 33,
     apy: 7.1,
-    color: "#3b82f6",
+    color: "#1249ed",
     utility: "Exit depth",
   },
   {
@@ -113,7 +113,7 @@ export const POSITIONS: Position[] = [
     target: 40,
     actual: 36,
     apy: 5.2,
-    color: "#2ecc71",
+    color: "#ffd523",
     utility: "Staking yield",
   },
   {
@@ -122,7 +122,7 @@ export const POSITIONS: Position[] = [
     target: 20,
     actual: 22,
     apy: 8.9,
-    color: "#9945ff",
+    color: "#8d25d9",
     utility: "Boost yield",
   },
   {

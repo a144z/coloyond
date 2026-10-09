@@ -13,7 +13,7 @@ export async function fetchDebridgeRoute(opts: LiveQuoteOptions): Promise<Route 
     dstChainTokenOutAmount: "auto",
     prependOperatingExpense: "true",
   });
-  const res = await fetch(`${BASE}?${params.toString()}`);
+  const res = await fetch(`${BASE}?${params.toString()}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) {
     if (res.status >= 400 && res.status < 500) return null;
     throw new Error(`deBridge ${res.status}: ${(await res.text()).slice(0, 160)}`);
