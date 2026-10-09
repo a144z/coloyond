@@ -1,537 +1,431 @@
-import { useState } from "react";
-import { CHAINS } from "./data.js";
-import { symbolsOn } from "../tokenmap.js";
-import { Route } from "../types.js";
-import { fetchRoutes } from "../routeService.js";
+import { useRef, useState } from "react";
 import {
-  ECOSYSTEM,
-  FEATURE_FARM,
-  FARMS,
-  GAMBLE_OUTCOMES,
-  GambleOutcome,
-  HOOK_CARDS,
-  PILLARS,
-  POSITIONS,
-  QUESTS,
-  SAMPLE_ROUTES,
-  SHIELD_MODES,
+  CAPTIONS,
+  EXPRESSION,
+  FOOTER_LINK,
+  FOOTER_NOTE,
+  FOOTNOTES,
+  INTRO_COPY,
+  INTRO_TITLE,
+  NOTICE,
+  PREVIEW_LABEL,
+  REMIX,
+  SCREENS,
+  SHARE_DIALOG,
+  SHARE_TARGET,
+  STATUS_GLYPHS,
+  STATUS_TIME,
   STRATEGY,
-  TABS,
-  WALLET,
-  ProductTab,
-  ShieldMode,
-  driftLabel,
+  STUDY_LABELS,
+  STUDY_SHAPES,
+  TOP_LINKS,
 } from "./product.js";
 
-const SHIELD_CHAINS = CHAINS.filter((c) => c.id !== 0);
+const INK = "#171715";
+const BLUE = "#1249ED";
+const YELLOW = "#FFD523";
+const VIOLET = "#8D25D9";
+const CORAL = "#FF513B";
+
+const UNSAVED_LABEL = "Unsaved expression";
+
+function art(kind: number, suffix: string, remix = false): string {
+  const rotation = remix ? 9 : 0;
+  const defs = `<defs>
+    <linearGradient id="warm-${suffix}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${CORAL}"/><stop offset="1" stop-color="${YELLOW}"/></linearGradient>
+    <linearGradient id="cool-${suffix}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${BLUE}"/><stop offset="1" stop-color="${VIOLET}"/></linearGradient>
+    <linearGradient id="ink-${suffix}" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#C3BDAD"/><stop offset="1" stop-color="${INK}"/></linearGradient>
+    <filter id="grain-${suffix}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" seed="17"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".10"/></feComponentTransfer></filter>
+  </defs>`;
+  let geometry = "";
+  if (kind === 0) {
+    geometry = `<g transform="rotate(${rotation} 180 170)">
+      <path d="M48 120 180 48 250 88 119 162Z" fill="url(#ink-${suffix})"/>
+      <path d="M48 120 119 162 119 250 48 209Z" fill="#999487"/>
+      <path d="M119 162 180 129 180 216 119 250Z" fill="${INK}"/>
+      <path d="M180 48 250 88 250 165 180 129Z" fill="url(#warm-${suffix})"/>
+      <path d="M180 129 250 165 180 216Z" fill="url(#cool-${suffix})"/>
+      <path d="M157 207 360 115 360 172Z" fill="${CORAL}"/>
+      <path d="M157 207 360 172 360 213Z" fill="${BLUE}"/>
+      <path d="M157 207 360 213 360 262Z" fill="${YELLOW}"/>
+      <path d="M157 207 360 262 360 318Z" fill="${VIOLET}"/>
+      <path d="M119 162 257 242 257 298 119 218Z" fill="url(#ink-${suffix})"/>
+      <path d="M48 209 119 218 257 298 185 315Z" fill="${INK}"/>
+    </g>`;
+  } else if (kind === 1) {
+    geometry = `<g transform="rotate(${rotation - 16} 180 180)">
+      <circle cx="176" cy="176" r="98" fill="none" stroke="${INK}" stroke-width="39" stroke-dasharray="440 176" transform="rotate(34 176 176)"/>
+      <path d="M164 52 259 84 236 153 142 120Z" fill="url(#cool-${suffix})"/>
+      <path d="M150 167 340 98 324 151 185 188Z" fill="${YELLOW}"/>
+      <path d="M164 201 336 194 306 238 165 222Z" fill="${CORAL}"/>
+      <path d="M151 235 270 283 234 312 139 255Z" fill="${VIOLET}"/>
+      <circle cx="176" cy="176" r="46" fill="#F7F2E5"/>
+    </g>`;
+  } else {
+    geometry = `<g transform="rotate(${rotation} 180 180)">
+      <path d="M43 85 158 43 158 245 43 286Z" fill="${INK}"/>
+      <path d="M43 85 102 113 216 72 158 43Z" fill="url(#ink-${suffix})"/>
+      <path d="M102 113 216 72 216 175 102 216Z" fill="url(#cool-${suffix})"/>
+      <path d="M178 212 300 169 300 261 178 307Z" fill="url(#warm-${suffix})"/>
+      <path d="M178 212 208 227 329 184 300 169Z" fill="${YELLOW}"/>
+      <path d="M300 169 329 184 329 277 300 261Z" fill="${INK}"/>
+      <path d="M32 315 144 275 157 283 47 324Z" fill="${VIOLET}"/>
+    </g>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" role="img" aria-label="${STUDY_SHAPES[kind]}">${defs}${geometry}<rect width="360" height="360" filter="url(#grain-${suffix})" opacity=".7"/></svg>`;
+}
+
+interface ShareCardProps {
+  study: number;
+  caption: string;
+  captionVisible: boolean;
+  artSuffix: string;
+}
+
+function ShareCard({ study, caption, captionVisible, artSuffix }: ShareCardProps) {
+  return (
+    <div className="share-card">
+      <div className="art" dangerouslySetInnerHTML={{ __html: art(study, artSuffix) }} />
+      <div className={captionVisible ? "caption" : "caption hidden"}>{caption}</div>
+      <div className="card-foot">
+        <div className="card-foot-top">
+          <span className="id">{EXPRESSION.id}</span>
+          <span className="card-brand">coloyond</span>
+        </div>
+        <div className="card-facts">
+          {EXPRESSION.facts[0]}
+          <br />
+          {EXPRESSION.facts[1]}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ColoyondApp() {
-  const [tab, setTab] = useState<ProductTab>("Portfolio");
-  const [fromChain, setFromChain] = useState(42161);
-  const [toChain, setToChain] = useState(10);
-  const [fromToken, setFromToken] = useState("ETH");
-  const [toToken, setToToken] = useState("USDC");
-  const [amount, setAmount] = useState("1.0");
-  const [slippage, setSlippage] = useState(0.5);
-  const [mode, setMode] = useState<ShieldMode>(SHIELD_MODES[0]);
-  const [routes, setRoutes] = useState<Route[]>(SAMPLE_ROUTES);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [gamble, setGamble] = useState<GambleOutcome | null>(null);
-  const [done, setDone] = useState<Set<string>>(new Set());
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const [study, setStudy] = useState(0);
+  const [caption, setCaption] = useState(0);
+  const [captionVisible, setCaptionVisible] = useState(true);
+  const [allocation, setAllocation] = useState(70);
+  const [remixVariation, setRemixVariation] = useState(1);
+  const [saved, setSaved] = useState({
+    study: 0,
+    caption: CAPTIONS[0],
+    captionVisible: true,
+  });
+  const [notice, setNotice] = useState("");
 
-  const fromOptions = symbolsOn(fromChain);
-  const toOptions = symbolsOn(toChain);
-  const bestRoutes = [...routes].sort((a, b) => b.outputAmountNum - a.outputAmountNum).slice(0, 3);
-  const drift = POSITIONS.reduce((sum, p) => sum + Math.abs(p.target - p.actual), 0);
-  const health = Math.max(0, 100 - drift * 4);
-  const completed = QUESTS.filter((q) => done.has(q.id));
-  const questXp = completed.reduce((sum, q) => sum + q.reward, 0);
-  const rank = health > 80 ? "Builder" : health > 65 ? "Steward" : "Watch";
-  const numAmount = parseFloat(amount) || 0;
-  const canPrepare = numAmount > 0 && fromOptions.length > 0 && toOptions.length > 0;
+  const currentCaption = CAPTIONS[caption];
+  const dirty =
+    study !== saved.study ||
+    currentCaption !== saved.caption ||
+    captionVisible !== saved.captionVisible;
+  const remixStudy = (REMIX.parentStudy + remixVariation) % 3;
 
-  const updateFromChain = (chain: number) => {
-    const opts = symbolsOn(chain);
-    setFromChain(chain);
-    setFromToken(opts.includes(fromToken) ? fromToken : (opts[0] ?? "ETH"));
+  const nextStudy = () => {
+    setStudy((v) => (v + 1) % 3);
+    setNotice(NOTICE.study);
   };
 
-  const updateToChain = (chain: number) => {
-    const opts = symbolsOn(chain);
-    setToChain(chain);
-    setToToken(opts.includes(toToken) ? toToken : (opts[0] ?? "ETH"));
+  const nextCaption = () => setCaption((v) => (v + 1) % CAPTIONS.length);
+
+  const previewRemix = () => {
+    setRemixVariation((v) => (v === 1 ? 2 : 1));
+    setNotice(NOTICE.remix);
   };
 
-  const prepareShieldRoute = async () => {
-    if (!canPrepare) {
-      setError("Enter an amount and select tokens supported on both paths.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchRoutes({
-        fromChain,
-        toChain,
-        fromToken,
-        toToken,
-        amount,
-        slippage,
-      });
-      if (result.routes.length > 0) {
-        setRoutes(result.routes);
-      } else {
-        setError(result.error ?? "No provider route found; sample routes remain below.");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+  const saveExpression = () => {
+    setSaved({ study, caption: currentCaption, captionVisible });
+    setNotice(NOTICE.saved);
   };
 
-  const toggleQuest = (id: string) => {
-    const next = new Set(done);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    setDone(next);
-  };
-
-  const rollGamble = () => {
-    const roll = Math.random();
-    const outcome =
-      roll < 0.38
-        ? GAMBLE_OUTCOMES[0]
-        : roll < 0.62
-          ? GAMBLE_OUTCOMES[1]
-          : roll < 0.82
-            ? GAMBLE_OUTCOMES[2]
-            : GAMBLE_OUTCOMES[3];
-    setGamble(outcome);
-  };
+  const share = () => dialogRef.current?.showModal();
 
   return (
-    <div className="cb-app">
-      <header className="cb-header">
-        <div className="cb-brand">
-          <span className="cb-mark">◆</span>
+    <>
+      <main className="board">
+        <div className="intro">
           <div>
-            <div className="cb-title">coloyond</div>
-            <div className="cb-subtitle">
-              Managed strategy · TradeFi liquidity · shielded rebalancing
-            </div>
+            <p className="eyebrow">coloyond / Strategy expressions / Design 02</p>
+            <h1>
+              {INTRO_TITLE[0]}
+              <br />
+              {INTRO_TITLE[1]}
+            </h1>
           </div>
-        </div>
-        <div className="cb-wallet">
-          <div className="cb-wallet-label">{WALLET.network}</div>
-          <div className="cb-wallet-usd">{WALLET.usd}</div>
-        </div>
-      </header>
-
-      <section className="cb-hero">
-        <div className="cb-hero-copy">
-          <h1>{STRATEGY.name}</h1>
           <p>
-            {STRATEGY.kind} · {STRATEGY.network}
+            {INTRO_COPY[0]}
+            <br />
+            <br />
+            {INTRO_COPY[1]}
           </p>
         </div>
-        <div className="cb-status">
-          <span className="cb-status-active">{STRATEGY.status}</span>
-          <span>Updated {STRATEGY.freshness}</span>
-        </div>
-        <div className="cb-health">
-          <div className="cb-health-track">
-            <div className="cb-health-fill" style={{ width: `${health}%` }} />
-          </div>
-          <div className="cb-health-label">
-            {driftLabel(drift)} · drift {drift.toFixed(1)}%
-          </div>
-        </div>
-        <div className="cb-stats">
-          <div className="cb-stat">
-            <span>Protocol NAV</span>
-            <b>{STRATEGY.nav}</b>
-          </div>
-          <div className="cb-stat">
-            <span>Market price</span>
-            <b>{STRATEGY.market}</b>
-          </div>
-          <div className="cb-stat">
-            <span>Executable quote</span>
-            <b>{STRATEGY.quote}</b>
-          </div>
-          <div className="cb-stat">
-            <span>Share token</span>
-            <b>{STRATEGY.share}</b>
-          </div>
-        </div>
-      </section>
 
-      <nav className="cb-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            className={`cb-tab ${tab === t ? "active" : ""}`}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </nav>
+        <div className="controls" aria-label="Product preview controls">
+          <label>
+            Visual study
+            <select
+              value={study}
+              onChange={(e) => setStudy(Number(e.target.value))}
+            >
+              {STUDY_LABELS.map((name, i) => (
+                <option key={name} value={i}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Caption
+            <select
+              value={currentCaption}
+              onChange={(e) => setCaption(CAPTIONS.indexOf(e.target.value))}
+            >
+              {CAPTIONS.map((text) => (
+                <option key={text} value={text}>
+                  {text}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={captionVisible}
+              onChange={(e) => setCaptionVisible(e.target.checked)}
+            />
+            Include caption
+          </label>
+          <span className="preview-label">{PREVIEW_LABEL}</span>
+        </div>
 
-      <main className="cb-main">
-        {tab === "Portfolio" && (
-          <section className="cb-panel">
-            <div className="cb-section-head">
-              <h2>Rebalancing portfolio</h2>
-              <p>
-                Repair drift while preserving real utility: share value, exit depth,
-                protocol-managed custody, and visible yield.
-              </p>
-            </div>
-            <div className="cb-alloc">
-              {POSITIONS.map((p) => {
-                const delta = p.actual - p.target;
-                const deltaClass = delta === 0 ? "good" : Math.abs(delta) <= 2 ? "watch" : "risk";
-                return (
-                  <article className="cb-alloc-row" key={p.symbol}>
-                    <div className="cb-alloc-head">
-                      <span className="cb-dot" style={{ background: p.color }} />
-                      <div>
-                        <div className="cb-token">{p.symbol}</div>
-                        <div className="cb-subtle">{p.name}</div>
-                      </div>
-                      <div className="cb-delta">
-                        <b>{p.actual}%</b>
-                        <span className={deltaClass}>
-                          {delta > 0 ? "+" : ""}
-                          {delta}%
-                        </span>
-                      </div>
+        <div className="screens">
+          <section aria-label="Select a strategy">
+            <p className="screen-label">
+              <span>{SCREENS[0][0]}</span> {SCREENS[0][1]}
+            </p>
+            <div className="phone">
+              <div className="status">
+                <span>{STATUS_TIME}</span>
+                <span aria-hidden="true">{STATUS_GLYPHS}</span>
+              </div>
+              <header className="topbar">
+                <span className="brand">coloyond</span>
+                <span className="top-link">{TOP_LINKS.create}</span>
+              </header>
+              <div className="body">
+                <div
+                  className="art"
+                  dangerouslySetInnerHTML={{ __html: art(study, "create") }}
+                />
+                <div className="id-row">
+                  <span className="id">{STRATEGY.id}</span>
+                  <span className="quiet">{STRATEGY.network}</span>
+                </div>
+                <div className="label">{STRATEGY.label}</div>
+                <div className="funding">
+                  <span>{STRATEGY.funding.left}</span>
+                  <span className="quiet">{STRATEGY.funding.right}</span>
+                </div>
+                <div className="allocations">
+                  {STRATEGY.targets.map((t) => (
+                    <div className="allocation" key={t.asset}>
+                      <span className="asset">
+                        <i className={`dot${t.dotClass ? ` ${t.dotClass}` : ""}`} />
+                        {t.asset}
+                      </span>
+                      <strong>{t.pct}%</strong>
                     </div>
-                    <div className="cb-bars">
-                      <div className="cb-bar">
-                        <span style={{ width: `${p.target}%` }} />
-                        <em>target</em>
-                      </div>
-                      <div className="cb-bar actual">
-                        <span style={{ width: `${p.actual}%` }} />
-                        <em>actual</em>
-                      </div>
-                    </div>
-                    <div className="cb-meta-row">
-                      <span>{p.utility}</span>
-                      <span>{p.apy}% APY</span>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-            <div className="cb-action-row">
-              <button onClick={() => setTab("Shield")}>Prepare route</button>
-              <button onClick={() => setTab("Yield")}>Open farms</button>
-              <button onClick={() => setTab("Game")}>Check game</button>
+                  ))}
+                  <div className="bar">
+                    <span style={{ width: `${STRATEGY.bar.bluePct}%` }} />
+                    <span />
+                  </div>
+                </div>
+                <details className="details">
+                  <summary>{STRATEGY.details.summary}</summary>
+                  <p>{STRATEGY.details.body}</p>
+                </details>
+                <button className="button" onClick={nextStudy}>
+                  {STRATEGY.generate}
+                </button>
+                <p className="micro">
+                  {STRATEGY.micro[0]}
+                  <br />
+                  {STRATEGY.micro[1]}
+                </p>
+              </div>
             </div>
           </section>
-        )}
 
-        {tab === "Shield" && (
-          <section className="cb-panel">
-            <div className="cb-section-head">
-              <h2>Shield transaction prep</h2>
-              <p>Quote first, route only after the hook and risk checks pass.</p>
-            </div>
-            <div className="cb-shield-grid">
-              <div className="cb-form-grid">
-                <label className="cb-field">
-                  <span>From chain</span>
-                  <select value={fromChain} onChange={(e) => updateFromChain(Number(e.target.value))}>
-                    {SHIELD_CHAINS.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="cb-field">
-                  <span>From token</span>
-                  <select
-                    value={fromToken}
-                    onChange={(e) => setFromToken(e.target.value)}
-                    disabled={fromOptions.length === 0}
-                  >
-                    {fromOptions.map((token) => (
-                      <option key={token} value={token}>
-                        {token}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="cb-field">
-                  <span>Amount</span>
-                  <input
-                    className="cb-amount"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                    placeholder="0.0"
-                  />
-                </label>
-                <label className="cb-field">
-                  <span>To chain</span>
-                  <select value={toChain} onChange={(e) => updateToChain(Number(e.target.value))}>
-                    {SHIELD_CHAINS.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="cb-field">
-                  <span>Receive token</span>
-                  <select
-                    value={toToken}
-                    onChange={(e) => setToToken(e.target.value)}
-                    disabled={toOptions.length === 0}
-                  >
-                    {toOptions.map((token) => (
-                      <option key={token} value={token}>
-                        {token}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="cb-field">
-                  <span>Slippage</span>
-                  <div className="cb-suffix">
-                    <input
-                      className="cb-slippage"
-                      inputMode="decimal"
-                      value={slippage}
-                      onChange={(e) =>
-                        setSlippage(Math.max(0, Math.min(50, Number(e.target.value) || 0)))
-                      }
-                    />
-                    <span>%</span>
-                  </div>
-                </label>
+          <section aria-label="Save an expression">
+            <p className="screen-label">
+              <span>{SCREENS[1][0]}</span> {SCREENS[1][1]}
+            </p>
+            <div className="phone">
+              <div className="status">
+                <span>{STATUS_TIME}</span>
+                <span aria-hidden="true">{STATUS_GLYPHS}</span>
               </div>
-
-              <div className="cb-mode-grid">
-                {SHIELD_MODES.map((shieldMode) => (
-                  <button
-                    key={shieldMode}
-                    className={`cb-mode ${mode === shieldMode ? "active" : ""}`}
-                    onClick={() => setMode(shieldMode)}
-                  >
-                    {shieldMode}
+              <header className="topbar">
+                <span className="brand">coloyond</span>
+                <span className="top-link">{dirty ? UNSAVED_LABEL : SHARE_TARGET}</span>
+              </header>
+              <div className="body">
+                <ShareCard
+                  study={study}
+                  caption={currentCaption}
+                  captionVisible={captionVisible}
+                  artSuffix="share"
+                />
+                <div className="expression-tools">
+                  <button className="text-button" onClick={nextStudy}>
+                    {EXPRESSION.tools.image}
                   </button>
-                ))}
-              </div>
-
-              <button className="cb-primary" disabled={loading} onClick={prepareShieldRoute}>
-                {loading ? "Preparing route…" : "Prepare route"}
-              </button>
-
-              {error && <div className="cb-error">{error}</div>}
-
-              {bestRoutes.length > 0 && (
-                <div className="cb-routes">
-                  {bestRoutes.map((r) => {
-                    const etaText =
-                      r.totalTimeSeconds < 60
-                        ? `~${r.totalTimeSeconds}s`
-                        : `~${Math.round(r.totalTimeSeconds / 60)}min`;
-                    return (
-                      <article key={r.id} className="cb-route-card">
-                        <div className="cb-route-top">
-                          <b>{r.provider}</b>
-                          <span>{r.atomicLevel}</span>
-                        </div>
-                        <div className="cb-flow">
-                          {r.steps.map((s, i) => (
-                            <span key={`${r.id}-${i}`}>
-                              {s.protocol}: {s.fromSymbol}→{s.toSymbol}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="cb-metrics">
-                          <span>
-                            {r.outputAmount} {toToken}
-                          </span>
-                          <span>${r.totalFeeUsd.toFixed(2)} fee</span>
-                          <span>{etaText}</span>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  <button className="text-button" onClick={nextCaption}>
+                    {EXPRESSION.tools.caption}
+                  </button>
                 </div>
-              )}
-
-              <div className="cb-hook-grid">
-                {HOOK_CARDS.map((hook) => (
-                  <article key={hook.name} className="cb-hook">
-                    <div className="cb-hook-head">
-                      <b>{hook.name}</b>
-                      <em>{hook.status}</em>
-                    </div>
-                    <p>{hook.role}</p>
-                  </article>
-                ))}
+                <div className="button-row">
+                  <button className="button secondary" disabled={!dirty} onClick={saveExpression}>
+                    {EXPRESSION.save}
+                  </button>
+                  <button className="button" disabled={dirty} onClick={share}>
+                    {EXPRESSION.share}
+                  </button>
+                </div>
+                <details className="details">
+                  <summary>{EXPRESSION.details.summary}</summary>
+                  <p>{EXPRESSION.details.body}</p>
+                </details>
+                <p className="micro">
+                  {EXPRESSION.micro[0]}
+                  <br />
+                  {EXPRESSION.micro[1]}
+                </p>
               </div>
             </div>
           </section>
-        )}
 
-        {tab === "Yield" && (
-          <section className="cb-panel">
-            <div className="cb-section-head">
-              <h2>Active yield farm</h2>
-              <p>TradeFi liquidity layer converts rebalancing activity into LP fee revenue.</p>
-            </div>
-            <div className="cb-farm-feature">
-              <div className="cb-farm-title">
-                <b>{FEATURE_FARM.name}</b>
-                <span>{FEATURE_FARM.pool}</span>
+          <section aria-label="Make a remix">
+            <p className="screen-label">
+              <span>{SCREENS[2][0]}</span> {SCREENS[2][1]}
+            </p>
+            <div className="phone">
+              <div className="status">
+                <span>{STATUS_TIME}</span>
+                <span aria-hidden="true">{STATUS_GLYPHS}</span>
               </div>
-              <div className="cb-farm-stats">
-                <div>
-                  <span>APY</span>
-                  <b>{FEATURE_FARM.apy}</b>
-                </div>
-                <div>
-                  <span>Lock</span>
-                  <b>{FEATURE_FARM.lock}</b>
-                </div>
-                <div>
-                  <span>Source</span>
-                  <b>{FEATURE_FARM.note}</b>
-                </div>
-              </div>
-              <button className="cb-primary">Stake share tokens</button>
-            </div>
-            <div className="cb-grid-three">
-              {FARMS.map((farm) => (
-                <article key={farm.name} className="cb-mini-card">
-                  <b>{farm.name}</b>
-                  <span>
-                    {farm.pool} · {farm.status}
-                  </span>
-                  <div>APY {farm.apy}</div>
-                  <div>{farm.note}</div>
-                  <em>
-                    {farm.tvl} · {farm.lock}
-                  </em>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {tab === "Ecosystem" && (
-          <section className="cb-panel">
-            <div className="cb-section-head">
-              <h2>Full ecosystem</h2>
-              <p>
-                Real utility first, then the full ecosystem, then the game loop, then optional
-                gambling.
-              </p>
-            </div>
-            <div className="cb-pillar-grid">
-              {PILLARS.map((pillar) => (
-                <article key={pillar.title} className="cb-pillar-card">
-                  <div className="cb-pillar-label">{pillar.label}</div>
-                  <h3>{pillar.title}</h3>
-                  <p>{pillar.detail}</p>
-                  <ul>
-                    {pillar.points.map((point) => (
-                      <li key={point}>{point}</li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-            <div className="cb-stack">
-              {ECOSYSTEM.map((node) => (
-                <article key={node.title} className="cb-stack-card">
-                  <div>
-                    <b>{node.title}</b>
-                    <p>{node.detail}</p>
+              <header className="topbar">
+                <span className="brand">coloyond</span>
+                <span className="top-link">{TOP_LINKS.remix}</span>
+              </header>
+              <div className="body">
+                <div className="parent">
+                  <div
+                    className="art art-small"
+                    dangerouslySetInnerHTML={{ __html: art(REMIX.parentStudy, "parent") }}
+                  />
+                  <div className="parent-text">
+                    <span>{REMIX.parentLabel}</span>
+                    <span className="id">{REMIX.parentId}</span>
                   </div>
-                  <em>{node.status}</em>
-                </article>
-              ))}
+                </div>
+                <div
+                  className="art remix-art"
+                  dangerouslySetInnerHTML={{ __html: art(remixStudy, "remix", true) }}
+                />
+                <div
+                  className={captionVisible ? "remix-caption" : "remix-caption hidden"}
+                >
+                  {REMIX.caption}
+                </div>
+                <div className="id-row">
+                  <span className="id">{REMIX.ids[allocation]}</span>
+                  <span className="quiet">{REMIX.statuses[allocation]}</span>
+                </div>
+                <div className="allocation">
+                  <span className="asset">
+                    <i className="dot" />
+                    jupSOL
+                  </span>
+                  <strong>{allocation}%</strong>
+                </div>
+                <div className="allocation">
+                  <span className="asset">
+                    <i className="dot yellow" />
+                    USDC
+                  </span>
+                  <strong>{100 - allocation}%</strong>
+                </div>
+                <label className="label" htmlFor="allocation">
+                  Explore another allocation
+                </label>
+                <select
+                  className="slider"
+                  id="allocation"
+                  aria-label="Illustrative existing-vault selection or allocation draft"
+                  value={allocation}
+                  onChange={(e) => setAllocation(Number(e.target.value))}
+                >
+                  {REMIX.allocations.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <button className="button" onClick={previewRemix}>
+                  {REMIX.preview}
+                </button>
+                <p className="micro">
+                  {REMIX.explanations[allocation]}
+                  <br />
+                  {REMIX.micro}
+                </p>
+              </div>
             </div>
           </section>
-        )}
+        </div>
 
-        {tab === "Game" && (
-          <section className="cb-panel">
-            <div className="cb-section-head">
-              <h2>Gamification and gambling</h2>
-              <p>Game loop rewards useful behavior; gamble is an optional multiplier inside a risk budget.</p>
-            </div>
-            <div className="cb-game-stats">
-              <div className="cb-game-stat">
-                <span>XP</span>
-                <b>{String(WALLET.xp + questXp)}</b>
-              </div>
-              <div className="cb-game-stat">
-                <span>Streak</span>
-                <b>{WALLET.streak}d</b>
-              </div>
-              <div className="cb-game-stat">
-                <span>Quests</span>
-                <b>
-                  {completed.length}/{QUESTS.length}
-                </b>
-              </div>
-              <div className="cb-game-stat">
-                <span>Rank</span>
-                <b>{rank}</b>
-              </div>
-            </div>
-            <div className="cb-quests">
-              {QUESTS.map((quest) => {
-                const checked = done.has(quest.id);
-                return (
-                  <label key={quest.id} className={`cb-quest ${checked ? "done" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleQuest(quest.id)}
-                    />
-                    <span>{quest.title}</span>
-                    <b>+{quest.reward} XP</b>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="cb-gamble">
-              <div>
-                <h3>Nes roll</h3>
-                <p>Optional after a route or save. No promised yield.</p>
-              </div>
-              <button className="cb-gamble-btn" onClick={rollGamble}>
-                Roll boost
-              </button>
-            </div>
-            {gamble && (
-              <div className="cb-gamble-result">
-                <b>
-                  {gamble.multiplier} {gamble.label}
-                </b>
-                <span>{gamble.detail}</span>
-                <em>+{gamble.xp} bonus XP</em>
-              </div>
-            )}
-          </section>
-        )}
+        <div className="footnotes">
+          {FOOTNOTES.map((note) => (
+            <p key={note}>{note}</p>
+          ))}
+        </div>
+
+        <div className="footer">
+          <span>
+            {FOOTER_NOTE.split("\n").map((line, i) => (
+              <span key={line}>
+                {i > 0 && <br />}
+                {line}
+              </span>
+            ))}
+          </span>
+          <a href={FOOTER_LINK.href}>{FOOTER_LINK.label}</a>
+        </div>
+
+        <p className="notice" role="status" aria-live="polite">
+          {notice}
+        </p>
       </main>
-    </div>
+
+      <dialog ref={dialogRef} aria-labelledby="dialogTitle">
+        <h2 id="dialogTitle">{SHARE_DIALOG.title}</h2>
+        <div>
+          <ShareCard
+            study={study}
+            caption={currentCaption}
+            captionVisible={captionVisible}
+            artSuffix="dialog"
+          />
+        </div>
+        <p>{SHARE_DIALOG.note}</p>
+        <form method="dialog">
+          <button className="button">{SHARE_DIALOG.close}</button>
+        </form>
+      </dialog>
+    </>
   );
 }
