@@ -1,0 +1,580 @@
+{
+  "description": "Structural hash fixtures independently verified with RFC 8785. Vault/share addresses are deterministic generated 32-byte test keys, NOT live supported vaults. Config digests are illustrative; legacy v1 vectors remain view-only. Captions are hashed exactly as stored.",
+  "managedDomainTagHex": "636f6c6f796f6e642f53747261746567792f763200",
+  "draftDomainTagHex": "636f6c6f796f6e642f44726166742f763100",
+  "vectors": [
+    {
+      "name": "managed-60-40",
+      "input": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          },
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "normalized": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "canonicalJson": "{\"configDigest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"configProjectionVersion\":1,\"kind\":\"managed-vault\",\"network\":\"solana:mainnet-beta\",\"programId\":\"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate\",\"protocol\":\"symmetry\",\"schemaVersion\":2,\"shareMint\":\"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv\",\"targetWeights\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"vaultAddress\":\"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW\"}",
+      "strategyId": "cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4"
+    },
+    {
+      "name": "reordered-same-revision",
+      "input": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "normalized": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "canonicalJson": "{\"configDigest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"configProjectionVersion\":1,\"kind\":\"managed-vault\",\"network\":\"solana:mainnet-beta\",\"programId\":\"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate\",\"protocol\":\"symmetry\",\"schemaVersion\":2,\"shareMint\":\"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv\",\"targetWeights\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"vaultAddress\":\"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW\"}",
+      "strategyId": "cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4"
+    },
+    {
+      "name": "changed-config",
+      "input": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          },
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          }
+        ],
+        "configDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "configProjectionVersion": 1
+      },
+      "normalized": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          }
+        ],
+        "configDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "configProjectionVersion": 1
+      },
+      "canonicalJson": "{\"configDigest\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"configProjectionVersion\":1,\"kind\":\"managed-vault\",\"network\":\"solana:mainnet-beta\",\"programId\":\"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate\",\"protocol\":\"symmetry\",\"schemaVersion\":2,\"shareMint\":\"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv\",\"targetWeights\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"vaultAddress\":\"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW\"}",
+      "strategyId": "cb2:5e05b3718bb229af64d5b071d9e5d85beaf28435bf33bc9ea35c470c156cf438"
+    },
+    {
+      "name": "different-vault",
+      "input": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "Eymfkp5VMyYumiNbTiCGAzNczSTGMqqRE1ukEfxozS9S",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          },
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "normalized": {
+        "schemaVersion": 2,
+        "kind": "managed-vault",
+        "network": "solana:mainnet-beta",
+        "protocol": "symmetry",
+        "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+        "vaultAddress": "Eymfkp5VMyYumiNbTiCGAzNczSTGMqqRE1ukEfxozS9S",
+        "shareMint": "69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 4000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 6000
+          }
+        ],
+        "configDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "configProjectionVersion": 1
+      },
+      "canonicalJson": "{\"configDigest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"configProjectionVersion\":1,\"kind\":\"managed-vault\",\"network\":\"solana:mainnet-beta\",\"programId\":\"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate\",\"protocol\":\"symmetry\",\"schemaVersion\":2,\"shareMint\":\"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv\",\"targetWeights\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"vaultAddress\":\"Eymfkp5VMyYumiNbTiCGAzNczSTGMqqRE1ukEfxozS9S\"}",
+      "strategyId": "cb2:3fff558c7cfd1997ef18d767a4e30d1a86142b4d11cfb3885490c41c8a9fce39"
+    },
+    {
+      "name": "draft-70-30",
+      "input": {
+        "schemaVersion": 1,
+        "kind": "allocation-draft",
+        "network": "solana:mainnet-beta",
+        "targetWeights": [
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 7000
+          },
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 3000
+          }
+        ]
+      },
+      "normalized": {
+        "schemaVersion": 1,
+        "kind": "allocation-draft",
+        "network": "solana:mainnet-beta",
+        "targetWeights": [
+          {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "weightBps": 3000
+          },
+          {
+            "mint": "So11111111111111111111111111111111111111112",
+            "weightBps": 7000
+          }
+        ]
+      },
+      "canonicalJson": "{\"kind\":\"allocation-draft\",\"network\":\"solana:mainnet-beta\",\"schemaVersion\":1,\"targetWeights\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":3000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":7000}]}",
+      "strategyId": "cbd1:7471c8aa584dcdc79173002a7b5c8a795ecae1ad53671489612660a4ddfc6409"
+    }
+  ],
+  "legacyV1": {
+    "description": "Specification identity vectors. All fields are ASCII strings or bounded integers, so sorted compact JSON agrees with RFC 8785 for this restricted fixture set. They are not a general JCS implementation.",
+    "domainTagHex": "636f6c6f796f6e642f53747261746567792f763100",
+    "vectors": [
+      {
+        "name": "retained-sol-60-usdc-40",
+        "input": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 6000
+            },
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 4000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "normalized": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 4000
+            },
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 6000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "canonicalJson": "{\"adapterPolicyVersion\":1,\"allocations\":[{\"outputMint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"outputMint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"inputMint\":\"So11111111111111111111111111111111111111112\",\"network\":\"solana:mainnet-beta\",\"policy\":{\"maxPriceImpactBps\":100,\"maxPriorityFeeLamports\":\"100000\",\"maxSlippageBps\":50},\"schemaVersion\":1}",
+        "strategyId": "cb1:2475cb62a94b9f34f96784eacdcb27dbf4d7bbdbc1d8f156f6add6dde8573aae"
+      },
+      {
+        "name": "reordered-same-strategy",
+        "input": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 4000
+            },
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 6000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "normalized": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 4000
+            },
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 6000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "canonicalJson": "{\"adapterPolicyVersion\":1,\"allocations\":[{\"outputMint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":4000},{\"outputMint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":6000}],\"inputMint\":\"So11111111111111111111111111111111111111112\",\"network\":\"solana:mainnet-beta\",\"policy\":{\"maxPriceImpactBps\":100,\"maxPriorityFeeLamports\":\"100000\",\"maxSlippageBps\":50},\"schemaVersion\":1}",
+        "strategyId": "cb1:2475cb62a94b9f34f96784eacdcb27dbf4d7bbdbc1d8f156f6add6dde8573aae"
+      },
+      {
+        "name": "retained-sol-70-usdc-30",
+        "input": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 7000
+            },
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 3000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "normalized": {
+          "schemaVersion": 1,
+          "network": "solana:mainnet-beta",
+          "inputMint": "So11111111111111111111111111111111111111112",
+          "allocations": [
+            {
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "weightBps": 3000
+            },
+            {
+              "outputMint": "So11111111111111111111111111111111111111112",
+              "weightBps": 7000
+            }
+          ],
+          "policy": {
+            "maxSlippageBps": 50,
+            "maxPriceImpactBps": 100,
+            "maxPriorityFeeLamports": "100000"
+          },
+          "adapterPolicyVersion": 1
+        },
+        "canonicalJson": "{\"adapterPolicyVersion\":1,\"allocations\":[{\"outputMint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"weightBps\":3000},{\"outputMint\":\"So11111111111111111111111111111111111111112\",\"weightBps\":7000}],\"inputMint\":\"So11111111111111111111111111111111111111112\",\"network\":\"solana:mainnet-beta\",\"policy\":{\"maxPriceImpactBps\":100,\"maxPriorityFeeLamports\":\"100000\",\"maxSlippageBps\":50},\"schemaVersion\":1}",
+        "strategyId": "cb1:5069f09669af4ee718ad7916ab1238387fe3e4380907450ae2abd5152fae74ae"
+      }
+    ]
+  },
+  "sceneVectors": [
+    {
+      "name": "bounded-blue-plane",
+      "scene": {
+        "schemaVersion": 1,
+        "rendererVersion": 1,
+        "canvasRatio": "1:1",
+        "background": "paper",
+        "seed": 17,
+        "layers": [
+          {
+            "type": "polygon",
+            "points": [
+              [
+                100,
+                100
+              ],
+              [
+                700,
+                100
+              ],
+              [
+                400,
+                800
+              ]
+            ],
+            "fill": {
+              "type": "solid",
+              "color": "cobalt"
+            },
+            "opacity": 1000
+          }
+        ],
+        "texture": {
+          "grainIntensity": 50
+        },
+        "inheritedFeature": null
+      },
+      "canonicalJson": "{\"background\":\"paper\",\"canvasRatio\":\"1:1\",\"inheritedFeature\":null,\"layers\":[{\"fill\":{\"color\":\"cobalt\",\"type\":\"solid\"},\"opacity\":1000,\"points\":[[100,100],[700,100],[400,800]],\"type\":\"polygon\"}],\"rendererVersion\":1,\"schemaVersion\":1,\"seed\":17,\"texture\":{\"grainIntensity\":50}}",
+      "sceneHash": "9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c"
+    }
+  ],
+  "expressionVectors": [
+    {
+      "name": "saved-caption",
+      "expression": {
+        "schemaVersion": 1,
+        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "scene": {
+          "schemaVersion": 1,
+          "rendererVersion": 1,
+          "canvasRatio": "1:1",
+          "background": "paper",
+          "seed": 17,
+          "layers": [
+            {
+              "type": "polygon",
+              "points": [
+                [
+                  100,
+                  100
+                ],
+                [
+                  700,
+                  100
+                ],
+                [
+                  400,
+                  800
+                ]
+              ],
+              "fill": {
+                "type": "solid",
+                "color": "cobalt"
+              },
+              "opacity": 1000
+            }
+          ],
+          "texture": {
+            "grainIntensity": 50
+          },
+          "inheritedFeature": null
+        },
+        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "rendererVersion": 1,
+        "layoutVersion": 1,
+        "caption": "Held, lightly",
+        "captionOrigin": "user",
+        "generationOrigin": "local-preview",
+        "parentExpressionId": null
+      },
+      "canonicalJson": "{\"caption\":\"Held, lightly\",\"captionOrigin\":\"user\",\"generationOrigin\":\"local-preview\",\"layoutVersion\":1,\"parentExpressionId\":null,\"rendererVersion\":1,\"scene\":{\"background\":\"paper\",\"canvasRatio\":\"1:1\",\"inheritedFeature\":null,\"layers\":[{\"fill\":{\"color\":\"cobalt\",\"type\":\"solid\"},\"opacity\":1000,\"points\":[[100,100],[700,100],[400,800]],\"type\":\"polygon\"}],\"rendererVersion\":1,\"schemaVersion\":1,\"seed\":17,\"texture\":{\"grainIntensity\":50}},\"sceneHash\":\"9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c\",\"schemaVersion\":1,\"strategyId\":\"cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4\"}",
+      "expressionId": "cbe1:3891a556da411a3e18d5d973901448bc3b86907e9a399fb3c5106f4bdb456cd2"
+    },
+    {
+      "name": "changed-caption",
+      "expression": {
+        "schemaVersion": 1,
+        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "scene": {
+          "schemaVersion": 1,
+          "rendererVersion": 1,
+          "canvasRatio": "1:1",
+          "background": "paper",
+          "seed": 17,
+          "layers": [
+            {
+              "type": "polygon",
+              "points": [
+                [
+                  100,
+                  100
+                ],
+                [
+                  700,
+                  100
+                ],
+                [
+                  400,
+                  800
+                ]
+              ],
+              "fill": {
+                "type": "solid",
+                "color": "cobalt"
+              },
+              "opacity": 1000
+            }
+          ],
+          "texture": {
+            "grainIntensity": 50
+          },
+          "inheritedFeature": null
+        },
+        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "rendererVersion": 1,
+        "layoutVersion": 1,
+        "caption": "Almost a circle",
+        "captionOrigin": "user",
+        "generationOrigin": "local-preview",
+        "parentExpressionId": null
+      },
+      "canonicalJson": "{\"caption\":\"Almost a circle\",\"captionOrigin\":\"user\",\"generationOrigin\":\"local-preview\",\"layoutVersion\":1,\"parentExpressionId\":null,\"rendererVersion\":1,\"scene\":{\"background\":\"paper\",\"canvasRatio\":\"1:1\",\"inheritedFeature\":null,\"layers\":[{\"fill\":{\"color\":\"cobalt\",\"type\":\"solid\"},\"opacity\":1000,\"points\":[[100,100],[700,100],[400,800]],\"type\":\"polygon\"}],\"rendererVersion\":1,\"schemaVersion\":1,\"seed\":17,\"texture\":{\"grainIntensity\":50}},\"sceneHash\":\"9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c\",\"schemaVersion\":1,\"strategyId\":\"cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4\"}",
+      "expressionId": "cbe1:da961c632b443f740656818620af5d50b2d20b1d77ee2f5a525383279633a284"
+    },
+    {
+      "name": "unicode-and-escaped-caption-exact-storage",
+      "expression": {
+        "schemaVersion": 1,
+        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "scene": {
+          "schemaVersion": 1,
+          "rendererVersion": 1,
+          "canvasRatio": "1:1",
+          "background": "paper",
+          "seed": 17,
+          "layers": [
+            {
+              "type": "polygon",
+              "points": [
+                [
+                  100,
+                  100
+                ],
+                [
+                  700,
+                  100
+                ],
+                [
+                  400,
+                  800
+                ]
+              ],
+              "fill": {
+                "type": "solid",
+                "color": "cobalt"
+              },
+              "opacity": 1000
+            }
+          ],
+          "texture": {
+            "grainIntensity": 50
+          },
+          "inheritedFeature": null
+        },
+        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "rendererVersion": 1,
+        "layoutVersion": 1,
+        "caption": "Unspent light · \"almost\" \\ café",
+        "captionOrigin": "user",
+        "generationOrigin": "local-preview",
+        "parentExpressionId": null
+      },
+      "canonicalJson": "{\"caption\":\"Unspent light · \\\"almost\\\" \\\\ café\",\"captionOrigin\":\"user\",\"generationOrigin\":\"local-preview\",\"layoutVersion\":1,\"parentExpressionId\":null,\"rendererVersion\":1,\"scene\":{\"background\":\"paper\",\"canvasRatio\":\"1:1\",\"inheritedFeature\":null,\"layers\":[{\"fill\":{\"color\":\"cobalt\",\"type\":\"solid\"},\"opacity\":1000,\"points\":[[100,100],[700,100],[400,800]],\"type\":\"polygon\"}],\"rendererVersion\":1,\"schemaVersion\":1,\"seed\":17,\"texture\":{\"grainIntensity\":50}},\"sceneHash\":\"9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c\",\"schemaVersion\":1,\"strategyId\":\"cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4\"}",
+      "expressionId": "cbe1:05df277cf533e83438c7051de52cc7a31443b2d4b7d97e1eea832fd07b4e8dfc"
+    }
+  ],
+  "canonicalizerVerification": {
+    "implementation": "rfc8785.py",
+    "version": "0.1.4",
+    "source": "https://github.com/trailofbits/rfc8785.py",
+    "notes": "Every canonical byte string/digest verified independently, including non-ASCII caption, double quote, backslash and decomposed accent. No normalization is applied for identity."
+  }
+}
