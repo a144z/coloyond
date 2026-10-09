@@ -392,3 +392,38 @@ API key acquisition:
 - Rango: obtain at <https://rango.exchange/>.
 - LI.FI: register via `createConfig({ integrator: 'coloyond' })`.
 - SwapKit: obtain at <https://api.swapkit.dev>.
+
+## 7. Live endpoint verification — 9 October 2026
+
+Probe run from the dev machine against every endpoint this document and
+`src/` reference (probe script: temp `endpoint-probe.mjs`/`endpoint-probe2.mjs`).
+
+### 7.1 Results matrix
+
+| Endpoint (as used)                                       | Result | Evidence / note |
+| -------------------------------------------------------- | ------ | --------------- |
+| `https://api.mainnet.solana.com` (public RPC)              | ✅ ok  | `getHealth` → `ok` (cold 357 ms, warm 92 ms); `getLatestBlockhash` returns a blockhash; `getBalance` responds with proper `-32602 WrongSize` validation for bad mints. Ruleset rule 16 still prefers a project-dedicated endpoint for demo day. |
+| LI.FI `POST https://li.quest/v1/advanced/routes`          | ✅ ok  | Exactly the payload `src/providers/lifi.ts` sends: 200 with 4 routes for Arbitrum ETH → Optimism USDC (1.65 s). Works without `integrator`; `?integrator=coloyond` also accepted — keep the param per §4.5. |
+| deBridge `GET /v1.0/dln/order/create-tx`                   | ✅ ok  | 200 for the same demo pair. Response `estimation` (the API's own spelling — §4.3 confirmed) carries `srcChainTokenIn`, `dstChainTokenOut`, `costsDetails`, `recommendedSlippage`; `dstChainTokenOut` = 2,493.157793 USDC. |
+| CrossCurve MetaLayer `GET /relayer/v1/networks`           | ⚠️ here | Host `https://meta-api.cross.exchange` refused connection from this machine (DNS/proxy); verify at device time. Host now recorded here because §4.1 listed only paths, never a host. |
+| Rango `GET /v1/explorer/chains`                            | ⚠️ here | `api.rango.network` also refused connection from this machine; endpoint matches docs, verify later. |
+| SwapKit `GET /v3/chains` + `/providers`                    | ✅ live | Server answers; bare `/providers` is 401 → integrator/approval key required for the §4.6 flow; `/v3/chains` is not a public path (404). |
+| THORChain `GET /v1/mimir`                                  | ✅ as doc'd | 401 without a key → §4.7's `x-api-key` requirement confirmed. |
+| 1inch Fusion root + `/v1.2/quote/receive`                   | ✅ ok  | Both reachable (200); note §4.8: quote/receive is exercised with POST. |
+| Jupiter lite-api `/v2/quote` and `/v1/price`               | ⚠️ live | The service answers with its own structured `404 Route not found` (and the token-list paths `/v1/tokens`, `/v2/tokens` are 404 on lite), so HTTP plumbing works, but the mint IDs this repo had (`So111…`, `EPjF…`) do not resolve here and the full `api.jup.ag/v1/tokens` wants an API key. Resolve canonical mints (or an API key) before wiring the Solana-leg price into the UI. |
+
+### 7.2 SDK registry check
+
+Via `https://registry.npmjs.com/<pkg>`: `@lifi/sdk@4.11.0` ✓, `@debridge-finance/desdk@2.0.0-rc.0` ✓,
+`@1inch/fusion-sdk@2.4.16` ✓. `@jup-ag/sdk` and `crosscurve-sdk` are 404 at those paths — confirm the
+exact package names for the Jupiter SDK and CrossCurve SDK before importing either.
+
+### 7.3 Follow-ups the probe exposed (engine, not doc)
+
+1. `src/providers/debridge.ts`: the live payload has no top-level `fee` object (fee data sits under
+   `fixFee`/`protocolFee` and `estimation.costsDetails`), and `approximateFulfillmentDelay` is not at
+   the level read — deBridge routes therefore render with `etaSeconds 0` and an undercounted
+   `totalFeeUsd`. Align the field reads with the dumped shape.
+2. Jupiter Solana-leg quotes need this environment's canonical mint addresses (or an API key) before
+   the design spec's "independent Jupiter entry/exit routes" become a live call.
+3. CrossCurve/Rango hosts: re-run the probe through the demo network/proxy before trusting them.
