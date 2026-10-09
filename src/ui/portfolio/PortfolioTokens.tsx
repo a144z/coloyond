@@ -1,7 +1,7 @@
 // The Portfolio tab's watchlist: supported Solana tokens, instant search,
 // and a pasted mint the public node can confirm. Self-contained on purpose;
 // mount it wherever the token table belongs.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SUPPORTED_SOLANA_TOKENS, searchSupportedTokens, confirmMintOnChain, type SupportedToken, type TokenTag } from "./tokenRegistry.js";
 import { usePortfolioTokens } from "./usePortfolioTokens.js";
 
@@ -13,21 +13,28 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
   const [query, setQuery] = useState("");
   const [checking, setChecking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  // Each mint check gets a number; any newer edit, add, or unmount makes older checks stale.
+  const checkRef = useRef(0);
+  useEffect(() => () => { checkRef.current += 1; }, []);
 
   const mint = query.trim();
   const looksMintish = mint.length >= 32 && mint.length <= 44;
   const suggestions = searchSupportedTokens(query, tokens.map((token) => token.mint)).slice(0, 6);
 
   const addFromSearch = (token: SupportedToken) => {
+    checkRef.current += 1;
+    setChecking(false);
     add(token);
     setQuery("");
     setStatus(`${token.symbol} joined the watchlist.`);
   };
 
   const addFromMint = async () => {
+    const thisCheck = ++checkRef.current;
     setChecking(true);
     setStatus("Reading the node…");
     const check = await confirmMintOnChain(mint);
+    if (thisCheck !== checkRef.current) return;
     setChecking(false);
     if (!check.ok) { setStatus(check.detail); return; }
     if (tokens.some((token) => token.mint === mint)) { setStatus("That mint is already on the watchlist."); setQuery(""); return; }
@@ -58,13 +65,13 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
             <article className="cr-pt-row" key={token.mint}>
               <div className="cr-pt-identity"><span className="cr-pt-dot" style={{ background: TAG_DOTS[token.tag] }} /><span><strong>{token.symbol}</strong><small>{token.name} · {token.mint.slice(0, 8)}…</small></span></div>
               <div className="cr-pt-facts"><span>{TAG_WORDS[token.tag]}</span><strong>{token.demoUsd === 0 ? "—" : `$${token.demoUsd.toLocaleString()}`}</strong></div>
-              <button className="cr-pt-remove" onClick={() => remove(token.mint)}>Remove</button>
+              <button className="cr-pt-remove" aria-label={`Remove ${token.symbol}, mint ${token.mint.slice(0, 8)}`} onClick={() => remove(token.mint)}>Remove</button>
             </article>
           ))}
         </div>
         <div className="cr-pt-total"><span>Watchlist at sample prices <button className="cr-pt-reset" onClick={reset}>reset basket</button></span><strong>${totalDemoUsd.toLocaleString()}</strong></div>
         <div className="cr-pt-search">
-          <input aria-label="Search tokens or paste a mint" value={query} placeholder="Type a symbol or a name, or paste a mint" onChange={(event) => { setQuery(event.target.value); setStatus(null); }} />
+          <input aria-label="Search tokens or paste a mint" value={query} placeholder="Type a symbol or a name, or paste a mint" onChange={(event) => { checkRef.current += 1; setChecking(false); setQuery(event.target.value); setStatus(null); }} />
           <button className="cr-pt-mint" disabled={checking || !looksMintish} onClick={addFromMint}>{checking ? "Reading the node…" : "Add mint"}</button>
         </div>
         {suggestions.length > 0 && (
@@ -72,7 +79,8 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
             {suggestions.map((token) => <button key={token.mint} onClick={() => addFromSearch(token)}><i className="cr-pt-dot" style={{ background: TAG_DOTS[token.tag] }} />{token.symbol}<small>{token.name}</small></button>)}
           </div>
         )}
-        {status !== null && <p className="cr-pt-status" role="status">{status}</p>}
+        {/* Always mounted, so screen readers announce each new message. */}
+        <p className="cr-pt-status" role="status" aria-atomic="true">{status ?? ""}</p>
         <div className="cr-crosslink"><span>Watch first, then move: any token can start a route.</span>{onRouteToShield !== undefined && <button onClick={onRouteToShield}>Route one in Shield <span aria-hidden="true">↗</span></button>}</div>
       </section>
     </>

@@ -253,6 +253,7 @@ a { color: inherit; }
 .cr-pt-suggest button:hover { border-color: var(--ink); color: var(--blue); }
 .cr-pt-suggest small { color: var(--muted); font-size: 10px; }
 .cr-pt-status { margin: 12px 0 0; color: var(--muted); font: 10px/1.6 monospace; }
+.cr-pt-status:empty { margin: 0; }
 .cr-pt-empty { padding: 22px 0; border-bottom: 1px solid #cbc6b8; color: var(--muted); font-size: 12px; }
 @media (max-width: 1100px) {
   .cr-shell { padding: 0 24px; }
