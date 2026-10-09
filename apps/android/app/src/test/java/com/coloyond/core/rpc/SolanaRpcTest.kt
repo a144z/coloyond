@@ -41,13 +41,19 @@ class SolanaRpcTest {
     }
 
     @Test
-    fun signatureStatusesMapsSeenAndUnseen() = runBlocking {
+    fun signatureStatusesMapsSeenUnseenAndFailed() = runBlocking {
         val (_, rpc) = rpc(
-            """{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":82},"value":[{"slot":72,"confirmations":10,"err":null,"confirmationStatus":"confirmed"},null]}}""",
+            """{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":82},"value":[""" +
+                """{"slot":72,"confirmations":10,"err":null,"confirmationStatus":"confirmed"},""" +
+                """null,""" +
+                """{"slot":73,"confirmations":null,"err":{"InstructionError":[0,"InvalidInstructionData"]},"confirmationStatus":"finalized"}""" +
+                """]}}""",
         )
-        val statuses = rpc.signatureStatuses(listOf("sigA", "sigB"))
-        assertEquals("confirmed", statuses[0])
+        val statuses = rpc.signatureStatuses(listOf("sigA", "sigB", "sigC"))
+        assertEquals(SignatureStatus("confirmed", null), statuses[0])
         assertNull(statuses[1])
+        assertEquals("finalized", statuses[2]!!.confirmationStatus)
+        assertTrue(statuses[2]!!.err!!.contains("InvalidInstructionData"))
     }
 
     @Test
