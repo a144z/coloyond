@@ -97,7 +97,7 @@ fun WalletScreen(
                 Text("Disconnect")
             }
         }
-        OutlinedButton(onClick = onToggleMockMode) {
+        OutlinedButton(onClick = onToggleMockMode, enabled = !state.busy) {
             Text("Demo mode: ${if (state.mockMode) "on" else "off"} (43)")
         }
         state.failed?.let {

@@ -12,11 +12,13 @@ class PendingIntentStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("coloyond-pending", Context.MODE_PRIVATE)
 
-    fun save(kind: String, note: String) {
+    /** [signature] is null until the wallet returns one; keep it so the outcome can be checked later. */
+    fun save(kind: String, note: String, signature: String? = null) {
         val intent = JSONObject()
             .put("kind", kind)
             .put("note", note)
             .put("savedAt", System.currentTimeMillis())
+        if (signature != null) intent.put("signature", signature)
         prefs.edit().putString(KEY_INTENT, intent.toString()).apply()
     }
 

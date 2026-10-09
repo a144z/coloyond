@@ -4,6 +4,9 @@ import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** One signature's state: its commitment level, and the error if the transaction failed on-chain. */
+data class SignatureStatus(val confirmationStatus: String, val err: String?)
+
 /**
  * Read-only RPC surface for exactly what the demo path verifies: a balance
  * after connecting, a recent blockhash to build a transaction, and signature
@@ -40,11 +43,11 @@ class SolanaRpc(
     }
 
     /**
-     * One entry per signature: its confirmation status (processed, confirmed,
-     * finalized), or null when the node has not seen it yet. A request error
-     * is an RpcException.
+     * One entry per signature, or null when the node has not seen it yet. A
+     * transaction that failed on-chain still has a confirmation status, so
+     * callers must check [SignatureStatus.err]. A request error is an RpcException.
      */
-    suspend fun signatureStatuses(signatures: List<String>): List<String?> = withRetry(retry, "getSignatureStatuses") {
+    suspend fun signatureStatuses(signatures: List<String>): List<SignatureStatus?> = withRetry(retry, "getSignatureStatuses") {
         val values = post("getSignatureStatuses", JSONArray().put(JSONArray(signatures)))
             .getJSONObject("result")
             .getJSONArray("value")
@@ -52,7 +55,11 @@ class SolanaRpc(
             if (values.isNull(index)) {
                 null
             } else {
-                values.getJSONObject(index).optString("confirmationStatus", "processed")
+                val status = values.getJSONObject(index)
+                SignatureStatus(
+                    confirmationStatus = status.optString("confirmationStatus", "processed"),
+                    err = if (status.isNull("err")) null else status.get("err").toString(),
+                )
             }
         }
     }
