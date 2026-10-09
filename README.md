@@ -34,4 +34,4 @@ npm run typecheck
 npm run build
 ```
 
-The reviewed feature plan predates this Kotlin scaffold and describes a React Native/TypeScript implementation. Its platform-specific paths and APIs need a Kotlin adaptation before implementing those features. The current Android starter does not embed the Vite app or execute the planned financial strategies.
+The [design spec](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md) and [implementation plan](docs/superpowers/plans/2026-10-09-coloyond-managed-strategies.md) target this Kotlin app. They supersede the earlier React Native/Expo plan. The current Android starter does not embed the Vite app or execute the planned financial strategies.
