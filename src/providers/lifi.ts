@@ -101,6 +101,7 @@ export async function fetchLifiRoutes(opts: LiveQuoteOptions): Promise<Route[]> 
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     throw new Error(`LI.FI ${res.status}: ${(await res.text()).slice(0, 160)}`);
