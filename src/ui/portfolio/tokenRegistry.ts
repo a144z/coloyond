@@ -58,13 +58,19 @@ export async function confirmMintOnChain(mint: string): Promise<MintCheck> {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [trimmed, { encoding: "jsonParsed" }] }),
       signal: AbortSignal.timeout(15000),
     });
-    const payload = await response.json();
+    const payload = await response.json().catch(() => undefined);
     if (payload?.error !== undefined) {
       return { ok: false, detail: `Node: ${payload.error.message ?? "the request failed."}` };
     }
-    const account = payload?.result?.value;
-    if (account === null || account === undefined) return { ok: false, detail: "No account exists at that address." };
-    if (account.data?.parsed?.type === "mint") return { ok: true, detail: "On-chain: this address is a token mint." };
+    if (!response.ok) return { ok: false, detail: `Node: HTTP ${response.status}.` };
+    const result = payload?.result;
+    // Only an explicit null value means the account does not exist; anything else missing is a bad reply.
+    if (typeof result !== "object" || result === null || !("value" in result)) {
+      return { ok: false, detail: "Node: the reply had no account data." };
+    }
+    const account = result.value;
+    if (account === null) return { ok: false, detail: "No account exists at that address." };
+    if (account?.data?.parsed?.type === "mint") return { ok: true, detail: "On-chain: this address is a token mint." };
     return { ok: false, detail: "The account exists, but it is not a token mint." };
   } catch (caught) {
     return { ok: false, detail: caught instanceof Error ? `Node: ${caught.message}` : "The node did not answer." };
