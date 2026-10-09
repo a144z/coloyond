@@ -1,103 +1,57 @@
 package com.coloyond
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.funkatronics.encoders.Base58
+import com.coloyond.config.AppConfig
+import com.coloyond.di.AppContainer
+import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
-import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
-import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
-import com.solana.mobilewalletadapter.clientlib.Solana
-import com.solana.mobilewalletadapter.clientlib.TransactionResult
-import com.solana.publickey.SolanaPublicKey
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** Everything the wallet screen renders, merged from the repository flows. */
 data class WalletUiState(
-    val address: String? = null,
-    val isLoading: Boolean = false,
-    val message: String? = null,
-)
+    val wallet: WalletState = WalletState.Disconnected,
+    val feedback: String? = null,
+    val pendingNotice: String? = null,
+    val mockMode: Boolean = false,
+) {
+    val address: String? = (wallet as? WalletState.Connected)?.publicKeyBase58
+    val shortAddress: String? = address?.let { "${it.take(4)}…${it.takeLast(4)}" }
+    val busy: Boolean = wallet is WalletState.Connecting || wallet is WalletState.Signing
+    val failed: String? = (wallet as? WalletState.Failed)?.reason
+}
 
-class MainViewModel : ViewModel() {
+/** Thin shell over [WalletRepository]; actions map to one user tap each (36). */
+class MainViewModel(private val container: AppContainer) : ViewModel() {
 
-    // Replace with your app's own domain and host a Digital Asset Links file there so
-    // wallets can verify your app identity: https://docs.solanamobile.com/android-native/using_mobile_wallet_adapter
-    private val walletAdapter = MobileWalletAdapter(
-        connectionIdentity = ConnectionIdentity(
-            identityUri = Uri.parse("https://yourdapp.com"),
-            iconUri = Uri.parse("favicon.ico"),
-            identityName = "Coloyond",
-        )
-    ).apply {
-        blockchain = Solana.Devnet
+    private val repository = container.wallet
+
+    val uiState: StateFlow<WalletUiState> = combine(
+        repository.state,
+        repository.feedback,
+        repository.pendingNotice,
+        container.prefs.mockMode,
+    ) { wallet, feedback, pending, mock ->
+        WalletUiState(wallet = wallet, feedback = feedback, pendingNotice = pending, mockMode = mock)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WalletUiState())
+
+    init {
+        repository.reportPendingIntents()
     }
 
-    private val _uiState = MutableStateFlow(WalletUiState())
-    val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
+    fun connect(sender: ActivityResultSender) = viewModelScope.launch { repository.connect(sender) }
 
-    fun connect(sender: ActivityResultSender) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, message = null) }
-            when (val result = walletAdapter.connect(sender)) {
-                is TransactionResult.Success -> _uiState.update {
-                    it.copy(
-                        address = SolanaPublicKey(result.authResult.accounts.first().publicKey).base58(),
-                        isLoading = false,
-                    )
-                }
-                is TransactionResult.NoWalletFound -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-                is TransactionResult.Failure -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-            }
-        }
-    }
+    fun signMessage(sender: ActivityResultSender) =
+        viewModelScope.launch { repository.signMessage(sender, AppConfig.sampleMessage) }
 
-    fun signMessage(sender: ActivityResultSender, message: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, message = null) }
-            val result = walletAdapter.transact(sender) { authResult ->
-                signMessagesDetached(
-                    arrayOf(message.encodeToByteArray()),
-                    arrayOf(authResult.accounts.first().publicKey),
-                ).messages.first().signatures.first()
-            }
-            when (result) {
-                is TransactionResult.Success -> _uiState.update {
-                    it.copy(
-                        address = SolanaPublicKey(result.authResult.accounts.first().publicKey).base58(),
-                        isLoading = false,
-                        message = "Signature: ${Base58.encodeToString(result.payload)}",
-                    )
-                }
-                is TransactionResult.NoWalletFound -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-                is TransactionResult.Failure -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-            }
-        }
-    }
+    fun signTransaction(sender: ActivityResultSender) =
+        viewModelScope.launch { repository.signTransaction(sender, AppConfig.sampleMemo) }
 
-    fun disconnect(sender: ActivityResultSender) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, message = null) }
-            when (val result = walletAdapter.disconnect(sender)) {
-                is TransactionResult.Success -> _uiState.value = WalletUiState()
-                is TransactionResult.NoWalletFound -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-                is TransactionResult.Failure -> _uiState.update {
-                    it.copy(isLoading = false, message = result.message)
-                }
-            }
-        }
-    }
+    fun disconnect(sender: ActivityResultSender) = viewModelScope.launch { repository.disconnect(sender) }
+
+    fun toggleMockMode() = repository.toggleMockMode()
 }

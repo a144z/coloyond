@@ -2,16 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Ruleset 11: Web3 apps always need the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:name=".ColoyondApplication"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Coloyond">
+        android:theme="@style/Theme.Coloyond"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:replace="android:fullBackupContent">
+
+        <!-- Ruleset 13: allowBackup=false keeps secrets out of auto-backup. Ruleset 12: cleartext only to localhost, for the MWA local association; see network_security_config.xml. -->
+
+        <!-- Ruleset 15: singleTop so wallet SDK callbacks never stack Activity instances. -->
         <activity
+            android:launchMode="singleTop"
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
