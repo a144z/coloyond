@@ -17,6 +17,7 @@ sealed interface GatewayResult {
 interface WalletGateway {
     suspend fun connect(sender: ActivityResultSender): GatewayResult
     suspend fun signMessage(sender: ActivityResultSender, message: String): GatewayResult
-    suspend fun signTransaction(sender: ActivityResultSender, message: ByteArray): GatewayResult
+    /** Builds a Memo-program transaction, has the wallet sign and send it, and returns its signature. */
+    suspend fun signAndSendMemo(sender: ActivityResultSender, memo: String, recentBlockhash: String): GatewayResult
     suspend fun disconnect(sender: ActivityResultSender): GatewayResult
 }

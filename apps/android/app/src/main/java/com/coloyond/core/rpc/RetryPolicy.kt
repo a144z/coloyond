@@ -1,5 +1,8 @@
 package com.coloyond.core.rpc
 
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.delay
+
 /** Exponential-backoff policy shape from the ruleset (17). */
 data class RetryPolicy(
     val maxAttempts: Int = 3,
@@ -15,15 +18,15 @@ suspend fun <T> withRetry(policy: RetryPolicy, tag: String, block: suspend () ->
     for (attempt in 1..policy.maxAttempts) {
         try {
             return block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (cause: Exception) {
             if (attempt == policy.maxAttempts) {
-                throw RpcException("$tag failed after $attempt attempts", cause)
+                throw RpcException("$tag failed after $attempt attempts: ${cause.message}", cause)
             }
-            delay(kotlin.math.minOf(delayMs, policy.maxDelayMs).toLong())
+            delay(minOf(delayMs, policy.maxDelayMs).toLong())
             delayMs *= 2
         }
     }
     error("unreachable")
 }
-
-private suspend fun delay(millis: Long) = kotlinx.coroutines.delay(millis)

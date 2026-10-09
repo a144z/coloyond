@@ -5,11 +5,9 @@ import com.coloyond.core.rpc.SolanaRpc
 import com.coloyond.core.storage.PendingIntentStore
 import com.coloyond.core.storage.PrefsStore
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
-import kotlin.io.charsets.Charsets
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.runCatching
-import kotlinx.coroutines.toException
 
 /**
  * Orchestrates the demo path connect -> sign message -> sign transaction
@@ -63,7 +61,7 @@ class WalletRepository(
                         _feedback.value = "Connected on ${AppConfig.blockchainLabel} · balance $balance lamports"
                     }
                     .onFailure { error ->
-                        _feedback.value = "Connected · balance check failed: ${error.toException().message}"
+                        _feedback.value = "Connected · balance check failed: ${error.message}"
                     }
             }
             GatewayResult.NoWallet -> fail("No MWA-compatible wallet found")
@@ -85,13 +83,22 @@ class WalletRepository(
         }
     }
 
-    suspend fun signTransaction(sender: ActivityResultSender, message: ByteArray) {
+    suspend fun signTransaction(sender: ActivityResultSender, memo: String) {
         val address = connectedAddress
             ?: return fail("Connect first; connect and sign are separate steps")
-        pendingIntents.save("signTransaction", String(message, Charsets.UTF_8))
+        pendingIntents.save("signTransaction", memo)
         _pendingNotice.value = pendingIntents.pending()
         _state.value = WalletState.Signing("transaction")
-        when (val result = gateway.signTransaction(sender, message)) {
+        // Demo mode never touches the network, so it needs no real blockhash.
+        val blockhash = if (useMockMode) {
+            MOCK_BLOCKHASH
+        } else {
+            runCatching { rpc.getLatestBlockhash() }.getOrElse { error ->
+                clearPending()
+                return fail("Could not fetch a blockhash: ${error.message}", address)
+            }
+        }
+        when (val result = gateway.signAndSendMemo(sender, memo, blockhash)) {
             is GatewayResult.Ok -> {
                 val signature = result.payload ?: run {
                     clearPending()
@@ -103,24 +110,39 @@ class WalletRepository(
                     _feedback.value = "Demo mode: signature $signature accepted without the network"
                     return
                 }
-                runCatching { rpc.signatureStatuses(listOf(signature)) }
-                    .onSuccess { statuses ->
+                runCatching { awaitStatus(signature) }
+                    .onSuccess { status ->
                         clearPending()
                         _state.value = WalletState.Connected(address)
-                        _feedback.value = if (statuses.firstOrNull() != null) {
-                            "Signature $signature verified on-chain"
+                        _feedback.value = if (status != null) {
+                            "Signature $signature $status on-chain"
                         } else {
                             "Signature $signature sent; not seen on-chain yet"
                         }
                     }
                     .onFailure { error ->
-                        _state.value = WalletState.Failed(error.toException().message ?: "RPC error")
-                        _feedback.value = "Transaction failed: ${error.toException().message}"
+                        // Keep the pending intent: the transaction may still land.
+                        fail("Sent, but the status check failed: ${error.message}", address)
                     }
             }
-            GatewayResult.NoWallet -> fail("No MWA-compatible wallet found", address)
-            is GatewayResult.Rejected -> fail(result.reason, address)
+            GatewayResult.NoWallet -> {
+                clearPending()
+                fail("No MWA-compatible wallet found", address)
+            }
+            is GatewayResult.Rejected -> {
+                clearPending()
+                fail(result.reason, address)
+            }
         }
+    }
+
+    /** Polls until the node reports the signature, or gives up and returns null. */
+    private suspend fun awaitStatus(signature: String): String? {
+        repeat(STATUS_POLLS) { poll ->
+            rpc.signatureStatuses(listOf(signature)).firstOrNull()?.let { return it }
+            if (poll < STATUS_POLLS - 1) delay(STATUS_POLL_DELAY_MS)
+        }
+        return null
     }
 
     suspend fun disconnect(sender: ActivityResultSender) {
@@ -153,5 +175,11 @@ class WalletRepository(
     private fun clearPending() {
         pendingIntents.clear()
         _pendingNotice.value = null
+    }
+
+    private companion object {
+        const val STATUS_POLLS = 5
+        const val STATUS_POLL_DELAY_MS = 2_000L
+        const val MOCK_BLOCKHASH = "11111111111111111111111111111111"
     }
 }

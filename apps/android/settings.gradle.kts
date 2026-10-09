@@ -20,7 +20,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         // Ruleset 4: most Web3 Android artifacts ship through JitPack.
-        maven { url.set(uri("https://jitpack.io")) }
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
