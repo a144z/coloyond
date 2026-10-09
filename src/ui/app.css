@@ -23,7 +23,7 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
 button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
 a { color: inherit; }
-.cr-app { background: var(--canvas); min-height: 100vh; }
+.cr-app { background: var(--canvas); min-height: 100vh; min-height: 100dvh; }
 .cr-shell { max-width: 1440px; margin: auto; padding: 0 48px; }
 .cr-topbar { display: flex; justify-content: space-between; align-items: center; min-height: 91px; gap: 24px; border-bottom: 1px solid #cbc6b8; }
 .cr-brand { display: inline-flex; align-items: flex-start; gap: 3px; color: var(--ink); text-decoration: none; font-size: 28px; font-weight: 800; letter-spacing: -1.7px; line-height: 1; }
@@ -172,7 +172,7 @@ a { color: inherit; }
 .cr-farm-row > div:not(.cr-farm-identity) strong { font-size: 16px; letter-spacing: -.03em; }
 .cr-farm-row em { justify-self: end; font: 10px monospace; font-style: normal; border: 1px solid var(--rule); padding: 6px 8px; border-radius: 20px; }
 .cr-crosslink { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 34px; font-size: 14px; }
-.cr-crosslink button { border: 0; background: none; padding: 10px 0; border-bottom: 1px solid var(--ink); font-size: 12px; }
+.cr-crosslink button { min-height: 44px; border: 0; background: none; padding: 10px 0; border-bottom: 1px solid var(--ink); font-size: 12px; }
 .cr-crosslink button span { margin-left: 20px; }
 .cr-ecosystem-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .cr-pillar { min-height: 425px; display: flex; flex-direction: column; padding: 23px 24px 25px; background: var(--paper); border: 1px solid #c7c1b1; border-radius: 16px; }
@@ -270,8 +270,10 @@ a { color: inherit; }
 @media (max-width: 560px) {
   .cr-shell { padding: 0 17px; }
   .cr-topbar { min-height: 67px; }
+  .cr-topbar-right { gap: 18px; }
   .cr-brand { font-size: 23px; }
-  .cr-reference-link { font-size: 9px; }
+  .cr-reference-link { font-size: 9px; padding: 14px 0; }
+  .cr-field select { font-size: 16px; }
   .cr-intro { display: flex; flex-direction: column; gap: 15px; padding: 32px 0 28px; }
   .cr-intro h1 { font-size: clamp(47px, 12vw, 66px); }
   .cr-intro-description { margin: 23px 0 22px; }
