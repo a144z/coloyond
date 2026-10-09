@@ -208,10 +208,30 @@ export function ColoyondApp() {
               <div className="cr-strategy-facts"><div><span>Protocol NAV <small>sample</small></span><strong>{STRATEGY.nav}</strong></div><div><span>Market price <small>sample</small></span><strong>{STRATEGY.market}</strong></div><div><span>Indicative quote <small>sample</small></span><strong>{STRATEGY.quote}</strong></div><p>Separate values. No live vault or executable order is verified here.</p></div>
             </section>
             <section className="cr-portfolio-grid">
-              <div className="cr-allocation-block"><SectionTitle index="B /" title="Target and actual" note="Illustrative weights, shown separately." /><div className="cr-alloc-key"><span><i className="cr-key-line" />Target</span><span><i className="cr-key-solid" />Actual</span></div><div className="cr-alloc-list">{POSITIONS.map((position) => {
-                const delta = position.actual - position.target;
-                return <article className="cr-alloc-row" key={position.symbol}><div className="cr-alloc-top"><div className="cr-asset"><span className="cr-asset-dot" style={{ background: position.color }} /> <span><strong>{position.symbol}</strong><small>{position.name}</small></span></div><div className="cr-alloc-values"><strong>{position.actual}%</strong><span>{delta > 0 ? "+" : ""}{delta}% vs target</span></div></div><div className="cr-alloc-bars"><div className="cr-target-bar"><span style={{ width: `${position.target}%`, background: position.color }} /></div><div className="cr-actual-bar"><span style={{ width: `${position.actual}%`, background: position.color }} /></div></div><div className="cr-alloc-foot"><span>{position.utility}</span><span>{position.apy}% sample APY</span></div></article>;
-              })}</div></div>
+              <div className="cr-allocation-block">
+                <SectionTitle index="B /" title="Target and actual" note="Saved target versus sample holdings. APYs are sample." />
+                <div className="cr-composition" role="group" aria-label="Portfolio composition comparison">
+                  <div className="cr-composition-row">
+                    <div className="cr-composition-heading"><span>01 / Saved target</span><strong>100%</strong></div>
+                    <div className="cr-composition-track" aria-hidden="true">{POSITIONS.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.target}% target`} style={{ flex: position.target, background: position.color }} />)}</div>
+                  </div>
+                  <div className="cr-composition-row">
+                    <div className="cr-composition-heading"><span>02 / Actual mix <em>sample</em></span><strong>100%</strong></div>
+                    <div className="cr-composition-track" aria-hidden="true">{POSITIONS.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.actual}% actual`} style={{ flex: position.actual, background: position.color }} />)}</div>
+                  </div>
+                  <p>Each band totals 100%. Colors match the asset rows; change uses percentage points.</p>
+                </div>
+                <table className="cr-alloc-table">
+                  <thead><tr><th scope="col">Asset</th><th scope="col">Target</th><th scope="col">Actual</th><th scope="col">Change</th></tr></thead>
+                  <tbody>{POSITIONS.map((position) => {
+                    const delta = position.actual - position.target;
+                    return <tr key={position.symbol}>
+                      <th scope="row"><span className="cr-asset"><span className="cr-asset-dot" style={{ background: position.color }} /><span><strong>{position.symbol}</strong><small>{position.name}</small><small>{position.utility} · <span className="cr-apy">{position.apy}% APY</span></small></span></span></th>
+                      <td>{position.target}%</td><td><strong>{position.actual}%</strong></td><td className="cr-alloc-delta">{delta > 0 ? "+" : ""}{delta} pp</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
               <aside className="cr-health-panel"><span className="cr-kicker">Portfolio signal / Sample</span><div className="cr-health-number">{health}<span>/ 100</span></div><h3>{driftLabel(drift)}</h3><p>Aggregate distance from saved targets: {drift.toFixed(1)} percentage points. The label is an illustration, not a risk score.</p><div className="cr-health-rule"><span style={{ width: `${health}%` }} /></div><div className="cr-next-label">Where to next</div><button onClick={() => setTab("Shield")}>Compare routes <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Yield")}>Explore yield <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Game")}>View progress <span aria-hidden="true">↗</span></button></aside>
             </section>
             <PortfolioTokens onRouteToShield={() => { setTab("Shield"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
