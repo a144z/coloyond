@@ -14,7 +14,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -22,7 +21,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.coloyond.di.AppContainer
 import com.coloyond.ui.theme.ColoyondTheme
+import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 class MainActivity : ComponentActivity() {
@@ -31,18 +32,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val sender = ActivityResultSender(this)
+        val container = (application as ColoyondApplication).container
 
         setContent {
             ColoyondTheme {
-                val viewModel: MainViewModel = viewModel()
+                val viewModel: MainViewModel = viewModel { MainViewModel(container) }
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     WalletScreen(
                         state = state,
                         onConnect = { viewModel.connect(sender) },
-                        onSignMessage = { viewModel.signMessage(sender, "Hello from Coloyond!") },
+                        onSignMessage = { viewModel.signMessage(sender) },
+                        onSignTransaction = { viewModel.signTransaction(sender) },
                         onDisconnect = { viewModel.disconnect(sender) },
+                        onToggleMockMode = { viewModel.toggleMockMode() },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -56,7 +60,9 @@ fun WalletScreen(
     state: WalletUiState,
     onConnect: () -> Unit,
     onSignMessage: () -> Unit,
+    onSignTransaction: () -> Unit,
     onDisconnect: () -> Unit,
+    onToggleMockMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -72,24 +78,44 @@ fun WalletScreen(
             textAlign = TextAlign.Center,
         )
         if (state.address == null) {
-            Button(onClick = onConnect, enabled = !state.isLoading) {
-                Text("Connect wallet")
+            Button(onClick = onConnect, enabled = !state.busy) {
+                Text(if (state.wallet is WalletState.Connecting) "Connecting…" else "Connect wallet")
             }
         } else {
             Text(
-                text = "Connected: ${state.address.take(4)}…${state.address.takeLast(4)}",
+                text = "Connected: ${state.shortAddress}",
                 style = MaterialTheme.typography.bodyLarge,
             )
-            Button(onClick = onSignMessage, enabled = !state.isLoading) {
+            Button(onClick = onSignMessage, enabled = !state.busy) {
                 Text("Sign message")
             }
-            OutlinedButton(onClick = onDisconnect, enabled = !state.isLoading) {
+            Button(onClick = onSignTransaction, enabled = !state.busy) {
+                Text("Sign transaction")
+            }
+            OutlinedButton(onClick = onDisconnect, enabled = !state.busy) {
                 Text("Disconnect")
             }
         }
-        state.message?.let {
+        OutlinedButton(onClick = onToggleMockMode) {
+            Text("Demo mode: ${if (state.mockMode) "on" else "off"} (43)")
+        }
+        state.failed?.let {
             Text(
                 text = it,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+        }
+        state.feedback?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+        }
+        state.pendingNotice?.let {
+            Text(
+                text = "Pending intent: $it",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
             )
@@ -105,7 +131,9 @@ fun WalletScreenDisconnectedPreview() {
             state = WalletUiState(),
             onConnect = {},
             onSignMessage = {},
+            onSignTransaction = {},
             onDisconnect = {},
+            onToggleMockMode = {},
         )
     }
 }
@@ -115,10 +143,15 @@ fun WalletScreenDisconnectedPreview() {
 fun WalletScreenConnectedPreview() {
     ColoyondTheme {
         WalletScreen(
-            state = WalletUiState(address = "Ho5vmods3ZvjAegHJ8mZTnDa1zbp2Rw4HDNy8Ni2bjfU"),
+            state = WalletUiState(
+                wallet = WalletState.Connected("Ho5vmods3ZvjAegHJ8mZTnDa1zbp2Rw4HDNy8Ni2bjfU"),
+                feedback = "Signature: 5eQxqFu4…",
+            ),
             onConnect = {},
             onSignMessage = {},
+            onSignTransaction = {},
             onDisconnect = {},
+            onToggleMockMode = {},
         )
     }
 }
