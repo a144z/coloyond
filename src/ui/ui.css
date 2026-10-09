@@ -1343,6 +1343,29 @@ option {
   flex-shrink: 0;
 }
 
+.cb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cb-reference-link {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cb-reference-link:hover,
+.cb-reference-link:focus-visible {
+  border-color: var(--accent2);
+  color: var(--text);
+}
+
 .cb-wallet-label {
   color: var(--muted);
   font-size: 11px;
@@ -2134,6 +2157,11 @@ option {
     align-items: flex-start;
   }
 
+  .cb-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .cb-wallet {
     text-align: left;
   }
@@ -2161,4 +2189,3 @@ option {
     align-items: flex-start;
   }
 }
-

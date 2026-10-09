@@ -126,9 +126,14 @@ export function ColoyondApp() {
             </div>
           </div>
         </div>
-        <div className="cb-wallet">
-          <div className="cb-wallet-label">{WALLET.network}</div>
-          <div className="cb-wallet-usd">{WALLET.usd}</div>
+        <div className="cb-header-actions">
+          <a className="cb-reference-link" href="/reference/index.html">
+            UI reference
+          </a>
+          <div className="cb-wallet">
+            <div className="cb-wallet-label">{WALLET.network}</div>
+            <div className="cb-wallet-usd">{WALLET.usd}</div>
+          </div>
         </div>
       </header>
 
