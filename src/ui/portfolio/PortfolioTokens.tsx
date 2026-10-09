@@ -16,7 +16,7 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
 
   const mint = query.trim();
   const looksMintish = mint.length >= 32 && mint.length <= 44;
-  const suggestions = searchSupportedTokens(query, tokens.map((token) => token.symbol)).slice(0, 6);
+  const suggestions = searchSupportedTokens(query, tokens.map((token) => token.mint)).slice(0, 6);
 
   const addFromSearch = (token: SupportedToken) => {
     add(token);
@@ -30,6 +30,7 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
     const check = await confirmMintOnChain(mint);
     setChecking(false);
     if (!check.ok) { setStatus(check.detail); return; }
+    if (tokens.some((token) => token.mint === mint)) { setStatus("That mint is already on the watchlist."); setQuery(""); return; }
     const known = SUPPORTED_SOLANA_TOKENS.find((token) => token.mint === mint);
     if (known !== undefined) {
       add(known);
@@ -54,10 +55,10 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
         <div className="cr-pt-list">
           {tokens.length === 0 && <p className="cr-pt-empty">The watchlist is empty. Add a token below, or reset to the seed basket.</p>}
           {tokens.map((token) => (
-            <article className="cr-pt-row" key={token.symbol}>
+            <article className="cr-pt-row" key={token.mint}>
               <div className="cr-pt-identity"><span className="cr-pt-dot" style={{ background: TAG_DOTS[token.tag] }} /><span><strong>{token.symbol}</strong><small>{token.name} · {token.mint.slice(0, 8)}…</small></span></div>
               <div className="cr-pt-facts"><span>{TAG_WORDS[token.tag]}</span><strong>{token.demoUsd === 0 ? "—" : `$${token.demoUsd.toLocaleString()}`}</strong></div>
-              <button className="cr-pt-remove" onClick={() => remove(token.symbol)}>Remove</button>
+              <button className="cr-pt-remove" onClick={() => remove(token.mint)}>Remove</button>
             </article>
           ))}
         </div>
@@ -68,7 +69,7 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
         </div>
         {suggestions.length > 0 && (
           <div className="cr-pt-suggest">
-            {suggestions.map((token) => <button key={token.symbol} onClick={() => addFromSearch(token)}><i className="cr-pt-dot" style={{ background: TAG_DOTS[token.tag] }} />{token.symbol}<small>{token.name}</small></button>)}
+            {suggestions.map((token) => <button key={token.mint} onClick={() => addFromSearch(token)}><i className="cr-pt-dot" style={{ background: TAG_DOTS[token.tag] }} />{token.symbol}<small>{token.name}</small></button>)}
           </div>
         )}
         {status !== null && <p className="cr-pt-status" role="status">{status}</p>}
