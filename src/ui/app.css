@@ -71,23 +71,32 @@ a { color: inherit; }
 .cr-strategy-facts p { margin: auto 0 4px; padding-top: 20px; font-size: 11px; line-height: 1.5; color: var(--muted); }
 .cr-portfolio-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr); gap: 50px; margin-top: 90px; }
 .cr-allocation-block .cr-section-title { margin-bottom: 27px; }
-.cr-alloc-key { display: flex; align-items: center; gap: 22px; padding: 0 0 12px; border-bottom: 1px solid #cbc6b8; font: 10px monospace; color: var(--muted); }
-.cr-alloc-key > span { display: inline-flex; align-items: center; gap: 7px; }
-.cr-key-line, .cr-key-solid { display: block; width: 17px; height: 4px; }
-.cr-key-line { border: 1px solid var(--ink); }
-.cr-key-solid { background: var(--ink); }
-.cr-alloc-row { padding: 20px 0 17px; border-bottom: 1px solid #cbc6b8; }
-.cr-alloc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.cr-asset { display: flex; align-items: center; gap: 12px; }
-.cr-asset-dot { display: block; width: 11px; height: 11px; border-radius: 50%; }
-.cr-asset strong, .cr-alloc-values strong { display: block; font-size: 19px; letter-spacing: -.6px; }
-.cr-asset small, .cr-alloc-values span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
-.cr-alloc-values { text-align: right; }
-.cr-alloc-bars { display: grid; gap: 5px; margin: 15px 0 10px 23px; }
-.cr-target-bar, .cr-actual-bar { height: 5px; background: #ded9ca; }
-.cr-target-bar span { display: block; height: 100%; opacity: .5; }
-.cr-actual-bar span { display: block; height: 100%; }
-.cr-alloc-foot { display: flex; justify-content: space-between; margin-left: 23px; gap: 16px; color: var(--muted); font: 10px/1.4 monospace; }
+.cr-composition { padding: 21px 23px 16px; background: var(--paper); border: 1px solid #c7c1b1; border-radius: 14px; }
+.cr-composition-row + .cr-composition-row { margin-top: 20px; }
+.cr-composition-heading { display: flex; justify-content: space-between; gap: 12px; font: 10px/1.4 monospace; text-transform: uppercase; letter-spacing: .6px; }
+.cr-composition-heading strong { font-weight: 400; }
+.cr-composition-heading em { margin-left: 5px; color: var(--muted); font-style: normal; }
+.cr-composition-track { display: flex; gap: 2px; width: 100%; height: 16px; margin-top: 9px; overflow: hidden; background: var(--canvas); }
+.cr-composition-track span { min-width: 0; }
+.cr-composition p { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--rule); color: var(--muted); font: 10px/1.5 monospace; }
+.cr-alloc-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.cr-alloc-table thead { border-bottom: 1px solid #cbc6b8; }
+.cr-alloc-table thead th { padding: 19px 0 10px; color: var(--muted); font: 10px/1.4 monospace; font-weight: 400; text-align: right; }
+.cr-alloc-table thead th:first-child { width: 46%; text-align: left; }
+.cr-alloc-table thead th:last-child { width: 21%; }
+.cr-alloc-table tbody tr { border-bottom: 1px solid #cbc6b8; }
+.cr-alloc-table tbody th, .cr-alloc-table td { padding: 19px 0 18px; vertical-align: top; }
+.cr-alloc-table tbody th { text-align: left; font-weight: 400; }
+.cr-alloc-table td { text-align: right; font-size: 16px; }
+.cr-alloc-table td:first-of-type { color: var(--muted); }
+.cr-alloc-table td strong { font-weight: 700; }
+.cr-alloc-table .cr-alloc-delta { font: 12px/1.8 monospace; white-space: nowrap; }
+.cr-asset { display: flex; align-items: baseline; gap: 11px; }
+.cr-asset-dot { display: block; flex: 0 0 11px; width: 11px; height: 11px; border-radius: 50%; }
+.cr-asset strong { display: block; font-size: 19px; letter-spacing: -.6px; }
+.cr-asset small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.cr-asset small + small { font: 10px/1.5 monospace; }
+.cr-apy { white-space: nowrap; }
 .cr-health-panel { background: var(--paper); border: 1px solid #c7c1b1; border-radius: 18px; padding: 30px 31px; align-self: start; }
 .cr-health-number { margin-top: 47px; font-size: 95px; letter-spacing: -.09em; line-height: .9; }
 .cr-health-number span { color: var(--muted); font-size: 22px; letter-spacing: -.05em; }
