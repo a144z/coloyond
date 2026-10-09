@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>coloyond UI reference — strategy card design</title>
+  <style>
+    :root { --paper:#f1ecdd; --ink:#171715; --muted:#66645b; --rule:#d9d3c3; --blue:#1249ed; --violet:#8d25d9; --yellow:#ffd523; --coral:#ff513b; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#e6e2d8; color:var(--ink); font-family:Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
+    button,select,input { font:inherit; }
+    button { cursor:pointer; }
+    button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid var(--blue); outline-offset:4px; }
+    .board { max-width:1440px; margin:auto; padding:44px 48px 36px; }
+    .intro { display:flex; justify-content:space-between; align-items:flex-start; gap:32px; margin-bottom:24px; }
+    .eyebrow { margin:0 0 12px; font:11px/1.4 monospace; letter-spacing:1.6px; text-transform:uppercase; }
+    h1 { margin:0; font-size:48px; letter-spacing:-3px; line-height:1; }
+    .intro p { max-width:400px; margin:0; font-size:15px; line-height:1.6; }
+    .controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px 24px; padding:16px 0; border-top:1px solid #cbc6b8; border-bottom:1px solid #cbc6b8; }
+    .controls label { display:flex; align-items:center; gap:10px; font-size:12px; }
+    .controls select { max-width:235px; padding:10px 12px; border:1px solid #bbb5a5; border-radius:6px; background:#f5f1e8; color:var(--ink); }
+    .controls input { width:18px; height:18px; accent-color:var(--ink); }
+    .preview-label { margin-left:auto; color:var(--muted); font:11px/1.5 monospace; }
+    .screens { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:28px; margin-top:26px; }
+    .screen-label { margin:0 0 12px; display:flex; align-items:center; gap:10px; font-size:12px; }
+    .screen-label span { color:var(--muted); font-family:monospace; font-size:10px; }
+    .phone { background:var(--paper); border:1px solid #c7c1b1; border-radius:26px; overflow:hidden; min-height:720px; box-shadow:0 12px 28px #33301e0b; }
+    .status { padding:13px 21px 0; display:flex; justify-content:space-between; font:10px/1.4 monospace; }
+    .status span:last-child { font-family:Arial,sans-serif; letter-spacing:2px; }
+    .topbar { padding:22px 22px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .brand { font-size:20px; font-weight:800; letter-spacing:-1.2px; }
+    .top-link { font-size:11px; color:var(--muted); }
+    .body { padding:0 22px 24px; }
+    .art { width:100%; aspect-ratio:1/1; display:block; overflow:hidden; }
+    .art svg { width:100%; height:100%; display:block; }
+    .art-small { width:46px; height:46px; aspect-ratio:1; flex:none; background:var(--paper); }
+    .id { color:var(--muted); font:10px/1.5 monospace; letter-spacing:.2px; }
+    .id-row { display:flex; align-items:center; justify-content:space-between; margin:14px 0 20px; }
+    .quiet { color:var(--muted); font-size:10px; }
+    .label { font-size:10px; color:var(--muted); margin-bottom:10px; }
+    .funding { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); font-size:13px; }
+    .coin { width:21px; height:21px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--ink); border-radius:50%; font-size:9px; margin-right:8px; }
+    .allocations { padding:12px 0 5px; }
+    .allocation { display:flex; justify-content:space-between; align-items:center; padding:8px 0; font-size:12px; }
+    .allocation .asset { display:flex; align-items:center; gap:8px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--blue); }
+    .dot.yellow { background:#9b7900; }
+    .allocation strong { font-size:14px; }
+    .bar { display:flex; height:4px; margin:9px 0 13px; }
+    .bar span:first-child { width:60%; background:var(--blue); }
+    .bar span:last-child { flex:1; background:var(--yellow); }
+    .details { font-size:11px; color:var(--muted); margin:8px 0 18px; }
+    summary { cursor:pointer; padding:5px 0; }
+    details p { margin:9px 0; line-height:1.5; }
+    .button { display:block; width:100%; min-height:44px; border:0; border-radius:7px; background:var(--ink); color:var(--paper); font-size:12px; font-weight:600; padding:13px 16px; text-align:center; }
+    .button.secondary { border:1px solid #c1baaa; background:transparent; color:var(--ink); }
+    .button:disabled { cursor:default; opacity:.55; }
+    .button-row { display:flex; gap:8px; margin-top:10px; }
+    .button-row .button { flex:1; }
+    .micro { font-size:10px; line-height:1.6; color:var(--muted); margin:12px 0 0; }
+    .share-card { border:1px solid var(--rule); background:#f7f2e5; margin:8px 0 20px; padding:10px 12px 16px; }
+    .share-card .art { aspect-ratio:1; }
+    .caption { font-size:20px; line-height:1.25; letter-spacing:-.6px; min-height:68px; display:flex; align-items:center; padding:8px 7px 12px; }
+    .caption.hidden { visibility:hidden; }
+    .card-foot { margin:0 7px; padding-top:12px; border-top:1px solid var(--rule); }
+    .card-foot-top { display:flex; justify-content:space-between; align-items:center; }
+    .card-brand { font-size:12px; font-weight:800; letter-spacing:-.6px; }
+    .card-facts { font-size:9px; color:#58564f; margin-top:10px; line-height:1.5; }
+    .expression-tools { display:flex; justify-content:space-between; align-items:center; margin:8px 0 16px; }
+    .text-button { padding:8px 0; min-height:44px; border:0; background:none; color:var(--ink); font-size:11px; text-decoration:underline; text-underline-offset:3px; }
+    .parent { display:flex; align-items:center; gap:9px; padding:10px 0 12px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+    .parent-text { display:flex; flex-direction:column; gap:3px; font-size:10px; }
+    .remix-art { margin-top:4px; }
+    .remix-caption { min-height:37px; font-size:17px; letter-spacing:-.4px; margin:4px 0 10px; }
+    .slider { width:100%; color:var(--ink); background:var(--paper); border:1px solid var(--rule); min-height:44px; padding:8px; font-size:11px; margin:0 0 12px; }
+    .footnotes { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; margin-top:18px; font-size:12px; line-height:1.6; color:#55534b; }
+    .footnotes p { margin:0; }
+    .footer { display:flex; justify-content:space-between; align-items:center; gap:20px; padding-top:22px; margin-top:22px; border-top:1px solid #cbc6b8; font:10px/1.6 monospace; color:var(--muted); }
+    .footer a { color:var(--ink); }
+    .notice { margin:0; min-height:20px; font-size:11px; color:var(--muted); }
+    dialog { max-width:420px; width:calc(100% - 32px); border:1px solid #b9b2a0; border-radius:12px; padding:20px; background:var(--paper); color:var(--ink); }
+    dialog::backdrop { background:#17171566; }
+    dialog h2 { font-size:16px; margin:0 0 14px; }
+    dialog p { font-size:12px; line-height:1.6; }
+    @media(max-width:1100px) { .board { padding:32px 24px; } .screens,.footnotes { gap:16px; } .topbar { padding-left:16px; padding-right:16px; } .body { padding-left:16px; padding-right:16px; } .preview-label { margin-left:0; } }
+    @media(max-width:820px) { .intro { display:block; } .intro p { margin-top:20px; } h1 { font-size:42px; } .screens { grid-template-columns:1fr; max-width:390px; margin-left:auto; margin-right:auto; gap:30px; } .footnotes { grid-template-columns:1fr; } .phone { min-height:0; } .footer { align-items:flex-start; } }
+    @media(prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; } }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <div class="intro">
+      <div><p class="eyebrow">coloyond / Strategy expressions / Design 02</p><h1>A little room<br>for interpretation.</h1></div>
+      <p>The strategy has an identity. Its expression can keep changing.<br><br>Abstract artwork, an optional caption, and a quiet factual footer. The financial details stay within reach.</p>
+    </div>
+    <div class="controls" aria-label="Design preview controls">
+      <label>Visual study <select id="study"><option value="0">Folded planes</option><option value="1">An interrupted orbit</option><option value="2">Almost meeting</option></select></label>
+      <label>Caption <select id="captionChoice"><option>The yellow arrived first</option><option>Held, lightly</option><option>An opening at the edge</option><option>Almost a circle</option><option>Still becoming</option><option>Where the light goes</option><option>Between possibilities</option><option>Beyond this moment</option><option>An unfamiliar horizon</option><option>What might unfold</option></select></label>
+      <label><input id="captionVisible" type="checkbox" checked> Include caption</label>
+      <span class="preview-label">Offline design preview · Sample artwork and IDs</span>
+    </div>
+    <div class="screens">
+      <section aria-label="Create strategy design">
+        <p class="screen-label"><span>01</span> Select a strategy</p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span aria-hidden="true">▰ ▰ ▰</span></div>
+          <header class="topbar"><span class="brand">coloyond</span><span class="top-link">Saved</span></header>
+          <div class="body">
+            <div class="art" id="createArt"></div>
+            <div class="id-row"><span class="id">cb2:7c4a91…e912b7</span><span class="quiet">Solana</span></div>
+            <div class="label">Existing managed strategy · sample</div>
+            <div class="funding"><span>One share token</span><span class="quiet">Protocol managed</span></div>
+            <div class="allocations">
+              <div class="allocation"><span class="asset"><i class="dot"></i>Target jupSOL</span><strong>60%</strong></div>
+              <div class="allocation"><span class="asset"><i class="dot yellow"></i>Target USDC</span><strong>40%</strong></div>
+              <div class="bar"><span></span><span></span></div>
+            </div>
+            <details class="details"><summary>Strategy details</summary><p>Illustrative saved target weights, not actual holdings. The product verifies an existing vault, its share mint, fees, management activity, NAV, and independent Jupiter entry/exit routes. No live vault is verified in this preview.</p></details>
+            <button class="button" id="generate">Generate image</button>
+            <p class="micro">Preview interaction cycles authored visual studies.<br>Live GenAI and vault verification are specified.</p>
+          </div>
+        </div>
+      </section>
+      <section aria-label="Share expression design">
+        <p class="screen-label"><span>02</span> Save an expression</p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span aria-hidden="true">▰ ▰ ▰</span></div>
+          <header class="topbar"><span class="brand">coloyond</span><span class="top-link" id="expressionState">Saved expression</span></header>
+          <div class="body">
+            <div class="share-card" id="savedCard">
+              <div class="art" id="shareArt"></div>
+              <div class="caption" id="captionText">The yellow arrived first</div>
+              <div class="card-foot">
+                <div class="card-foot-top"><span class="id">cb2:7c4a91…e912b7</span><span class="card-brand">coloyond</span></div>
+                <div class="card-facts">Target weights · saved configuration<br>60% jupSOL / 40% USDC · Symmetry / Solana · Sample</div>
+              </div>
+            </div>
+            <div class="expression-tools"><button class="text-button" id="anotherImage">Another image</button><button class="text-button" id="anotherCaption">Another caption</button></div>
+            <div class="button-row"><button class="button secondary" id="saveExpression" disabled>Save expression</button><button class="button" id="share">Share preview</button></div>
+            <details class="details"><summary>View strategy</summary><p>The artwork interprets a saved configuration. NAV, market price, current holdings, and an executable quote are separate facts. Sharing does not buy a token.</p></details>
+            <p class="micro">The caption belongs to this expression.<br>The strategy ID stays the same.</p>
+          </div>
+        </div>
+      </section>
+      <section aria-label="Remix strategy design">
+        <p class="screen-label"><span>03</span> Make a remix</p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span aria-hidden="true">▰ ▰ ▰</span></div>
+          <header class="topbar"><span class="brand">coloyond</span><span class="top-link">Remix</span></header>
+          <div class="body">
+            <div class="parent"><div class="art art-small" id="parentArt"></div><div class="parent-text"><span>From this expression</span><span class="id">cbe1:8b716e…639ca2</span></div></div>
+            <div class="art remix-art" id="remixArt"></div>
+            <div class="remix-caption" id="remixCaption">An opening at the edge</div>
+            <div class="id-row"><span class="id" id="remixId">cb2:a18f32…03c47e</span><span class="quiet" id="remixStatus">Changed strategy</span></div>
+            <div class="allocation"><span class="asset"><i class="dot"></i>jupSOL</span><strong id="lstValue">70%</strong></div>
+            <div class="allocation"><span class="asset"><i class="dot yellow"></i>USDC</span><strong id="usdcValue">30%</strong></div>
+            <label class="label" for="allocation">Explore another allocation</label>
+            <select class="slider" id="allocation" aria-label="Illustrative existing-vault selection or allocation draft"><option value="70">70 / 30 · another sample vault</option><option value="60">60 / 40 · same sample vault</option><option value="50">50 / 50 · unmatched draft</option></select>
+            <button class="button" id="remix">Preview new expression</button>
+            <p class="micro"><span id="remixExplanation">Select another existing vault; the parent stays intact.</span><br>No live purchase is available in this preview.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="footnotes">
+      <p>One share token represents managed holdings. Saved target weights remain readable; actual composition and current NAV are separate facts.</p>
+      <p>Captions can be sensory, spatial, intimate, or absent. They stay small enough to let the image speak.</p>
+      <p>A remix inherits a visual gesture. Select another existing vault, or keep desired weights as an explicit draft. The parent stays intact.</p>
+    </div>
+    <div class="footer"><span>Design artifact only. No wallet, inference, live quotes, or financial execution.<br>All shown IDs are illustrative. Color reflects composition, not risk.</span><a href="../superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md">Read the specification →</a></div>
+    <p class="notice" role="status" aria-live="polite" id="notice"></p>
+  </main>
+  <dialog id="shareDialog" aria-labelledby="dialogTitle">
+    <h2 id="dialogTitle">Share card layout</h2>
+    <div id="dialogCard"></div>
+    <p>Illustrative export layout. The product renders a 1080 × 1350 PNG locally and exports the validated strategy separately.</p>
+    <form method="dialog"><button class="button">Close preview</button></form>
+  </dialog>
+  <script>
+    const study = document.getElementById('study');
+    const captionChoice = document.getElementById('captionChoice');
+    const captionVisible = document.getElementById('captionVisible');
+    const allocation = document.getElementById('allocation');
+    let remixVariation = 1;
+    const parentStudy = 0;
+    let savedExpression = { study: 0, caption: captionChoice.value, captionVisible: true };
+    const illustrativeIds = {
+      50: 'cbd1:9de257…af63d9', 60: 'cb2:7c4a91…e912b7', 70: 'cb2:a18f32…03c47e'
+    };
+    function art(kind, suffix, remix = false) {
+      const blue = '#1249ed', yellow = '#ffd523', violet = '#8d25d9', coral = '#ff513b';
+      const rotation = remix ? 9 : 0;
+      const defs = `<defs>
+        <linearGradient id="warm-${suffix}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${coral}"/><stop offset="1" stop-color="${yellow}"/></linearGradient>
+        <linearGradient id="cool-${suffix}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${blue}"/><stop offset="1" stop-color="${violet}"/></linearGradient>
+        <linearGradient id="ink-${suffix}" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#c3bdad"/><stop offset="1" stop-color="#171715"/></linearGradient>
+        <filter id="grain-${suffix}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" seed="17"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".10"/></feComponentTransfer></filter>
+      </defs>`;
+      let geometry = '';
+      if (kind === 0) {
+        geometry = `<g transform="rotate(${rotation} 180 170)">
+          <path d="M48 120 180 48 250 88 119 162Z" fill="url(#ink-${suffix})"/>
+          <path d="M48 120 119 162 119 250 48 209Z" fill="#999487"/>
+          <path d="M119 162 180 129 180 216 119 250Z" fill="#171715"/>
+          <path d="M180 48 250 88 250 165 180 129Z" fill="url(#warm-${suffix})"/>
+          <path d="M180 129 250 165 180 216Z" fill="url(#cool-${suffix})"/>
+          <path d="M157 207 360 115 360 172Z" fill="${coral}"/>
+          <path d="M157 207 360 172 360 213Z" fill="${blue}"/>
+          <path d="M157 207 360 213 360 262Z" fill="${yellow}"/>
+          <path d="M157 207 360 262 360 318Z" fill="${violet}"/>
+          <path d="M119 162 257 242 257 298 119 218Z" fill="url(#ink-${suffix})"/>
+          <path d="M48 209 119 218 257 298 185 315Z" fill="#171715"/>
+        </g>`;
+      } else if (kind === 1) {
+        geometry = `<g transform="rotate(${rotation-16} 180 180)">
+          <circle cx="176" cy="176" r="98" fill="none" stroke="#171715" stroke-width="39" stroke-dasharray="440 176" transform="rotate(34 176 176)"/>
+          <path d="M164 52 259 84 236 153 142 120Z" fill="url(#cool-${suffix})"/>
+          <path d="M150 167 340 98 324 151 185 188Z" fill="${yellow}"/>
+          <path d="M164 201 336 194 306 238 165 222Z" fill="${coral}"/>
+          <path d="M151 235 270 283 234 312 139 255Z" fill="${violet}"/>
+          <circle cx="176" cy="176" r="46" fill="#f7f2e5"/>
+        </g>`;
+      } else {
+        geometry = `<g transform="rotate(${rotation} 180 180)">
+          <path d="M43 85 158 43 158 245 43 286Z" fill="#171715"/>
+          <path d="M43 85 102 113 216 72 158 43Z" fill="url(#ink-${suffix})"/>
+          <path d="M102 113 216 72 216 175 102 216Z" fill="url(#cool-${suffix})"/>
+          <path d="M178 212 300 169 300 261 178 307Z" fill="url(#warm-${suffix})"/>
+          <path d="M178 212 208 227 329 184 300 169Z" fill="${yellow}"/>
+          <path d="M300 169 329 184 329 277 300 261Z" fill="#171715"/>
+          <path d="M32 315 144 275 157 283 47 324Z" fill="${violet}"/>
+        </g>`;
+      }
+      const descriptions = [
+        'Illustrative folded planes with cobalt, coral, yellow, and violet beams',
+        'Illustrative interrupted black ring with saturated colored planes',
+        'Illustrative offset slabs with an opening between blue and yellow forms'
+      ];
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" role="img" aria-label="${descriptions[kind]}">${defs}${geometry}<rect width="360" height="360" filter="url(#grain-${suffix})" opacity=".7"/></svg>`;
+    }
+    function render() {
+      const kind = Number(study.value);
+      document.getElementById('createArt').innerHTML = art(kind, 'create');
+      document.getElementById('shareArt').innerHTML = art(kind, 'share');
+      document.getElementById('parentArt').innerHTML = art(parentStudy, 'parent');
+      document.getElementById('remixArt').innerHTML = art((parentStudy + remixVariation) % 3, 'remix', true);
+      document.getElementById('captionText').textContent = captionChoice.value;
+      document.getElementById('captionText').classList.toggle('hidden', !captionVisible.checked);
+      document.getElementById('remixCaption').style.visibility = captionVisible.checked ? 'visible' : 'hidden';
+      const value = Number(allocation.value);
+      document.getElementById('lstValue').textContent = `${value}%`;
+      document.getElementById('usdcValue').textContent = `${100-value}%`;
+      document.getElementById('remixId').textContent = illustrativeIds[value];
+      document.getElementById('remixStatus').textContent = value === 60 ? 'Same saved strategy' : value === 50 ? 'Allocation draft · no vault' : 'Another sample vault';
+      document.getElementById('remixExplanation').textContent = value === 50 ? 'Desired weights only. No matching vault or share mint is implied.' : value === 60 ? 'Another expression for the same saved strategy.' : 'Select another existing vault; the parent stays intact.';
+      const dirty = kind !== savedExpression.study || captionChoice.value !== savedExpression.caption || captionVisible.checked !== savedExpression.captionVisible;
+      document.getElementById('expressionState').textContent = dirty ? 'Unsaved expression' : 'Saved expression';
+      document.getElementById('saveExpression').disabled = !dirty;
+      document.getElementById('share').disabled = dirty;
+    }
+    function nextStudy() { study.value = String((Number(study.value) + 1) % 3); render(); document.getElementById('notice').textContent = 'Showing another authored visual study. The strategy ID stays the same.'; }
+    [study, captionChoice, captionVisible].forEach(control => control.addEventListener('change', render));
+    allocation.addEventListener('change', render);
+    document.getElementById('generate').addEventListener('click', nextStudy);
+    document.getElementById('anotherImage').addEventListener('click', nextStudy);
+    document.getElementById('anotherCaption').addEventListener('click', () => { captionChoice.selectedIndex = (captionChoice.selectedIndex + 1) % captionChoice.options.length; render(); });
+    document.getElementById('remix').addEventListener('click', () => { remixVariation = remixVariation === 1 ? 2 : 1; render(); document.getElementById('notice').textContent = 'Showing a sample remix expression. No financial action was performed.'; });
+    document.getElementById('saveExpression').addEventListener('click', () => {
+      savedExpression = { study: Number(study.value), caption: captionChoice.value, captionVisible: captionVisible.checked };
+      render();
+      document.getElementById('notice').textContent = 'Saved this illustrative expression for sharing. The imported remix parent stays intact.';
+    });
+    document.getElementById('share').addEventListener('click', () => {
+      document.getElementById('dialogCard').innerHTML = document.getElementById('savedCard').outerHTML;
+      document.querySelectorAll('#dialogCard [id]').forEach(element => element.removeAttribute('id'));
+      document.querySelectorAll('#dialogCard svg').forEach(element => {
+        element.innerHTML = art(savedExpression.study, 'dialog').replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+      });
+      document.getElementById('shareDialog').showModal();
+    });
+    render();
+  </script>
+</body>
+</html>
