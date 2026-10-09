@@ -4,6 +4,7 @@ import { symbolsOn } from "../tokenmap.js";
 import { Route } from "../types.js";
 import { fetchRoutes } from "../routeService.js";
 import { ReferenceArt } from "./ReferenceArt.js";
+import { PortfolioTokens } from "./portfolio/PortfolioTokens.js";
 import {
   ECOSYSTEM,
   FEATURE_FARM,
@@ -233,6 +234,7 @@ export function ColoyondApp() {
               </div>
               <aside className="cr-health-panel"><span className="cr-kicker">Portfolio signal / Sample</span><div className="cr-health-number">{health}<span>/ 100</span></div><h3>{driftLabel(drift)}</h3><p>Aggregate distance from saved targets: {drift.toFixed(1)} percentage points. The label is an illustration, not a risk score.</p><div className="cr-health-rule"><span style={{ width: `${health}%` }} /></div><div className="cr-next-label">Where to next</div><button onClick={() => setTab("Shield")}>Compare routes <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Yield")}>Explore yield <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Game")}>View progress <span aria-hidden="true">↗</span></button></aside>
             </section>
+            <PortfolioTokens onRouteToShield={() => { setTab("Shield"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
           </>}
 
           {tab === "Shield" && <>
