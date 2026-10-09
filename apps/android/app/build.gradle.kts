@@ -50,6 +50,9 @@ dependencies {
     implementation(libs.mobile.wallet.adapter.clientlib.ktx)
     implementation(libs.multimult)
     implementation(libs.web3.solana)
+    // Ruleset 34 lists a fourth coordinate, com.solana:rpc-core. Its pinned
+    // version tracks the older clientlib line, so the scaffold's own
+    // HttpRpcTransport/SolanaRpc stay in-repo instead (ruleset 10, 23).
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

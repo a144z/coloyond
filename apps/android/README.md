@@ -91,3 +91,20 @@ On 9 October 2026, Linux/WSL with JDK 17 completed:
 ```
 
 The debug APK was produced, the single generated unit test passed, and lint completed successfully. APK inspection confirmed `com.coloyond`, minimum SDK 26, target SDK 37, and the `MainActivity` launcher. No device was connected, so APK installation, instrumented tests, and real wallet interactions were not exercised.
+
+## Base infra — Solana Mobile hackathon ruleset pass
+
+The app now carries the base library the demo path will stand on. Each piece cites its ruleset number; the description file lives outside the repo on the author's desktop.
+
+- `di/AppContainer.kt` + `ColoyondApplication.kt` — one hand-wired composition root, no DI framework (10, 23).
+- `config/AppConfig.kt` — dedicated RPC endpoint placeholder, wallet `ConnectionIdentity`, connect/read timeouts, 3-attempt 1s→8s backoff (16, 17, 35).
+- `core/rpc/` — `RpcTransport` seam, `HttpRpcTransport` (`HttpURLConnection`, no new dependency), `SolanaRpc` (getBalance + signature status verification), `withRetry`/`RetryPolicy` (17, 21).
+- `core/storage/` — `PrefsStore` (mock-mode flag; keys live with the wallet/Keystore, never in plaintext prefs) and `PendingIntentStore` (intent saved before sending, checked on Activity reload) (19, 21).
+- `wallet/` — `WalletState` lifecycle; `WalletGateway` seam (20); `MwaWalletGateway` for the Intent-based MWA→Phantom path (33, 35); `MockWalletGateway` for the no-wallet fallback (37, 43); `WalletRepository` enforces connect and sign as separate taps, never fails silently, and verifies transaction signatures on-chain (36, 21, 41).
+- Manifest — `INTERNET` permission (11), `allowBackup=false` (13), `usesCleartextTraffic=true` for devnet http, flip before submission (12), `launchMode="singleTop"` (15), and `android:name=".ColoyondApplication"`.
+- Gradle — JitPack repository in `settings.gradle.kts` (4); AndroidX/Jetifier lines in `gradle.properties` (5, no-ops on AGP 9, kept for the checklist).
+- `proguard-rules.pro` — Solana-only keep/dontwarn rules; deliberately no Web3j or BouncyCastle (14, 40).
+
+Deliberate omissions: no `rpc-core` dependency (its pinned version tracks the older clientlib line; the in-repo transport satisfies rule 17 — ruleset 10 wins), no BouncyCastle force (no Etheream-side stack, rule 40), and `compileSdk`/`targetSdk` stay on 37 because the AGP 9.3 scaffold build above already verified them (rule 2 permits 35+ once every dependency is confirmed).
+
+Demo path (41): Connect Wallet against the Mock MWA Wallet (lock-screen PIN set) or real Phantom, then Sign Message, then Sign Transaction. If the device wallet misbehaves on-site, the Demo Mode toggle (43) fakes wallet calls with preset results. The `yourdapp.com` identity host (35) is still a placeholder and must become app-owned metadata before wallet identity verification counts.

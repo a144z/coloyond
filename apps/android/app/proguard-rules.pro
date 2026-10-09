@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Ruleset 14 + 40: reflection-heavy Web3 code survives R8. Solana-only keep
+# rules; deliberately no web3j or BouncyCastle rules here (ruleset 40).
+-keepattributes *Annotation*
+-keep class com.solana.** { *; }
+-keep class com.funkatronics.encoders.** { *; }
+-dontwarn com.solana.**
+-dontwarn com.funkatronics.**
