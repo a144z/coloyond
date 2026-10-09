@@ -15,10 +15,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Coloyond"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:replace="android:fullBackupContent">
 
-        <!-- Ruleset 13: allowBackup=false keeps secrets out of auto-backup; ruleset 12: usesCleartextTraffic=true for devnet http only, flip to false before submission. -->
+        <!-- Ruleset 13: allowBackup=false keeps secrets out of auto-backup. Ruleset 12: cleartext only to localhost, for the MWA local association; see network_security_config.xml. -->
 
         <!-- Ruleset 15: singleTop so wallet SDK callbacks never stack Activity instances. -->
         <activity
