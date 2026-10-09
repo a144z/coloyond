@@ -26,5 +26,6 @@ object AppConfig {
     val retry = RetryPolicy(maxAttempts = 3, initialDelayMs = 1_000, maxDelayMs = 8_000)
 
     const val sampleMessage = "Hello from Coloyond!"
-    val sampleTransactionBytes: ByteArray = "Coloyond demo transaction".toByteArray()
+    // Published on devnet through the Memo program; the wallet pays the fee.
+    const val sampleMemo = "Coloyond demo transaction"
 }

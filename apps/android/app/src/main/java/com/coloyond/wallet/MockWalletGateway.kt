@@ -17,7 +17,7 @@ class MockWalletGateway(
     override suspend fun signMessage(sender: ActivityResultSender, message: String) =
         GatewayResult.Ok(fakeSignature)
 
-    override suspend fun signTransaction(sender: ActivityResultSender, message: ByteArray) =
+    override suspend fun signAndSendMemo(sender: ActivityResultSender, memo: String, recentBlockhash: String) =
         GatewayResult.Ok(fakeSignature)
 
     override suspend fun disconnect(sender: ActivityResultSender) = GatewayResult.Ok()

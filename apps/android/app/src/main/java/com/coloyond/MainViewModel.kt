@@ -8,7 +8,6 @@ import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,7 +37,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         container.prefs.mockMode,
     ) { wallet, feedback, pending, mock ->
         WalletUiState(wallet = wallet, feedback = feedback, pendingNotice = pending, mockMode = mock)
-    }.stateIn(viewModelScope, WalletUiState(), WhileSubscribed(SharingStarted.Eagerly, 0))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WalletUiState())
 
     init {
         repository.reportPendingIntents()
@@ -50,7 +49,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { repository.signMessage(sender, AppConfig.sampleMessage) }
 
     fun signTransaction(sender: ActivityResultSender) =
-        viewModelScope.launch { repository.signTransaction(sender, AppConfig.sampleTransactionBytes) }
+        viewModelScope.launch { repository.signTransaction(sender, AppConfig.sampleMemo) }
 
     fun disconnect(sender: ActivityResultSender) = viewModelScope.launch { repository.disconnect(sender) }
 

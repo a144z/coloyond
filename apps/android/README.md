@@ -101,6 +101,7 @@ The app now carries the base library the demo path will stand on. Each piece cit
 - `core/rpc/` — `RpcTransport` seam, `HttpRpcTransport` (`HttpURLConnection`, no new dependency), `SolanaRpc` (getBalance + signature status verification), `withRetry`/`RetryPolicy` (17, 21).
 - `core/storage/` — `PrefsStore` (mock-mode flag; keys live with the wallet/Keystore, never in plaintext prefs) and `PendingIntentStore` (intent saved before sending, checked on Activity reload) (19, 21).
 - `wallet/` — `WalletState` lifecycle; `WalletGateway` seam (20); `MwaWalletGateway` for the Intent-based MWA→Phantom path (33, 35); `MockWalletGateway` for the no-wallet fallback (37, 43); `WalletRepository` enforces connect and sign as separate taps, never fails silently, and verifies transaction signatures on-chain (36, 21, 41).
+- "Sign transaction" builds a devnet Memo-program transaction with a fresh blockhash and asks the wallet to sign and send it. The connected account needs devnet SOL for the fee. The app then polls `getSignatureStatuses` for about 10 seconds.
 - Manifest — `INTERNET` permission (11), `allowBackup=false` (13), `usesCleartextTraffic=true` for devnet http, flip before submission (12), `launchMode="singleTop"` (15), and `android:name=".ColoyondApplication"`.
 - Gradle — JitPack repository in `settings.gradle.kts` (4); AndroidX/Jetifier lines in `gradle.properties` (5, no-ops on AGP 9, kept for the checklist).
 - `proguard-rules.pro` — Solana-only keep/dontwarn rules; deliberately no Web3j or BouncyCastle (14, 40).

@@ -7,7 +7,10 @@ import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import com.solana.mobilewalletadapter.clientlib.Solana
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
+import com.solana.programs.MemoProgram
 import com.solana.publickey.SolanaPublicKey
+import com.solana.transaction.Message
+import com.solana.transaction.Transaction
 
 /**
  * Production path: MWA talks to Phantom-compatible wallets over Android
@@ -33,34 +36,48 @@ class MwaWalletGateway : WalletGateway {
                 SolanaPublicKey(result.authResult.accounts.first().publicKey).base58(),
             )
             is TransactionResult.NoWalletFound -> GatewayResult.NoWallet
-            is TransactionResult.Failure -> GatewayResult.Rejected(result.message ?: "connect rejected")
+            is TransactionResult.Failure -> GatewayResult.Rejected(result.message)
         }
 
     override suspend fun signMessage(sender: ActivityResultSender, message: String): GatewayResult =
         when (val result = adapter.transact(sender) { authResult ->
             signMessagesDetached(
-                arrayOf(message.toByteArray()),
+                arrayOf(message.encodeToByteArray()),
                 arrayOf(authResult.accounts.first().publicKey),
             ).messages.first().signatures.first()
         }) {
             is TransactionResult.Success -> GatewayResult.Ok(Base58.encodeToString(result.payload))
             is TransactionResult.NoWalletFound -> GatewayResult.NoWallet
-            is TransactionResult.Failure -> GatewayResult.Rejected(result.message ?: "sign rejected")
+            is TransactionResult.Failure -> GatewayResult.Rejected(result.message)
         }
 
-    override suspend fun signTransaction(sender: ActivityResultSender, message: ByteArray): GatewayResult =
+    override suspend fun signAndSendMemo(
+        sender: ActivityResultSender,
+        memo: String,
+        recentBlockhash: String,
+    ): GatewayResult =
         when (val result = adapter.transact(sender) { authResult ->
-            signTransaction(message, listOf(authResult.accounts.first().publicKey), false).signatures
+            val payer = SolanaPublicKey(authResult.accounts.first().publicKey)
+            signAndSendTransactions(arrayOf(memoTransaction(payer, memo, recentBlockhash))).signatures.first()
         }) {
             is TransactionResult.Success -> GatewayResult.Ok(Base58.encodeToString(result.payload))
             is TransactionResult.NoWalletFound -> GatewayResult.NoWallet
-            is TransactionResult.Failure -> GatewayResult.Rejected(result.message ?: "sign rejected")
+            is TransactionResult.Failure -> GatewayResult.Rejected(result.message)
         }
 
     override suspend fun disconnect(sender: ActivityResultSender): GatewayResult =
         when (val result = adapter.disconnect(sender)) {
             is TransactionResult.Success -> GatewayResult.Ok()
             is TransactionResult.NoWalletFound -> GatewayResult.NoWallet
-            is TransactionResult.Failure -> GatewayResult.Rejected(result.message ?: "disconnect failed")
+            is TransactionResult.Failure -> GatewayResult.Rejected(result.message)
         }
+}
+
+/** Unsigned legacy transaction with one Memo instruction; [payer] signs and pays the fee. */
+internal fun memoTransaction(payer: SolanaPublicKey, memo: String, recentBlockhash: String): ByteArray {
+    val message = Message.Builder()
+        .addInstruction(MemoProgram.publishMemo(payer, memo))
+        .setRecentBlockhash(recentBlockhash)
+        .build()
+    return Transaction(message).serialize()
 }

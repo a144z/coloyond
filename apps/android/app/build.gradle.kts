@@ -54,6 +54,7 @@ dependencies {
     // version tracks the older clientlib line, so the scaffold's own
     // HttpRpcTransport/SolanaRpc stay in-repo instead (ruleset 10, 23).
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
