@@ -55,6 +55,8 @@ impl PinnedFeed {
 pub struct OracleLimits {
     pub maximum_age_seconds: u64,
     pub maximum_confidence_bps: u16,
+    pub minimum_exponent: i32,
+    pub maximum_exponent: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,6 +145,14 @@ pub fn decode_fixed_feed_account(
         PYTH_RECEIVER_PROGRAM_ID,
         OracleError::WrongOracleOwner
     );
+    // `PriceUpdateV2::LEN` reserves the maximum Borsh enum width for Partial
+    // verification. Full serializes one byte shorter. Accept exactly those
+    // two SDK-defined account lengths, without assuming how the final
+    // allocation byte is initialized.
+    require!(
+        (PriceUpdateV2::LEN - 1..=PriceUpdateV2::LEN).contains(&data.len()),
+        OracleError::InvalidAccountData
+    );
     let mut bytes = data;
     PriceUpdateV2::try_deserialize(&mut bytes).map_err(|_| error!(OracleError::InvalidAccountData))
 }
@@ -165,7 +175,8 @@ pub fn validate_fixed_feed(
         OracleError::WrongOracleOwner
     );
     require!(
-        limits.maximum_age_seconds <= i64::MAX as u64,
+        limits.maximum_age_seconds <= i64::MAX as u64
+            && limits.minimum_exponent <= limits.maximum_exponent,
         OracleError::InvalidPolicy
     );
 
@@ -180,6 +191,10 @@ pub fn validate_fixed_feed(
         )
         .map_err(|_| error!(OracleError::InvalidPrice))?;
     require!(price.price > 0, OracleError::NonPositivePrice);
+    require!(
+        (limits.minimum_exponent..=limits.maximum_exponent).contains(&price.exponent),
+        OracleError::UnsupportedExponent
+    );
     require!(
         price.publish_time <= clock.unix_timestamp,
         OracleError::FuturePublishTime
@@ -262,6 +277,8 @@ mod tests {
         OracleLimits {
             maximum_age_seconds: 60,
             maximum_confidence_bps: 100,
+            minimum_exponent: -17,
+            maximum_exponent: 0,
         }
     }
 
@@ -490,6 +507,7 @@ mod tests {
         let limits_at_boundary = OracleLimits {
             maximum_age_seconds: 60,
             maximum_confidence_bps: 100,
+            ..limits()
         };
         assert!(validate_fixed_feed(
             PinnedFeed::SolUsd,
@@ -549,6 +567,7 @@ mod tests {
         let permissive_diagnostic_limit = OracleLimits {
             maximum_age_seconds: 60,
             maximum_confidence_bps: 10_000,
+            ..limits()
         };
         assert!(validate_fixed_feed(
             PinnedFeed::SolUsd,
@@ -562,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn decoder_checks_owner_and_uses_the_sdk_account_layout() {
+    fn decoder_accepts_only_full_or_maximum_sdk_account_length() {
         let value = update(
             PinnedFeed::UsdcUsd,
             VerificationLevel::Full,
@@ -572,6 +591,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
         value.try_serialize(&mut bytes).unwrap();
+        assert_eq!(bytes.len(), PriceUpdateV2::LEN - 1);
         let decoded = decode_fixed_feed_account(
             PinnedFeed::UsdcUsd,
             USDC_USD_FEED_ACCOUNT,
@@ -580,6 +600,87 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decoded.price_message.feed_id, value.price_message.feed_id);
+
+        let mut full_with_allocation_byte = bytes.clone();
+        full_with_allocation_byte.push(0);
+        let decoded_padded_full = decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &full_with_allocation_byte,
+        )
+        .unwrap();
+        assert!(validate_fixed_feed(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &decoded_padded_full,
+            &clock(),
+            limits(),
+        )
+        .is_ok());
+
+        let partial = update(
+            PinnedFeed::UsdcUsd,
+            VerificationLevel::Partial { num_signatures: 1 },
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let mut maximum_allocation = Vec::new();
+        partial.try_serialize(&mut maximum_allocation).unwrap();
+        assert_eq!(maximum_allocation.len(), PriceUpdateV2::LEN);
+        let decoded_partial = decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &maximum_allocation,
+        )
+        .unwrap();
+        assert!(validate_fixed_feed(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &decoded_partial,
+            &clock(),
+            limits(),
+        )
+        .is_err());
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes[..PriceUpdateV2::LEN - 2],
+        )
+        .is_err());
+        let mut oversized_full = bytes.clone();
+        oversized_full.extend_from_slice(&[0, 0]);
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &oversized_full,
+        )
+        .is_err());
+
+        let mut bad_discriminator = bytes.clone();
+        bad_discriminator[0] ^= 0xff;
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bad_discriminator,
+        )
+        .is_err());
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes,
+        )
+        .is_err());
         assert!(decode_fixed_feed_account(
             PinnedFeed::UsdcUsd,
             USDC_USD_FEED_ACCOUNT,
@@ -587,5 +688,101 @@ mod tests {
             &bytes,
         )
         .is_err());
+    }
+
+    #[test]
+    fn exponent_policy_is_inclusive_and_rejects_each_outside_boundary() {
+        let policy = OracleLimits {
+            minimum_exponent: -17,
+            maximum_exponent: 0,
+            ..limits()
+        };
+        for exponent in [-17, 0] {
+            let mut at_boundary = update(
+                PinnedFeed::SolUsd,
+                VerificationLevel::Full,
+                100_000_000,
+                1_000,
+                NOW,
+            );
+            at_boundary.price_message.exponent = exponent;
+            assert!(validate_fixed_feed(
+                PinnedFeed::SolUsd,
+                SOL_USD_FEED_ACCOUNT,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &at_boundary,
+                &clock(),
+                policy,
+            )
+            .is_ok());
+        }
+        for exponent in [-18, 1] {
+            let mut outside = update(
+                PinnedFeed::SolUsd,
+                VerificationLevel::Full,
+                100_000_000,
+                1_000,
+                NOW,
+            );
+            outside.price_message.exponent = exponent;
+            assert!(validate_fixed_feed(
+                PinnedFeed::SolUsd,
+                SOL_USD_FEED_ACCOUNT,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &outside,
+                &clock(),
+                policy,
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_policy_and_fixed_point_overflow_or_precision_loss() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let invalid_policy = OracleLimits {
+            minimum_exponent: 1,
+            maximum_exponent: -1,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            invalid_policy,
+        )
+        .is_err());
+        let invalid_age = OracleLimits {
+            maximum_age_seconds: i64::MAX as u64 + 1,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            invalid_age,
+        )
+        .is_err());
+
+        assert!(raw_to_fixed(u128::MAX, 1, 0).is_err());
+        assert!(raw_to_fixed(101, -1, 0).is_err());
+        let interval_overflow = ValidatedPrice {
+            mantissa: u64::MAX,
+            confidence: 0,
+            exponent: 0,
+            publish_time: NOW,
+            confidence_bps: 0,
+        };
+        assert!(interval_overflow.confidence_interval(30).is_err());
     }
 }

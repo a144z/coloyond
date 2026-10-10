@@ -52,6 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OracleLimits {
             maximum_age_seconds: 60,
             maximum_confidence_bps: u16::MAX,
+            // Candidate math range for diagnostics only; S5C has not frozen
+            // a production exponent policy.
+            minimum_exponent: -17,
+            maximum_exponent: 0,
         },
     );
     println!("account={}", feed.address());
