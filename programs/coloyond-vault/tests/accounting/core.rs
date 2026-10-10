@@ -174,15 +174,29 @@ fn min_shares_max_inputs_and_donation_deficits_are_checked() {
 }
 
 #[test]
-fn failed_transfer_does_not_commit_accounting_state() {
+fn planning_quote_leaves_state_unchanged_until_record_step() {
     let mut v = vault([1_000, 1_000], 1_000, 1);
     let before = (v.accounted_amounts, v.total_shares, v.sequence);
-    let quote = accounting::quote_deposit(&v, [100, 100], 100).unwrap();
-    // Anchor instruction integration stages CPI before applying this mutation;
-    // a failing CPI exits before apply_deposit and Solana rolls back all writes.
-    let simulated_transfer_failed = true;
-    if !simulated_transfer_failed {
-        accounting::apply_deposit(&mut v, quote).unwrap();
-    }
+    let actual = v.accounted_amounts;
+    let quote =
+        crate::instructions::entry_exit::plan_deposit(&mut v, actual, [100, 100], 100).unwrap();
     assert_eq!((v.accounted_amounts, v.total_shares, v.sequence), before);
+
+    // This records the transition after the caller's transfer/mint step. The
+    // CPI failure and runtime rollback proof requires S1F local-validator tests.
+    crate::instructions::entry_exit::record_deposit(&mut v, quote).unwrap();
+    assert_ne!((v.accounted_amounts, v.total_shares, v.sequence), before);
+
+    let after_deposit = (v.accounted_amounts, v.total_shares, v.sequence);
+    let actual = v.accounted_amounts;
+    let redemption = crate::instructions::entry_exit::plan_redemption(&mut v, actual, 100).unwrap();
+    assert_eq!(
+        (v.accounted_amounts, v.total_shares, v.sequence),
+        after_deposit
+    );
+    crate::instructions::entry_exit::record_redemption(&mut v, 100, redemption).unwrap();
+    assert_ne!(
+        (v.accounted_amounts, v.total_shares, v.sequence),
+        after_deposit
+    );
 }
