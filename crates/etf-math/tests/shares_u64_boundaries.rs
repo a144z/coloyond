@@ -174,6 +174,33 @@ fn near_max_partial_redemption_floors_outputs_and_leaves_backing_dust() {
 }
 
 #[test]
+fn extreme_partial_redemption_burns_preserve_backing_and_output_monotonicity() {
+    let share_supply = u64::MAX;
+    let reserves = [u64::MAX, u64::MAX - 1];
+    let burns = [1, share_supply - 1];
+    let mut previous = [0_u64; 2];
+
+    for shares_to_burn in burns {
+        let quote = quote_proportional_redeem(shares_to_burn, share_supply, &reserves).unwrap();
+        for index in 0..2 {
+            let expected =
+                u128::from(shares_to_burn) * u128::from(reserves[index]) / u128::from(share_supply);
+            assert_eq!(u128::from(quote.amounts_out[index]), expected);
+            assert!(quote.amounts_out[index] >= previous[index]);
+
+            let remaining_reserve = reserves[index] - quote.amounts_out[index];
+            let remaining_supply = share_supply - shares_to_burn;
+            assert!(
+                u128::from(remaining_reserve) * u128::from(share_supply)
+                    >= u128::from(reserves[index]) * u128::from(remaining_supply),
+                "extreme redemption diluted remaining asset {index}"
+            );
+            previous[index] = quote.amounts_out[index];
+        }
+    }
+}
+
+#[test]
 fn full_redemption_returns_maximum_custody_balances_exactly() {
     let reserves = [u64::MAX, u64::MAX - 1];
 
