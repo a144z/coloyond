@@ -57,7 +57,9 @@ class StrategyRecordsTest {
         assertTrue(StrategyRecords.validateScene(StrategyRecords.parse(sceneText)).id.matches(Regex("[0-9a-f]{64}")))
         val bowTie = sceneText.replace("[100,0],[100,100]", "[100,100],[100,0]")
         assertTrue(runCatching { StrategyRecords.validateScene(StrategyRecords.parse(bowTie)) }.isFailure)
-        assertTrue(runCatching { StrategyRecords.parse(sceneText.dropLast(1) + ",\"unknown\":1}") }.isFailure)
+        assertTrue(runCatching {
+            StrategyRecords.validateScene(StrategyRecords.parse(sceneText.dropLast(1) + ",\"unknown\":1}"))
+        }.isFailure)
     }
 
     @Test fun coloyondV1IsASeparateStrictIdentityDomain() {
