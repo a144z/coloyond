@@ -194,6 +194,16 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
                 self.assertGreaterEqual(fee, previous)
                 previous = fee
 
+    def test_dynamic_fee_never_rises_with_haircut_and_resets_when_signal_is_covered(self):
+        for move in range(10_001):
+            haircuts = sorted({0, 1, 24, 25, 26, 99, 100, 101, move, move + 1, 10_000})
+            fees = [bounded_dynamic_fee_bps(move, haircut) for haircut in haircuts]
+            with self.subTest(move=move):
+                self.assertEqual(fees, sorted(fees, reverse=True))
+                for haircut, fee in zip(haircuts, fees):
+                    if haircut >= move:
+                        self.assertEqual(fee, 5)
+
     def test_reverse_direction_rejects_nonpositive_input_mark_and_unknown_direction(self):
         args = (Decimal("100000"), Decimal("100"), 30, 10_000, 0, Decimal("0"))
         with self.assertRaises(ValueError):
