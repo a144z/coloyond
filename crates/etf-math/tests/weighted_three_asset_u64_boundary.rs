@@ -284,3 +284,71 @@ fn three_asset_max_fee_transitions_match_exact_reference_bounds() {
         Err(MathError::FeeOutOfRange)
     );
 }
+
+#[test]
+fn three_asset_input_ratio_cap_accepts_the_exact_floor_and_rejects_the_next_unit() {
+    const WEIGHT_PROFILES: [[u16; 3]; 12] = [
+        [100, 100, 9_800],
+        [100, 9_800, 100],
+        [9_800, 100, 100],
+        [100, 4_900, 5_000],
+        [5_000, 100, 4_900],
+        [4_900, 5_000, 100],
+        [100, 3_300, 6_600],
+        [6_600, 100, 3_300],
+        [3_300, 6_600, 100],
+        [500, 4_500, 5_000],
+        [5_000, 500, 4_500],
+        [4_500, 5_000, 500],
+    ];
+    let mut boundary_quotes = 0usize;
+    let mut output_cap_rejections = 0usize;
+
+    for reserve in [10_000_u64, 10_001] {
+        let balances = [reserve; 3];
+        for weights in WEIGHT_PROFILES {
+            for (asset_in, asset_out) in [(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)] {
+                let exact_input_cap = reserve * 3_000 / 10_000;
+                match quote_exact_in(
+                    &balances,
+                    &weights,
+                    asset_in,
+                    asset_out,
+                    exact_input_cap,
+                    0,
+                ) {
+                    Ok(quote) => {
+                        boundary_quotes += 1;
+                        assert_eq!(quote.amount_in, exact_input_cap);
+                        assert!(quote.amount_out > 0);
+                        assert!(
+                            u128::from(quote.amount_out) * 10_000
+                                <= u128::from(reserve) * 3_000,
+                            "accepted quote exceeds output cap: reserve={reserve}, weights={weights:?}, pair={asset_in}->{asset_out}"
+                        );
+                    }
+                    Err(MathError::OutputTooLarge) => output_cap_rejections += 1,
+                    Err(error) => panic!(
+                        "exact input-cap floor rejected unexpectedly ({error:?}): reserve={reserve}, weights={weights:?}, pair={asset_in}->{asset_out}"
+                    ),
+                }
+                assert_eq!(
+                    quote_exact_in(
+                        &balances,
+                        &weights,
+                        asset_in,
+                        asset_out,
+                        exact_input_cap + 1,
+                        0,
+                    ),
+                    Err(MathError::InputTooLarge),
+                    "next gross base unit must exceed the input cap"
+                );
+            }
+        }
+    }
+
+    assert!(boundary_quotes > 0);
+    assert!(output_cap_rejections > 0);
+    assert_eq!(boundary_quotes + output_cap_rejections, 144);
+}
