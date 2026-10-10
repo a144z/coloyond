@@ -207,6 +207,11 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                     free_task_accounts=[self.context_account(2)],
                 )
 
+    def test_rejects_malformed_occupied_task_id_fixtures(self):
+        for occupied in (None, [[]], ["1"], [True], [8]):
+            with self.subTest(occupied=occupied), self.assertRaises(ValueError):
+                self.validate(returned(task()), occupied_task_ids=occupied)
+
     def test_rejects_overlong_utf8_description(self):
         with self.assertRaisesRegex(ValueError, "40 UTF-8 bytes"):
             self.validate(returned(task(description="界" * 14)))

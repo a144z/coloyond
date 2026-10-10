@@ -226,7 +226,18 @@ def validate_compiled_requeue(
         raise ValueError("returned children exceed crank-turner supplied free task IDs")
     if len(free_task_accounts) != len(free_task_ids):
         raise ValueError("free task account count must match supplied free task IDs")
-    occupied = set(occupied_task_ids)
+    if not isinstance(occupied_task_ids, (list, tuple)):
+        raise ValueError("occupied_task_ids: expected a sequence")
+    occupied = set()
+    for task_id in occupied_task_ids:
+        if (
+            isinstance(task_id, bool)
+            or not isinstance(task_id, int)
+            or not 0 <= task_id < queue_capacity
+        ):
+            raise ValueError("occupied task ID must be below queue capacity")
+        occupied.add(task_id)
+
     seen_task_ids = set()
     for task_id in free_task_ids:
         if (
