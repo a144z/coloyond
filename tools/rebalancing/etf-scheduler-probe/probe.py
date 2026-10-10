@@ -5,6 +5,8 @@ import hashlib
 import json
 import urllib.request
 
+from task_pda import derive_tuktuk_task_address
+
 
 RPC = "https://api.devnet.solana.com"
 PROGRAM_ID = "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
@@ -385,6 +387,12 @@ def main():
             task_row, task = task_sample
             if task["task_queue"] != row["pubkey"] or task["id"] != task_id:
                 raise RuntimeError(f"TaskV0 PDA filter returned mismatched task {task_row['pubkey']}")
+            expected_task_address = derive_tuktuk_task_address(row["pubkey"], task_id)
+            if task_row["pubkey"] != expected_task_address:
+                raise RuntimeError(
+                    f"TaskV0 address mismatch for queue {row['pubkey']} id {task_id}: "
+                    f"expected {expected_task_address}, received {task_row['pubkey']}"
+                )
             if task_id >= queue["capacity"] or task_id not in queue["sample_task_ids"]:
                 raise RuntimeError(f"TaskV0 {task_row['pubkey']} is not occupied within queue capacity")
             if task["free_tasks"] + 1 > queue["capacity"]:
