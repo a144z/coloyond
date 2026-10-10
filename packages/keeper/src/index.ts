@@ -6,4 +6,5 @@ export { actionApplied, actionKey, actionStillCurrent, selectEligibleAction, val
 export { buildS2DInstruction, loadRuntimeSignerFromEnvironment, PROGRAM_ID, SOL_USD_FEED, SolanaKeeperRuntime, TOKEN_PROGRAM, USDC_USD_FEED } from "./solana.js";
 export { buildActivateConditionInstruction, buildExecuteConditionRuleInstruction, buildObserveConditionInstruction, buildProposeConditionRuleInstruction, conditionStateAddress } from "./conditionInstructions.js";
 export type { ConditionBoundsInput, ConditionPredicateInput, ConditionRuleConfigInput } from "./conditionInstructions.js";
+export * from "./conditions/index.js";
 export type { ActionProposalSource, ActionResult, AuctionPolicyState, ChainSnapshot, Cluster, FillCandidate, GovernanceState, IntentState, KeeperAction, KeeperConfig, StartCandidate, VaultAsset, VaultState } from "./types.js";
