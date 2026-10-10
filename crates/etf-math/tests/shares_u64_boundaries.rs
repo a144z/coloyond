@@ -56,6 +56,71 @@ fn near_max_deposit_preserves_ceil_carry_custody_and_refunds() {
 }
 
 #[test]
+fn three_asset_near_max_deposit_and_redemption_preserve_each_asset_backing() {
+    let max = u64::MAX;
+    let share_supply = max - 20_000_000_000;
+    let reserves = [
+        max - 5_000_000_002,
+        max - 6_000_000_000,
+        max - 7_000_000_000,
+    ];
+    let max_inputs = [5_000_000_001, 5_100_000_000, 5_200_000_000];
+
+    let deposit = quote_proportional_deposit(&max_inputs, &reserves, share_supply).unwrap();
+
+    assert_eq!(deposit.asset_count, 3);
+    assert_eq!(deposit.shares_out, 4_999_999_996);
+    assert_eq!(
+        deposit.consumed,
+        [5_000_000_001, 5_000_000_000, 5_000_000_000]
+    );
+    assert_eq!(deposit.refund, [0, 100_000_000, 200_000_000]);
+    let post_supply = share_supply + deposit.shares_out;
+    let mut post_reserves = [0_u64; 3];
+    assert_eq!(post_supply, 18_446_744_058_709_551_611);
+    for index in 0..3 {
+        assert_eq!(
+            deposit.consumed[index] + deposit.refund[index],
+            max_inputs[index]
+        );
+        post_reserves[index] = reserves[index]
+            .checked_add(deposit.consumed[index])
+            .expect("near-u64 post-deposit custody remains representable");
+        let ceil_numerator = u128::from(deposit.shares_out) * u128::from(reserves[index]);
+        assert_ne!(ceil_numerator % u128::from(share_supply), 0);
+        assert_eq!(
+            u128::from(deposit.consumed[index]),
+            ceil_numerator.div_ceil(u128::from(share_supply))
+        );
+        assert!(
+            u128::from(post_reserves[index]) * u128::from(share_supply)
+                >= u128::from(reserves[index]) * u128::from(post_supply),
+            "deposit diluted asset {index}"
+        );
+    }
+    assert_eq!(
+        post_reserves,
+        [max - 1, max - 1_000_000_000, max - 2_000_000_000]
+    );
+
+    let shares_to_burn = post_supply / 3;
+    let redeem = quote_proportional_redeem(shares_to_burn, post_supply, &post_reserves).unwrap();
+    assert_eq!(redeem.asset_count, 3);
+    for index in 0..3 {
+        let numerator = u128::from(shares_to_burn) * u128::from(post_reserves[index]);
+        assert_eq!(
+            u128::from(redeem.amounts_out[index]),
+            numerator / u128::from(post_supply)
+        );
+        assert!(
+            u128::from(post_reserves[index] - redeem.amounts_out[index]) * u128::from(post_supply)
+                >= u128::from(post_reserves[index]) * u128::from(post_supply - shares_to_burn),
+            "redemption diluted remaining asset {index}"
+        );
+    }
+}
+
+#[test]
 fn deposits_reject_reserve_and_share_supply_overflow_at_the_boundary() {
     let max = u64::MAX;
 
