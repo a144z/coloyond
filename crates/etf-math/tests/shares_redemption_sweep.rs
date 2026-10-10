@@ -64,3 +64,13 @@ fn three_asset_redemptions_cover_every_small_reserve_supply_and_burn() {
     }
     assert_eq!(checked_burns, 235_008);
 }
+
+#[test]
+fn partial_redemptions_preserve_zero_balance_asset_legs() {
+    let mut checked_burns = 0;
+    for share_supply in 1_u64..=16 {
+        checked_burns += check_all_burns([0, 7], share_supply);
+        checked_burns += check_all_burns([5, 0, 9], share_supply);
+    }
+    assert_eq!(checked_burns, 272);
+}
