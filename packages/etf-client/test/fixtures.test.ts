@@ -117,6 +117,26 @@ test("unknown enums, unsafe numeric wire values, and missing-vs-zero are rejecte
   assert.ok(validateReadModelDocument(missing).some((error) => error.includes("cannot carry")));
 });
 
+test("bounded integer-valued JSON number fields accept integral values and reject booleans", () => {
+  const integral = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = integral.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  const balances = snapshot.balances as Record<string, unknown>[];
+  const oracle = snapshot.oracle as Record<string, unknown>;
+  balances[0]!.decimals = 9.0;
+  oracle.exponent = -6.0;
+  assert.deepEqual(validateReadModelDocument(integral), []);
+
+  const malformed = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const malformedSnapshot = malformed.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  const malformedBalances = malformedSnapshot.balances as Record<string, unknown>[];
+  const malformedOracle = malformedSnapshot.oracle as Record<string, unknown>;
+  malformedBalances[0]!.decimals = true;
+  malformedOracle.exponent = false;
+  const errors = validateReadModelDocument(malformed);
+  assert.ok(errors.some((error) => error.includes("decimals: expected u8 JSON number")));
+  assert.ok(errors.some((error) => error.includes("exponent: expected signed i32 JSON number")));
+});
+
 test("available snapshots need their source and a value payload", () => {
   const bad = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = bad.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;

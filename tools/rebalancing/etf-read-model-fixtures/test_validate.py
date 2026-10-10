@@ -68,6 +68,22 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         errors = validate_document(document)
         self.assertTrue(any("expected signed i32 JSON number" in error for error in errors))
 
+    def test_bounded_json_integer_fields_match_javascript_number_semantics(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        snapshot["balances"][0]["decimals"] = 9.0
+        snapshot["oracle"]["exponent"] = -6.0
+        self.assertEqual(validate_document(document), [])
+
+    def test_bounded_json_integer_fields_reject_booleans(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        snapshot["balances"][0]["decimals"] = True
+        snapshot["oracle"]["exponent"] = False
+        errors = validate_document(document)
+        self.assertTrue(any("decimals: expected u8 JSON number" in error for error in errors))
+        self.assertTrue(any("exponent: expected signed i32 JSON number" in error for error in errors))
+
     def test_unknown_receipt_cannot_resend_or_claim_deltas(self):
         document = load_fixture()
         unknown = next(item for item in document["fixtures"] if item["status"] == "unknown")

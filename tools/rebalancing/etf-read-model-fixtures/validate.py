@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -48,6 +49,20 @@ def _integer_string(value, path, errors, *, signed=False, minimum=0, maximum=U64
     return parsed
 
 
+def _bounded_json_integer(value, minimum, maximum):
+    """Match JavaScript Number.isInteger for bounded JSON number fields."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return minimum <= value <= maximum
+    return (
+        isinstance(value, float)
+        and math.isfinite(value)
+        and value.is_integer()
+        and minimum <= value <= maximum
+    )
+
+
 def _required_text_fields(value, fields, path, errors):
     for field in fields:
         _text(value.get(field), f"{path}.{field}", errors)
@@ -88,7 +103,7 @@ def _validate_snapshot(fixture, path, errors):
             continue
         _required_text_fields(balance, ("mint",), balance_path, errors)
         decimals = balance.get("decimals")
-        if isinstance(decimals, bool) or not isinstance(decimals, int) or not 0 <= decimals <= 255:
+        if not _bounded_json_integer(decimals, 0, 255):
             errors.append(f"{balance_path}.decimals: expected u8 JSON number")
         _integer_string(balance.get("rawAmount"), f"{balance_path}.rawAmount", errors)
         _integer_string(balance.get("contextSlot"), f"{balance_path}.contextSlot", errors)
@@ -115,7 +130,7 @@ def _validate_oracle(fixture, path, errors):
             maximum=maximum,
         )
     exponent = fixture.get("exponent")
-    if isinstance(exponent, bool) or not isinstance(exponent, int) or not I32_MIN <= exponent <= I32_MAX:
+    if not _bounded_json_integer(exponent, I32_MIN, I32_MAX):
         errors.append(f"{path}.exponent: expected signed i32 JSON number")
 
     if mode == "receiver_full":
