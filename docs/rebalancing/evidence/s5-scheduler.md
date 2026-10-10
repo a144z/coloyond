@@ -1,6 +1,6 @@
 # S5 scheduler source audit
 
-**Status:** TukTuk is the first replaceable L1 candidate. Direct Devnet reads confirm the program is executable and inspect the live config and queue census. The source-backed decoder sees existing queues and task IDs, but the project has not created a queue, inspected any compiled task payload, confirmed any run transaction, or established public crank-turner availability. A deployed program and unrelated queues are not scheduler integration.
+**Status:** TukTuk is the first replaceable L1 candidate. Direct Devnet reads confirm the program is executable and inspect the live config, queue census, and a bounded sample of unrelated task payloads. The project has not created a queue, registered an ETF task, confirmed any run transaction, or established public crank-turner availability. A deployed program and unrelated queues are not scheduler integration.
 
 ## Findings from official Helium sources
 
@@ -9,6 +9,7 @@
 - Queue authority and custom signer choices can expose queue funds; use a narrowly scoped queue and dedicated signer.
 - Use compiled tasks only for the no-HTTP project architecture. TukTuk's `RemoteV0` obtains a signed transaction from an HTTP server and therefore requires a backend service.
 - The source defines a 40-byte task-description limit and compiled instruction account indexes as `u8`. Exact ETF account list, task size/rent, transaction size, nested CPI behavior, compute units and crank reward remain to be probed; there is no single source-level limit that proves the composed ETF instruction fits.
+- `TriggerV0` currently has only `Now` and `Timestamp(i64)` variants; it has no interval, cron, or account-condition trigger. A task using either variant is one-shot. TukTuk's run path can create child tasks from return data written by the exact invoked program, subject to that task's declared free-task capacity and crank-turner-supplied accounts. The ETF `poke` contract does not define or prove that return-data/requeue protocol. Therefore neither recurring calls nor a zero-maintenance condition watcher are established by choosing TukTuk alone.
 - The maintained TukTuk `Anchor.toml` declares the cited program ID under `programs.localnet`, not `programs.devnet`; the separate direct account query below now confirms that the program is nevertheless deployed on Devnet. Source declarations and deployment presence still do not prove task execution.
 
 ## Devnet status
@@ -21,14 +22,19 @@ The read-only probe now makes a bounded sample of up to 15 live `TaskV0` reads f
 
 The extended probe ran read-only against Devnet at queue-census slot `509646765`, block time `1791660732` (2026-10-10 19:32:12 UTC), on the expected genesis. It observed 312 queues and 632 occupied task IDs. The bounded sample selected five active queues and up to three bitmap IDs per queue; one task lookup in queue `crank-tester8` changed/disappeared between queue and task reads and was reported as a snapshot race rather than treated as a decode failure. Ten task accounts decoded successfully: three unrelated tasks were `RemoteV0`, seven were `CompiledV0`, and all sampled triggers were `Now`. The compiled task payloads ranged from 197 to 487 serialized bytes; remote task payloads occupied 137 or 197 bytes. Account lamports include rent/reward effects and are not evidence of queue spendable funds. No ETF payload was examined, no task was submitted, and no run transaction or external crank-turner was verified.
 
+## Trigger and recurring-execution source audit — 11 October 2026
+
+The maintained [`TriggerV0` enum](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/state.rs) contains `Now` and `Timestamp(i64)` only; `Timestamp` becomes active once the current time reaches its timestamp. Neither variant repeats itself, and there is no state/account-change trigger in this enum. The maintained [`run_task_v0` implementation](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/instructions/run_task_v0.rs) supports creating follow-up tasks from return data owned by the invoked program, and the current task declares `free_tasks` capacity. This is a possible source-level mechanism for recurring execution, not a proven ETF design: ETF `poke` would need a reviewed, bounded child-task protocol, exact returned payload and accounts, capacity/rent funding, stop/cancel behavior, and a distinct crank-turner that keeps submitting runs. None is implemented or exercised here. A timestamp task can request one future execution but cannot itself express an unbounded interval. Until that proof exists, TukTuk is a candidate for a one-shot invocation only; the blueprint's recurring, condition-triggered, zero-maintenance claim remains unresolved.
+
 ## Required proof before S5/CP5 can pass
 
 1. [x] Read Devnet genesis and prove the exact TukTuk program account exists, is executable, and has the expected loader owner (one point-in-time read; refresh before any task creation).
 2. Wallet-sign queue creation/funding; record the 1 SOL deposit separately from queue/task rent and per-crank reward.
 3. Register a compiled task with the exact public ETF `poke` instruction; record registration signature, queue/task PDAs, task ID, trigger and decoded payload, then read back the task account independently.
 4. Capture a separate confirmed task-run transaction signed by the identified external crank-turner. Its inner instruction must invoke exactly `poke` and its before/after pool state must show eligibility/maintenance only.
-5. Separately prove a trader wallet supplies SPL input for `swap_exact_in`. The scheduler invocation must not be described as a trade.
-6. Prove permissionless direct `poke`, swaps and in-kind exits still work if the scheduler is unavailable.
+5. If recurring behavior is required, first freeze a protocol-native one-shot/requeue contract, then prove every returned task, account, rent/reward funding, stop condition and successive external crank transaction. A single `Now`/`Timestamp` task is not recurring evidence.
+6. Separately prove a trader wallet supplies SPL input for `swap_exact_in`. The scheduler invocation must not be described as a trade.
+7. Prove permissionless direct `poke`, swaps and in-kind exits still work if the scheduler is unavailable.
 
 If TukTuk fails the direct Devnet checks, evaluate another demonstrated L1 scheduler against the same `poke` contract. MagicBlock Ephemeral Rollups change the execution environment and are not a drop-in L1 replacement. If no candidate passes, Sprint 5 and CP5 stay blocked; a local simulation is not a substitute.
 
