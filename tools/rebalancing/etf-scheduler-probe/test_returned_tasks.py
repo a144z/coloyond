@@ -217,9 +217,13 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 )
 
     def test_rejects_malformed_occupied_task_id_fixtures(self):
+        self.assertTrue(self.validate(returned(task()), occupied_task_ids=[3]))
         for occupied in (None, [[]], ["1"], [True], [8]):
             with self.subTest(occupied=occupied), self.assertRaises(ValueError):
                 self.validate(returned(task()), occupied_task_ids=occupied)
+
+        with self.assertRaisesRegex(ValueError, "occupied task IDs must be unique"):
+            self.validate(returned(task()), occupied_task_ids=[3, 3])
 
     def test_rejects_overlong_utf8_description(self):
         with self.assertRaisesRegex(ValueError, "40 UTF-8 bytes"):

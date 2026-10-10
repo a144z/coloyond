@@ -236,6 +236,8 @@ def validate_compiled_requeue(
             or not 0 <= task_id < queue_capacity
         ):
             raise ValueError("occupied task ID must be below queue capacity")
+        if task_id in occupied:
+            raise ValueError("occupied task IDs must be unique")
         occupied.add(task_id)
 
     seen_task_ids = set()
