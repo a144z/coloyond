@@ -51,6 +51,42 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
                 Decimal(1) + Decimal(10 - confidence_bps) / Decimal(10_000),
             )
 
+    def test_negative_transaction_costs_and_bps_inputs_are_rejected(self):
+        args = (Decimal("100000"), Decimal("100"), 30)
+        with self.assertRaises(ValueError):
+            arbitrage_scenario(*args, 100, 25, Decimal("-0.01"))
+        with self.assertRaises(ValueError):
+            break_even_move_bps(*args, 25, Decimal("-0.01"))
+        with self.assertRaises(ValueError):
+            arbitrage_scenario(*args, -1, 0, Decimal("0"))
+        with self.assertRaises(ValueError):
+            arbitrage_scenario(*args, 1, -1, Decimal("0"))
+
+    def test_break_even_threshold_is_the_smallest_profitable_integer_move(self):
+        cases = (
+            (Decimal("10000"), Decimal("10"), 5, 0, Decimal("0")),
+            (Decimal("100000"), Decimal("100"), 30, 25, Decimal("0.10")),
+            (Decimal("1000000"), Decimal("500"), 100, 100, Decimal("1.00")),
+        )
+        for depth, amount, fee, haircut, cost in cases:
+            with self.subTest(depth=depth, amount=amount, fee=fee, haircut=haircut, cost=cost):
+                threshold = break_even_move_bps(depth, amount, fee, haircut, cost)
+                self.assertTrue(
+                    arbitrage_scenario(depth, amount, fee, threshold, haircut, cost)["profitable"]
+                )
+                if threshold:
+                    self.assertFalse(
+                        arbitrage_scenario(
+                            depth, amount, fee, threshold - 1, haircut, cost
+                        )["profitable"]
+                    )
+
+    def test_move_below_haircut_has_no_conservative_price_signal(self):
+        result = arbitrage_scenario(
+            Decimal("100000"), Decimal("100"), 30, 10, 25, Decimal("0")
+        )
+        self.assertEqual(result["conservative_external_price"], Decimal(1))
+
     def test_invalid_fee_or_depth_is_rejected(self):
         with self.assertRaises(ValueError):
             quote_equal_weight_exact_in(Decimal("0"), Decimal("1"), 30)

@@ -26,6 +26,8 @@ def arbitrage_scenario(
     transaction_cost_usd: Decimal,
 ) -> dict[str, Decimal | bool]:
     """Price output at a conservative external mark after an uncertainty haircut."""
+    if external_move_bps < 0 or uncertainty_haircut_bps < 0 or transaction_cost_usd < 0:
+        raise ValueError("external move, uncertainty haircut, and transaction cost must be nonnegative")
     output = quote_equal_weight_exact_in(depth_usd, amount_in_usd, fee_bps)
     conservative_move = max(0, external_move_bps - uncertainty_haircut_bps)
     conservative_external_price = Decimal(1) + Decimal(conservative_move) / BPS
