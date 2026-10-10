@@ -4,7 +4,12 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from model import arbitrage_scenario, break_even_move_bps, quote_equal_weight_exact_in
+from model import (
+    arbitrage_scenario,
+    bounded_dynamic_fee_bps,
+    break_even_move_bps,
+    quote_equal_weight_exact_in,
+)
 
 
 class WeightedAmmEconomicsTests(unittest.TestCase):
@@ -41,6 +46,20 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
             quote_equal_weight_exact_in(Decimal("0"), Decimal("1"), 30)
         with self.assertRaises(ValueError):
             quote_equal_weight_exact_in(Decimal("100"), Decimal("1"), 10_000)
+
+    def test_dynamic_fee_is_bounded_and_responds_only_to_signal_beyond_deadband(self):
+        self.assertEqual(bounded_dynamic_fee_bps(20, 5), 5)
+        self.assertEqual(bounded_dynamic_fee_bps(125, 0), 15)
+        self.assertEqual(bounded_dynamic_fee_bps(10_000, 0), 100)
+        self.assertGreaterEqual(
+            bounded_dynamic_fee_bps(500, 25), bounded_dynamic_fee_bps(100, 25)
+        )
+
+    def test_dynamic_fee_rejects_invalid_bounds(self):
+        with self.assertRaises(ValueError):
+            bounded_dynamic_fee_bps(-1, 0)
+        with self.assertRaises(ValueError):
+            bounded_dynamic_fee_bps(100, 0, base_fee_bps=101, max_fee_bps=100)
 
 
 if __name__ == "__main__":

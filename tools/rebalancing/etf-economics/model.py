@@ -62,3 +62,27 @@ def break_even_move_bps(
         else:
             low = mid + 1
     return low
+
+
+def bounded_dynamic_fee_bps(
+    external_move_bps: int,
+    uncertainty_haircut_bps: int,
+    base_fee_bps: int = 5,
+    deadband_bps: int = 25,
+    surcharge_bps_per_100bps: int = 10,
+    max_fee_bps: int = 100,
+) -> int:
+    """Return an illustrative bounded fee from a conservative move signal.
+
+    This is a sensitivity candidate, not a production recommendation. It adds
+    10 fee bps per full 100 bps of conservative signal beyond a 25 bps deadband.
+    """
+    if min(external_move_bps, uncertainty_haircut_bps, base_fee_bps, deadband_bps,
+           surcharge_bps_per_100bps) < 0:
+        raise ValueError("move, haircut, and fee parameters must be nonnegative")
+    if base_fee_bps > max_fee_bps or max_fee_bps >= 10_000:
+        raise ValueError("fee bounds must satisfy 0 <= base <= max < 10000")
+    conservative_signal = max(0, external_move_bps - uncertainty_haircut_bps)
+    excess_signal = max(0, conservative_signal - deadband_bps)
+    surcharge = excess_signal // 100 * surcharge_bps_per_100bps
+    return min(max_fee_bps, base_fee_bps + surcharge)
