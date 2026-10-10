@@ -3,7 +3,7 @@ import type { ConditionReadResult, ConditionRuleView, ConditionStatusReadModel }
 import "./ConditionStatus.css";
 
 const STATUS_LABELS: Record<ConditionRuleView["status"], string> = {
-  proposed: "Governance delay",
+  proposed: "Proposed · governance delay",
   waiting: "Waiting for observation or executor",
   eligible: "Observed ready · recheck required",
   activated: "Activated · revision confirmed",
@@ -73,7 +73,7 @@ function ModelView({ model }: { model: ConditionStatusReadModel }) {
         <div><dt>Condition sequence</dt><dd>{model.sequence ?? "Not initialized"}</dd></div>
         <div><dt>Last allocated nonce</dt><dd>{model.nextNonce ?? "Not initialized"}</dd></div>
         <div><dt>Configuration revision</dt><dd>{model.currentConfigurationRevision}</dd></div>
-        <div><dt>Risk</dt><dd>{model.riskPaused ? "Paused on chain" : "Not paused in governance"}</dd></div>
+        <div><dt>Risk</dt><dd>{model.riskPaused ? "Paused on chain" : "New risk enabled on chain"}</dd></div>
       </div>
       {model.accountState === "not-initialized" ? (
         <div className="condition-status-empty-block"><strong>No condition account is initialized.</strong><span>This confirmed Localnet snapshot contains no state at the condition PDA. It may mean no rule has been proposed; the page does not infer support from the deployed binary or the portfolio demo.</span></div>
@@ -120,7 +120,7 @@ export function ConditionStatus() {
     <section className="condition-status" aria-labelledby="condition-status-title" aria-busy={loading}>
       <header className="condition-status-header">
         <div><p className="cr-index">E / Solana · read-only account view</p><h2 id="condition-status-title">Condition lifecycle</h2><p>Governance rule, observation and confirmed revision from the vault PDA. The portfolio panels remain sample data; eligibility never means a trade executed.</p></div>
-        <div className="condition-status-actions"><span className="condition-status-live-tag">{result?.kind === "ready" ? "CONFIRMED RPC" : "LOCALNET READ"}</span><button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Reading…" : "Refresh state"}</button></div>
+        <div className="condition-status-actions"><span className="condition-status-live-tag">{result?.kind === "ready" ? "CONFIRMED LOCALNET RPC" : result?.kind === "error" ? "SNAPSHOT UNVERIFIED" : result?.kind === "unavailable" ? "RPC NOT READY" : "LOCALNET READ"}</span><button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Reading…" : "Refresh state"}</button></div>
       </header>
       {result?.kind === "unavailable" && <p className="condition-status-message" role="status">{result.reason}</p>}
       {result?.kind === "error" && <p className="condition-status-error" role="alert">The condition state could not be verified: {result.reason}</p>}

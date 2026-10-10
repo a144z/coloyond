@@ -38,17 +38,23 @@ function governanceAccount(paused: boolean): Uint8Array {
 }
 
 function auctionPolicy(): Uint8Array {
-  const out = [2, 104, 14, 217, 253, 100, 255, 33, 1, ...VAULT.toBytes()];
+  const out = [2, 104, 14, 217, 253, 100, 255, 33, 2, ...VAULT.toBytes()];
   pushInt(out, 9n, 8); // configuration revision
   pushInt(out, 60n, 8); // maximum age
   pushInt(out, 100n, 2); pushInt(out, 200n, 2); pushInt(out, 300n, 2);
   pushInt(out, 1_000n, 8); pushInt(out, 20n, 8);
   out.push(0); // no last completed slot
   pushInt(out, 500n, 2); pushInt(out, 100n, 2); pushInt(out, 80n, 8);
-  pushInt(out, 10n, 2); pushInt(out, 20n, 2); pushInt(out, 30n, 8);
+  pushInt(out, 10n, 2); pushInt(out, 20n, 2); // fee bounds
+  pushInt(out, 7000n, 2); // fee reserve share
+  pushInt(out, 100n, 8); pushInt(out, 200n, 8); // reserve floor
+  pushInt(out, 300n, 8); pushInt(out, 400n, 8); // epoch bounty budget
+  pushInt(out, 9n, 8); // bounty epoch
+  pushInt(out, 20n, 8); pushInt(out, 30n, 8); // bounty epoch spent
+  pushInt(out, 40n, 8); // maximum bounty
   pushInt(out, 50n, 2); pushInt(out, 40n, 2);
   out.push(1, 0); // WSOL -> USDC/USD, USDC -> SOL/USD
-  const data = new Uint8Array(118);
+  const data = new Uint8Array(176);
   data.set(out);
   return data;
 }
@@ -146,15 +152,18 @@ test("decodes only validated vault and governance fields from their IDL accounts
   assert.throws(() => decodeVaultHeader(vaultAccount(), "11111111111111111111111111111111"), /owner/);
 });
 
-test("decodes the on-chain auction-policy feed mapping", () => {
+test("decodes the S4C versioned auction-policy feed mapping", () => {
   assert.deepEqual(decodeAuctionPolicy(auctionPolicy(), PROGRAM_ID, VAULT.toBase58()), {
     configurationRevision: 9n,
     assetFeedIndices: [1, 0],
   });
   assert.throws(() => decodeAuctionPolicy(auctionPolicy(), "11111111111111111111111111111111", VAULT.toBase58()), /owner/);
   const invalidMapping = auctionPolicy();
-  invalidMapping[109] = 1;
+  invalidMapping[167] = 1;
   assert.throws(() => decodeAuctionPolicy(invalidMapping, PROGRAM_ID, VAULT.toBase58()), /mapping/);
+  const unsupportedVersion = auctionPolicy();
+  unsupportedVersion[8] = 1;
+  assert.throws(() => decodeAuctionPolicy(unsupportedVersion, PROGRAM_ID, VAULT.toBase58()), /version 1/);
 });
 
 test("decodes the confirmed Clock sysvar and checks its owner, size and RPC slot", () => {
