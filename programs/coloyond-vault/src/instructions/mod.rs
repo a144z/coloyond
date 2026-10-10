@@ -8,11 +8,13 @@ use crate::{
         AuctionPolicy, BountyClaim, RebalanceIntent, AUCTION_POLICY_SEED, BOUNTY_CLAIM_SEED,
         REBALANCE_INTENT_SEED,
     },
+    condition::{ConditionState, CONDITION_STATE_SEED},
     governance::GovernanceState,
     state::{AssetConfig, Vault, VaultError, ASSET_COUNT, VAULT_VERSION},
 };
 
 pub mod auction_handlers;
+pub mod condition_handlers;
 pub mod entry_exit;
 pub mod handlers;
 
@@ -305,6 +307,75 @@ pub struct FinishOrExpire<'info> {
     pub usdc_usd: Box<Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>>,
     #[account(mut)]
     pub caller: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(config: crate::condition::ConditionRuleConfig, bounds: crate::condition::ConditionBounds)]
+pub struct ProposeConditionRule<'info> {
+    #[account(seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(
+        init_if_needed,
+        payer = governance_authority,
+        space = ConditionState::SPACE,
+        seeds = [CONDITION_STATE_SEED, vault.key().as_ref()],
+        bump
+    )]
+    pub condition_state: Account<'info, ConditionState>,
+    #[account(mut)]
+    pub governance_authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteConditionRule<'info> {
+    #[account(seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(mut, seeds = [CONDITION_STATE_SEED, vault.key().as_ref()], bump = condition_state.bump)]
+    pub condition_state: Account<'info, ConditionState>,
+}
+
+#[derive(Accounts)]
+pub struct ObserveCondition<'info> {
+    #[account(seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(mut, seeds = [CONDITION_STATE_SEED, vault.key().as_ref()], bump = condition_state.bump)]
+    pub condition_state: Account<'info, ConditionState>,
+    #[account(address = crate::oracle::SOL_USD_FEED_ACCOUNT)]
+    pub sol_usd: Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>,
+    #[account(address = crate::oracle::USDC_USD_FEED_ACCOUNT)]
+    pub usdc_usd: Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>,
+}
+
+#[derive(Accounts)]
+pub struct ActivateCondition<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(mut, seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(mut, seeds = [CONDITION_STATE_SEED, vault.key().as_ref()], bump = condition_state.bump)]
+    pub condition_state: Account<'info, ConditionState>,
+    #[account(seeds = [REBALANCE_INTENT_SEED, vault.key().as_ref()], bump)]
+    /// CHECK: The canonical intent PDA is inspected by the handler; a program-owned account means an auction is active.
+    pub rebalance_intent: UncheckedAccount<'info>,
+    #[account(address = crate::oracle::SOL_USD_FEED_ACCOUNT)]
+    pub sol_usd: Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>,
+    #[account(address = crate::oracle::USDC_USD_FEED_ACCOUNT)]
+    pub usdc_usd: Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>,
 }
 
 pub fn check_custody(

@@ -1,6 +1,6 @@
 [package]
 name = "coloyond-vault"
-version = "0.1.0"
+version = "0.2.0"
 description = "Coloyond pooled two-asset vault program"
 edition = "2021"
 
@@ -20,7 +20,7 @@ custom-heap = []
 custom-panic = []
 
 [dependencies]
-anchor-lang = "=0.32.1"
+anchor-lang = { version = "=0.32.1", features = ["init-if-needed"] }
 anchor-spl = { version = "=0.32.1", default-features = false, features = ["token"] }
 pyth-solana-receiver-sdk = "=1.2.0"
 

@@ -1,6 +1,6 @@
 # Account and instruction contract v1
 
-**Status:** frozen S0 interface concept for local unfunded implementation. It is not an IDL or deployed-program claim. S1 may refine layout before the first implementation commit; after S1F, changes require a contract revision and coordinated migration decision.
+**Status:** frozen S0 interface concept for local unfunded implementation. It is not a deployed-program claim. The additive S3E condition revision below records the first concrete condition account and instruction contract; it does not authorize production policy values, deployment, or funded use.
 
 ## Accounts
 
@@ -33,3 +33,27 @@
 Every price-dependent instruction verifies the supplied account's owner and exact address/feed ID, Full verification, positive price, age, confidence and approved USDC depeg guard. All arithmetic uses checked integer fixed point and explicit exponent/decimal bounds. No action trusts a keeper-provided price or arbitrary CPI/program. State sequence and revision make stale/replayed submissions reject. Failed token transfer or downstream instruction rolls back all account and event effects. Pause is a risk gate, not a custody lock. Program upgrade authority remains a separate deployment trust boundary.
 
 Precise account serialization, PDA seeds, event fields, instruction arguments, integer scale, dust policy, fee values, oracle thresholds, and bounty values remain for the S1/S2/S4 contract passes; they are deliberately not guessed here. The generated IDL becomes authoritative only when S1F records its hash and matching client vectors.
+
+## S3E condition interface revision 1
+
+This additive revision pins the S3A pure condition module to an on-chain PDA and four Anchor instructions. `ConditionState` is a new account; existing `Vault`, `GovernanceAccount`, and `AuctionPolicy` layouts do not change. The versioned program IDL and the hash recorded in the sprint checklist are authoritative for this revision.
+
+### `ConditionStateV1`
+
+- PDA seeds: `[b"condition_state", vault.key()]`; one state per vault.
+- Fields: `version: u8`, `bump: u8`, `vault: Pubkey`, `sequence: u64`, `next_nonce: u64`, `active_rule: Option<ConditionalRule>`, `active_bounds: Option<ConditionBounds>`, and `pending: Option<PendingConditionRule>`.
+- `PendingConditionRule` stores the complete disabled `ConditionalRule`, all `ConditionBounds`, and `activate_after_slot`. `ConditionalRule` retains the S3A target, predicate, observed Pyth sample, expiry, revision guards and nonce.
+- No account exists until a governance-authorized proposal supplies the full configuration. The first proposal creates only a pending rule; the active rule and bounds remain absent until the inherited governance delay elapses and anyone executes it. An absent state, missing bounds, unknown account version, or stale revision rejects closed.
+- `ConditionBounds` is fully explicit: maximum observation age; minimum observation separation in seconds and slots; maximum rule lifetime in seconds and slots; maximum schedule delay in seconds and slots; and maximum hysteresis bps. No default or hard-coded production value exists. Its maximum observation age must be no greater than the current explicit `AuctionPolicy.maximum_age_seconds`.
+- The current S1F accounts expose one `configuration_revision`, so S3E binds both S3A target and configuration revision guards to that exact value. A successful target activation increments it once in both `Vault` and `GovernanceAccount`; `AuctionPolicy.configuration_revision` advances with it while its numeric risk values remain unchanged, preserving the existing policy-to-vault binding.
+
+### S3E instructions
+
+| Instruction | Caller and effect |
+|---|---|
+| `propose_condition_rule(config, bounds)` | Only `GovernanceAccount.governance_authority` may sign. The full target, predicate, expiry and every bound are explicit inputs. The program snapshots the current revisions and clock, advances the rule nonce, and stores a disabled pending rule with `activate_after_slot = current_slot + GovernanceAccount.min_delay_slots`. A pending governance target change or a still-live rule/proposal rejects. This is the only account-creation path and cannot make a rule executable. |
+| `execute_condition_rule()` | Permissionless after the recorded delay. Checks risk pause, vault status, absence of a pending governance target proposal, exact target/configuration revisions, rule expiry, explicit bounds and the bound against the current auction oracle-age limit. Promotes only the committed pending rule and bounds to active state. |
+| `observe_condition()` | Permissionless. Reads bounds only from active `ConditionState`; accepts no caller-supplied bounds. Validates both exact pinned Pyth feed accounts at Full verification, the current AuctionPolicy confidence/age limits and USDC parity guard, maps the rule asset to its pinned feed, then stores the sample and advances condition sequence. |
+| `activate_condition(expected_nonce)` | Permissionless single use. Revalidates the latest pinned Full Pyth prices and parity, latest trigger side, stored observation freshness, nonce, expiry, exact target/configuration revisions, risk pause, vault status, absence of a pending governance target proposal, and absence of the canonical active `RebalanceIntent` PDA. Atomically updates Vault and Governance target weights and revisions, advances only the AuctionPolicy binding revision, consumes the nonce and disables the rule. It performs no token transfer and cannot overlap an auction. |
+
+The no-active-auction check relies on the canonical `[b"rebalance_intent", vault.key()]` PDA: a program-owned intent means an auction exists and blocks activation; only the system-owned empty PDA state permits it. Condition observations and activations are still unfunded protocol transitions until separate admission and transaction evidence gates pass.

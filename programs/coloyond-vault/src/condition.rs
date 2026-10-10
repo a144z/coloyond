@@ -1,4 +1,4 @@
-//! Pure, fail-closed predicates for a published two-asset conditional target.
+//! Fail-closed predicates and versioned state for a published two-asset conditional target.
 //!
 //! The caller must pass a Pyth price that has already passed the pinned-feed,
 //! Full-verification, confidence and age checks in `oracle.rs`. Prices use the
@@ -10,6 +10,8 @@ use anchor_lang::prelude::*;
 use crate::state::ASSET_COUNT;
 
 pub const CONDITION_VERSION: u8 = 1;
+pub const CONDITION_STATE_VERSION: u8 = 1;
+pub const CONDITION_STATE_SEED: &[u8] = b"condition_state";
 const BPS_DENOMINATOR: u128 = 10_000;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
@@ -79,8 +81,17 @@ pub struct ConditionalRule {
     pub pending_activation: bool,
 }
 
-/// All values are supplied by a versioned on-chain policy. There is no Default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Explicit parameters for a governance-authored rule proposal.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+pub struct ConditionRuleConfig {
+    pub target_bps: [u16; ASSET_COUNT],
+    pub expires_at: i64,
+    pub expires_slot: u64,
+    pub predicate: ConditionPredicate,
+}
+
+/// All values are supplied in a governance-authorized proposal. There is no Default.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
 pub struct ConditionBounds {
     pub maximum_observation_age_seconds: u64,
     pub minimum_observation_separation_seconds: u64,
@@ -90,6 +101,68 @@ pub struct ConditionBounds {
     pub maximum_schedule_delay_seconds: u64,
     pub maximum_schedule_delay_slots: u64,
     pub maximum_hysteresis_bps: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq, InitSpace)]
+pub struct PendingConditionRule {
+    pub rule: ConditionalRule,
+    pub bounds: ConditionBounds,
+    pub activate_after_slot: u64,
+}
+
+/// One vault-scoped rule state. The first governance proposal creates only a
+/// pending, disabled rule; execution after the existing governance delay is
+/// required before any observation can affect target policy.
+#[account]
+#[derive(InitSpace)]
+pub struct ConditionState {
+    pub version: u8,
+    pub bump: u8,
+    pub vault: Pubkey,
+    pub sequence: u64,
+    pub next_nonce: u64,
+    pub active_rule: Option<ConditionalRule>,
+    pub active_bounds: Option<ConditionBounds>,
+    pub pending: Option<PendingConditionRule>,
+}
+
+impl ConditionState {
+    pub const SPACE: usize = 8 + Self::INIT_SPACE;
+
+    pub fn is_uninitialized(&self) -> bool {
+        self.version == 0
+            && self.bump == 0
+            && self.vault == Pubkey::default()
+            && self.sequence == 0
+            && self.next_nonce == 0
+            && self.active_rule.is_none()
+            && self.active_bounds.is_none()
+            && self.pending.is_none()
+    }
+
+    pub fn uninitialized() -> Self {
+        Self {
+            version: 0,
+            bump: 0,
+            vault: Pubkey::default(),
+            sequence: 0,
+            next_nonce: 0,
+            active_rule: None,
+            active_bounds: None,
+            pending: None,
+        }
+    }
+
+    pub fn initialize(&mut self, bump: u8, vault: Pubkey) {
+        self.version = CONDITION_STATE_VERSION;
+        self.bump = bump;
+        self.vault = vault;
+        self.sequence = 0;
+        self.next_nonce = 0;
+        self.active_rule = None;
+        self.active_bounds = None;
+        self.pending = None;
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,7 +208,67 @@ pub enum ConditionError {
     ArithmeticOverflow,
 }
 
+#[error_code(offset = 7000)]
+pub enum ConditionInstructionError {
+    #[msg("Condition bounds are unset or invalid")]
+    InvalidBounds,
+    #[msg("Conditional rule is malformed")]
+    InvalidRule,
+    #[msg("Conditional rule is disabled")]
+    RuleDisabled,
+    #[msg("Conditional rule has expired")]
+    RuleExpired,
+    #[msg("Conditional rule target revision is stale")]
+    StaleTargetRevision,
+    #[msg("Conditional rule configuration revision is stale")]
+    StaleConfigurationRevision,
+    #[msg("Condition observation is invalid")]
+    InvalidObservation,
+    #[msg("Condition observation publish time is future or before rule creation")]
+    FuturePublishTime,
+    #[msg("Condition observation is stale")]
+    StaleObservation,
+    #[msg("Condition observation replays an earlier Pyth publish time")]
+    OracleReplay,
+    #[msg("Condition observations do not satisfy the configured separation")]
+    ObservationTooClose,
+    #[msg("Condition observation is for the wrong asset")]
+    WrongObservationAsset,
+    #[msg("Conditional predicate is invalid")]
+    InvalidPredicate,
+    #[msg("Conditional predicate is not currently triggered")]
+    NotTriggered,
+    #[msg("Conditional rule nonce is stale or already consumed")]
+    NonceMismatch,
+    #[msg("Condition arithmetic overflowed")]
+    ArithmeticOverflow,
+    #[msg("Condition state account version or vault binding is invalid")]
+    InvalidState,
+    #[msg("No active condition policy exists")]
+    PolicyUnavailable,
+    #[msg("A non-stale condition proposal is already pending")]
+    ProposalPending,
+    #[msg("A live condition rule is already active")]
+    ActiveRule,
+    #[msg("Condition proposal has not reached its timelock slot")]
+    TimelockActive,
+    #[msg("An active rebalance intent prevents condition activation")]
+    ActiveAuction,
+    #[msg("Condition observation age exceeds the approved oracle policy")]
+    OracleAgePolicyMismatch,
+}
+
 pub type ConditionResult<T> = core::result::Result<T, ConditionError>;
+
+/// Validate a complete proposed rule and its explicitly supplied bounds.
+/// This check is independent of whether the rule is pending or active.
+pub fn validate_condition_definition(
+    rule: &ConditionalRule,
+    bounds: ConditionBounds,
+) -> ConditionResult<()> {
+    validate_bounds(bounds)?;
+    validate_rule_definition(rule, bounds)
+}
 
 /// Record one verified Pyth sample and evaluate the bounded predicate.
 ///
@@ -289,6 +422,42 @@ pub fn activate_condition(
     Ok(target)
 }
 
+/// Recheck the latest verified feed value before consuming a ready rule.
+/// This keeps a price rule from activating on an older stored crossing after
+/// the pinned Pyth account has already published a reversal.
+pub fn validate_current_condition(
+    rule: &ConditionalRule,
+    sample: ConditionSample,
+    now: ConditionNow,
+    bounds: ConditionBounds,
+) -> ConditionResult<()> {
+    validate_bounds(bounds)?;
+    validate_live_rule(rule, now, bounds)?;
+    validate_sample(rule, sample, now, bounds)?;
+    let expected_asset_index = match rule.predicate {
+        ConditionPredicate::Schedule { asset_index, .. }
+        | ConditionPredicate::PriceCross { asset_index, .. } => asset_index,
+    };
+    if sample.asset_index != expected_asset_index {
+        return Err(ConditionError::WrongObservationAsset);
+    }
+    let previous = rule
+        .last_observation
+        .ok_or(ConditionError::InvalidObservation)?;
+    if sample.publish_time < previous.publish_time {
+        return Err(ConditionError::OracleReplay);
+    }
+    match rule.predicate {
+        ConditionPredicate::Schedule { .. } => Ok(()),
+        ConditionPredicate::PriceCross {
+            direction,
+            threshold_q18,
+            ..
+        } if price_is_on_trigger_side(direction, threshold_q18, sample.price_q18) => Ok(()),
+        ConditionPredicate::PriceCross { .. } => Err(ConditionError::NotTriggered),
+    }
+}
+
 fn validate_bounds(bounds: ConditionBounds) -> ConditionResult<()> {
     if bounds.maximum_observation_age_seconds == 0
         || bounds.minimum_observation_separation_seconds == 0
@@ -303,9 +472,57 @@ fn validate_bounds(bounds: ConditionBounds) -> ConditionResult<()> {
     Ok(())
 }
 
+pub fn map_condition_error(error: ConditionError) -> anchor_lang::error::Error {
+    use ConditionError as E;
+    use ConditionInstructionError as I;
+
+    match error {
+        E::InvalidBounds => error!(I::InvalidBounds),
+        E::InvalidRule => error!(I::InvalidRule),
+        E::RuleDisabled => error!(I::RuleDisabled),
+        E::RuleExpired => error!(I::RuleExpired),
+        E::StaleTargetRevision => error!(I::StaleTargetRevision),
+        E::StaleConfigurationRevision => error!(I::StaleConfigurationRevision),
+        E::InvalidObservation => error!(I::InvalidObservation),
+        E::FuturePublishTime => error!(I::FuturePublishTime),
+        E::StaleObservation => error!(I::StaleObservation),
+        E::OracleReplay => error!(I::OracleReplay),
+        E::ObservationTooClose => error!(I::ObservationTooClose),
+        E::WrongObservationAsset => error!(I::WrongObservationAsset),
+        E::InvalidPredicate => error!(I::InvalidPredicate),
+        E::NotTriggered => error!(I::NotTriggered),
+        E::NonceMismatch => error!(I::NonceMismatch),
+        E::ArithmeticOverflow => error!(I::ArithmeticOverflow),
+    }
+}
+
 fn validate_live_rule(
     rule: &ConditionalRule,
     now: ConditionNow,
+    bounds: ConditionBounds,
+) -> ConditionResult<()> {
+    validate_rule_definition(rule, bounds)?;
+
+    if now.target_revision != rule.expected_revisions.target {
+        return Err(ConditionError::StaleTargetRevision);
+    }
+    if now.configuration_revision != rule.expected_revisions.configuration {
+        return Err(ConditionError::StaleConfigurationRevision);
+    }
+    if now.unix_timestamp < rule.created_at || now.slot < rule.created_slot {
+        return Err(ConditionError::InvalidRule);
+    }
+    if now.unix_timestamp >= rule.expires_at || now.slot >= rule.expires_slot {
+        return Err(ConditionError::RuleExpired);
+    }
+    if !rule.enabled {
+        return Err(ConditionError::RuleDisabled);
+    }
+    Ok(())
+}
+
+fn validate_rule_definition(
+    rule: &ConditionalRule,
     bounds: ConditionBounds,
 ) -> ConditionResult<()> {
     if rule.version != CONDITION_VERSION
@@ -338,22 +555,6 @@ fn validate_live_rule(
         return Err(ConditionError::InvalidRule);
     }
     validate_predicate(rule, bounds)?;
-
-    if now.target_revision != rule.expected_revisions.target {
-        return Err(ConditionError::StaleTargetRevision);
-    }
-    if now.configuration_revision != rule.expected_revisions.configuration {
-        return Err(ConditionError::StaleConfigurationRevision);
-    }
-    if now.unix_timestamp < rule.created_at || now.slot < rule.created_slot {
-        return Err(ConditionError::InvalidRule);
-    }
-    if now.unix_timestamp >= rule.expires_at || now.slot >= rule.expires_slot {
-        return Err(ConditionError::RuleExpired);
-    }
-    if !rule.enabled {
-        return Err(ConditionError::RuleDisabled);
-    }
     Ok(())
 }
 

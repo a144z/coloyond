@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 pub mod accounting;
 pub mod auction;
 pub mod auction_math;
+pub mod condition;
 pub mod governance;
 pub mod instructions;
 pub mod oracle;
@@ -86,6 +87,26 @@ pub mod coloyond_vault {
         expected_intent_sequence: u64,
     ) -> Result<()> {
         instructions::auction_handlers::finish_or_expire(ctx, expected_intent_sequence)
+    }
+
+    pub fn propose_condition_rule(
+        ctx: Context<ProposeConditionRule>,
+        config: condition::ConditionRuleConfig,
+        bounds: condition::ConditionBounds,
+    ) -> Result<()> {
+        instructions::condition_handlers::propose_condition_rule(ctx, config, bounds)
+    }
+
+    pub fn execute_condition_rule(ctx: Context<ExecuteConditionRule>) -> Result<()> {
+        instructions::condition_handlers::execute_condition_rule(ctx)
+    }
+
+    pub fn observe_condition(ctx: Context<ObserveCondition>) -> Result<()> {
+        instructions::condition_handlers::observe_condition(ctx)
+    }
+
+    pub fn activate_condition(ctx: Context<ActivateCondition>, expected_nonce: u64) -> Result<()> {
+        instructions::condition_handlers::activate_condition(ctx, expected_nonce)
     }
 }
 
