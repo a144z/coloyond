@@ -1,7 +1,15 @@
 import struct
 import unittest
 
-from probe import base58_encode, decode_config, decode_task, decode_task_queue, discriminator
+from probe import (
+    DEVNET_GENESIS_HASH,
+    base58_encode,
+    decode_config,
+    decode_task,
+    decode_task_queue,
+    discriminator,
+    validate_devnet_genesis,
+)
 
 
 def queue_account(bitmap=b"\x05", capacity=8, padding=b""):
@@ -71,6 +79,19 @@ def task_account(transaction, trigger_tag=0, trigger_time=0, padding=b"", descri
 
 
 class TukTukProbeTests(unittest.TestCase):
+    def test_accepts_pinned_devnet_genesis(self):
+        self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
+
+    def test_rejects_non_devnet_or_malformed_genesis(self):
+        for value in (
+            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+            None,
+            1,
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "cluster mismatch"):
+                validate_devnet_genesis(value)
+
     def test_base58_encoding_preserves_leading_zero_bytes(self):
         self.assertEqual(base58_encode(bytes(32)), "1" * 32)
         self.assertEqual(base58_encode(bytes.fromhex("000001")), "112")

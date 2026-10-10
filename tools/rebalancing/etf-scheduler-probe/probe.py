@@ -9,11 +9,21 @@ from task_pda import derive_tuktuk_task_address
 
 
 RPC = "https://api.devnet.solana.com"
+DEVNET_GENESIS_HASH = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
 PROGRAM_ID = "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
 UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 MAX_TASK_QUEUE_SAMPLES = 5
 MAX_TASKS_PER_QUEUE = 3
+
+
+def validate_devnet_genesis(value):
+    """Fail closed unless the RPC reports the currently pinned Devnet genesis."""
+    if not isinstance(value, str) or value != DEVNET_GENESIS_HASH:
+        raise RuntimeError(
+            f"cluster mismatch: expected Devnet genesis {DEVNET_GENESIS_HASH}, got {value!r}"
+        )
+    return value
 
 
 def rpc(method, params=None):
@@ -325,7 +335,7 @@ def sampled_task_account(queue_address, task_id, minimum_context_slot):
 
 
 def main():
-    genesis = rpc("getGenesisHash")
+    genesis = validate_devnet_genesis(rpc("getGenesisHash"))
     result = rpc("getAccountInfo", [PROGRAM_ID, {"encoding": "base64", "commitment": "confirmed"}])
     account = result["value"]
     if account is None:
