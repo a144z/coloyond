@@ -227,6 +227,93 @@ fn unequal_weight_three_asset_trade_preserves_pair_invariant_and_improves_usd_dr
 }
 
 #[test]
+fn generated_three_asset_swaps_preserve_invariant_and_improve_oracle_marked_drift() {
+    // Reference vectors are generated independently by reference_swap_states.py
+    // using Decimal quote math and exact arbitrary-precision invariant products.
+    let mut tested = 0usize;
+    let mut maximum_quote_shortfall = 0_u64;
+    for line in include_str!("swap_state_vectors.csv").lines().skip(1) {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        assert_eq!(fields.len(), 17);
+        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, decimals0, decimals1, decimals2, price0, price1, price2, asset_in, asset_out, amount_in, fee_bps, reference_floor] =
+            <[u64; 17]>::try_from(fields).expect("seventeen vector fields");
+        let reserves = [reserve0, reserve1, reserve2];
+        let weights = [weight0 as u16, weight1 as u16, weight2 as u16];
+        let decimals = [decimals0 as u8, decimals1 as u8, decimals2 as u8];
+        let prices = [price0 as i64, price1 as i64, price2 as i64];
+        let asset_in = asset_in as usize;
+        let asset_out = asset_out as usize;
+        let quote = quote_exact_in(
+            &reserves,
+            &weights,
+            asset_in,
+            asset_out,
+            amount_in,
+            fee_bps as u16,
+        )
+        .unwrap();
+        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
+        let shortfall = reference_floor - quote.amount_out;
+        assert!(shortfall <= 1, "unexpected quote error {shortfall}: {line}");
+        maximum_quote_shortfall = maximum_quote_shortfall.max(shortfall);
+
+        let mut post_reserves = reserves;
+        post_reserves[asset_in] += quote.amount_in;
+        post_reserves[asset_out] -= quote.amount_out;
+
+        // The third reserve cancels from the invariant comparison. With these
+        // bounded weights/reserves, the reduced exact integer powers fit u128.
+        let common = gcd_u16(weights[asset_in], weights[asset_out]);
+        let pair_invariant = |state: [u64; 3]| {
+            u128::from(state[asset_in]).pow(u32::from(weights[asset_in] / common))
+                * u128::from(state[asset_out]).pow(u32::from(weights[asset_out] / common))
+        };
+        assert!(
+            pair_invariant(post_reserves) >= pair_invariant(reserves),
+            "invariant decreased: {line}"
+        );
+
+        let to_usd = |amount, index| {
+            normalize_usd_value(amount, decimals[index], prices[index], -8).unwrap()
+        };
+        let pre_values = [
+            to_usd(reserves[0], 0),
+            to_usd(reserves[1], 1),
+            to_usd(reserves[2], 2),
+        ];
+        let post_values = [
+            to_usd(post_reserves[0], 0),
+            to_usd(post_reserves[1], 1),
+            to_usd(post_reserves[2], 2),
+        ];
+        assert!(
+            is_strict_deviation_improvement(&pre_values, &post_values, &weights).unwrap(),
+            "oracle-marked drift did not improve: {line}"
+        );
+        tested += 1;
+    }
+    assert_eq!(
+        tested, 256,
+        "regenerate and review the complete swap-state set"
+    );
+    eprintln!("checked {tested} generated three-asset swap states; max quote shortfall {maximum_quote_shortfall} base units");
+}
+
+fn gcd_u16(left: u16, right: u16) -> u16 {
+    let mut a = left;
+    let mut b = right;
+    while b != 0 {
+        let remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    a
+}
+
+#[test]
 fn rejects_large_input_or_output_ratios() {
     assert_eq!(
         quote_exact_in(&[1_000, 1_000], &[5_000, 5_000], 0, 1, 301, 0),
