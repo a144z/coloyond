@@ -249,7 +249,85 @@ fn div_up(numerator: u128, denominator: u128) -> Result<u128, MathError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{mul_q96_down, mul_q96_up, ratio_q96_down, ratio_q96_parts, ratio_q96_up, Q96};
+    use std::{eprintln, vec::Vec};
+
+    use super::{
+        exp_negative_q96_upper, mul_q96_down, mul_q96_up, negative_ln_q96_lower, pow_ratio_up,
+        ratio_q96_down, ratio_q96_parts, ratio_q96_up, Q96,
+    };
+
+    #[test]
+    fn q96_kernel_matches_high_precision_interval_vectors() {
+        let mut log_vectors = 0usize;
+        let mut exp_vectors = 0usize;
+        let mut power_vectors = 0usize;
+        let mut maximum_log_deficit = 0u128;
+        let mut maximum_exp_excess = 0u128;
+        let mut maximum_power_excess = 0u128;
+
+        for line in include_str!("../tests/q96_interval_vectors.csv")
+            .lines()
+            .skip(1)
+        {
+            let fields: Vec<&str> = line.split(',').collect();
+            assert_eq!(fields.len(), 6, "malformed vector: {line}");
+            let base = fields[1].parse::<u128>().unwrap();
+            let exponent = fields[2].parse::<u128>().unwrap();
+            let weight_in = fields[3].parse::<u16>().unwrap();
+            let weight_out = fields[4].parse::<u16>().unwrap();
+            let reference = fields[5].parse::<u128>().unwrap();
+
+            match fields[0] {
+                "L" => {
+                    let lower = negative_ln_q96_lower(base).unwrap();
+                    assert!(
+                        lower <= reference,
+                        "log lower bound crossed reference: {line}"
+                    );
+                    let deficit = reference - lower;
+                    assert!(deficit < 68, "log deficit exceeded proof ledger: {line}");
+                    maximum_log_deficit = maximum_log_deficit.max(deficit);
+                    log_vectors += 1;
+                }
+                "E" => {
+                    let upper = exp_negative_q96_upper(exponent).unwrap();
+                    assert!(
+                        upper >= reference,
+                        "exp upper bound crossed reference: {line}"
+                    );
+                    let excess = upper - reference;
+                    assert!(
+                        excess <= 1_556_628,
+                        "exp excess exceeded proof ledger: {line}"
+                    );
+                    maximum_exp_excess = maximum_exp_excess.max(excess);
+                    exp_vectors += 1;
+                }
+                "P" => {
+                    let upper = pow_ratio_up(base, weight_in, weight_out).unwrap();
+                    assert!(
+                        upper >= reference,
+                        "power upper bound crossed reference: {line}"
+                    );
+                    let excess = upper - reference;
+                    assert!(
+                        excess < (1 << 29),
+                        "power excess exceeded proof ledger: {line}"
+                    );
+                    maximum_power_excess = maximum_power_excess.max(excess);
+                    power_vectors += 1;
+                }
+                _ => panic!("unknown Q96 reference kind: {line}"),
+            }
+        }
+
+        assert_eq!(log_vectors, 12);
+        assert!(exp_vectors >= 16);
+        assert_eq!(power_vectors, 4_950 * 12);
+        eprintln!(
+            "checked Q96 interval vectors: log={log_vectors} max_deficit={maximum_log_deficit}, exp={exp_vectors} max_excess={maximum_exp_excess}, power={power_vectors} max_excess={maximum_power_excess}"
+        );
+    }
 
     #[test]
     fn q96_multiplication_keeps_floor_and_ceil_bounds() {

@@ -140,6 +140,9 @@ def vectors():
                 ):
                     raise RuntimeError("exact curve floor does not preserve the pair invariant")
 
+                pre_total = sum(values)
+                exact_post_total = sum(post_values)
+
                 accepted = [
                     *reserves,
                     *weights,
@@ -153,6 +156,8 @@ def vectors():
                     exact_floor,
                     gross_custody_floor,
                     decimal_floor,
+                    pre_total,
+                    exact_post_total,
                 ]
                 break
 
@@ -177,7 +182,7 @@ def main():
                 "decimals0", "decimals1", "decimals2", "price0", "price1", "price2",
                 "exponent_magnitude0", "exponent_magnitude1", "exponent_magnitude2",
                 "asset_in", "asset_out", "amount_in", "fee_bps", "exact_curve_floor",
-                "gross_custody_floor", "decimal_floor",
+                "gross_custody_floor", "decimal_floor", "pre_total_value_q", "exact_post_total_value_q",
             )
         )
         rows = list(vectors())

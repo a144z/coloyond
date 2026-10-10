@@ -297,14 +297,19 @@ fn generated_three_asset_swaps_preserve_invariant_and_improve_oracle_marked_drif
     // exact arbitrary-precision integer-invariant binary search.
     let mut tested = 0usize;
     let mut maximum_quote_shortfall = 0_u64;
+    let mut reference_nav_losses = 0usize;
+    let mut reference_nav_gains = 0usize;
+    let mut reference_nav_unchanged = 0usize;
+    let mut quote_nav_losses = 0usize;
+    let mut maximum_quote_nav_loss_bps = 0u128;
     for line in include_str!("swap_state_vectors.csv").lines().skip(1) {
         let fields: Vec<u64> = line
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        assert_eq!(fields.len(), 22);
-        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, decimals0, decimals1, decimals2, price0, price1, price2, exponent0, exponent1, exponent2, asset_in, asset_out, amount_in, fee_bps, exact_curve_floor, gross_custody_floor, decimal_floor] =
-            <[u64; 22]>::try_from(fields).expect("twenty-two vector fields");
+        assert_eq!(fields.len(), 24);
+        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, decimals0, decimals1, decimals2, price0, price1, price2, exponent0, exponent1, exponent2, asset_in, asset_out, amount_in, fee_bps, exact_curve_floor, gross_custody_floor, decimal_floor, reference_pre_total, reference_exact_post_total] =
+            <[u64; 24]>::try_from(fields).expect("twenty-four vector fields");
         let reserves = [reserve0, reserve1, reserve2];
         let weights = [weight0 as u16, weight1 as u16, weight2 as u16];
         let decimals = [decimals0 as u8, decimals1 as u8, decimals2 as u8];
@@ -360,6 +365,37 @@ fn generated_three_asset_swaps_preserve_invariant_and_improve_oracle_marked_drif
             to_usd(post_reserves[1], 1),
             to_usd(post_reserves[2], 2),
         ];
+        let pre_total = pre_values.iter().sum::<u128>();
+        assert_eq!(
+            pre_total,
+            u128::from(reference_pre_total),
+            "pre-NAV reference: {line}"
+        );
+        let mut exact_post_reserves = reserves;
+        exact_post_reserves[asset_in] += amount_in;
+        exact_post_reserves[asset_out] -= exact_curve_floor;
+        let exact_post_total = [
+            to_usd(exact_post_reserves[0], 0),
+            to_usd(exact_post_reserves[1], 1),
+            to_usd(exact_post_reserves[2], 2),
+        ]
+        .iter()
+        .sum::<u128>();
+        assert_eq!(
+            exact_post_total,
+            u128::from(reference_exact_post_total),
+            "exact post-NAV reference: {line}"
+        );
+        reference_nav_losses += usize::from(exact_post_total < pre_total);
+        reference_nav_gains += usize::from(exact_post_total > pre_total);
+        reference_nav_unchanged += usize::from(exact_post_total == pre_total);
+        let quote_total = post_values.iter().sum::<u128>();
+        let quote_nav_delta = quote_total as i128 - pre_total as i128;
+        quote_nav_losses += usize::from(quote_nav_delta < 0);
+        if quote_nav_delta < 0 {
+            let loss_bps = ((-quote_nav_delta) as u128) * 10_000 / pre_total;
+            maximum_quote_nav_loss_bps = maximum_quote_nav_loss_bps.max(loss_bps);
+        }
         assert!(
             is_strict_deviation_improvement(&pre_values, &post_values, &weights).unwrap(),
             "oracle-marked drift did not improve: {line}"
@@ -370,7 +406,20 @@ fn generated_three_asset_swaps_preserve_invariant_and_improve_oracle_marked_drif
         tested, 29_106,
         "regenerate and review the exhaustive weight/pair swap-state set"
     );
-    eprintln!("checked {tested} generated three-asset swap states; max quote shortfall {maximum_quote_shortfall} base units");
+    assert!(
+        reference_nav_losses > 0,
+        "matrix should retain NAV-loss evidence"
+    );
+    assert!(
+        quote_nav_losses > 0,
+        "runtime quote should retain NAV-loss evidence"
+    );
+    assert_eq!(reference_nav_losses, 28_999);
+    assert_eq!(reference_nav_gains, 106);
+    assert_eq!(reference_nav_unchanged, 1);
+    assert_eq!(quote_nav_losses, 28_999);
+    assert_eq!(maximum_quote_nav_loss_bps, 108);
+    eprintln!("checked {tested} generated three-asset swap states; max quote shortfall {maximum_quote_shortfall} base units; exact-reference NAV losses/gains/unchanged={reference_nav_losses}/{reference_nav_gains}/{reference_nav_unchanged}; runtime-quote NAV losses={quote_nav_losses}; max runtime-quote loss={maximum_quote_nav_loss_bps} bps");
 }
 
 #[test]
