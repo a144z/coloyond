@@ -271,7 +271,7 @@ object StrategyRecords {
         val parent = f.getValue("parentExpressionId")
         if (parent != JsonValue.Null) requireId(parent.asString("parentExpressionId"), setOf("cbe1:", "cbe2:"))
         val canonical = StrictJson.canonical(value)
-        val id = digest(if (coloyond) EXPRESSION2 else EXPRESSION1, canonical)
+        val id = (if (coloyond) "cbe2:" else "cbe1:") + digest(if (coloyond) EXPRESSION2 else EXPRESSION1, canonical)
         return ValidatedRecord(value, canonical, id, renderer != 1L || layout != 1L || sceneRecord.viewOnly)
     }
 
