@@ -42,15 +42,11 @@ object ColoyondAddresses {
     const val PYTH_RECEIVER_PROGRAM_ID = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
     const val SOL_USD_FEED = "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
     const val USDC_USD_FEED = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
-    // Canonical Devnet getGenesisHash example from https://solana.com/docs/rpc/http/getgenesishash.
-    const val DEVNET_GENESIS_HASH = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
+    // Confirmed by the Devnet and independent OnFinality RPCs on 2026-10-11.
+    const val DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
     private const val MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
     private const val TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"
-    private val legacyDevnetGenesisHashes = setOf(
-        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-    )
-    private val publicGenesisHashes = setOf(DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH) + legacyDevnetGenesisHashes
+    private val publicGenesisHashes = setOf(DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH)
 
     private val programKey get() = key(PROGRAM_ID)
     private val tokenProgramKey get() = key(TOKEN_PROGRAM_ID)

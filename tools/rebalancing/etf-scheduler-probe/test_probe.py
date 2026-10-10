@@ -84,7 +84,7 @@ class TukTukProbeTests(unittest.TestCase):
 
     def test_rejects_non_devnet_or_malformed_genesis(self):
         for value in (
-            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+            "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
             "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
             None,
             1,

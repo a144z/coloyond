@@ -1,20 +1,14 @@
 export type KeeperCluster = "localnet" | "devnet";
 
-// Solana's current RPC reference example for api.devnet.solana.com, checked 2026-10-10.
-// Older SDK constants and repository values refer to a reset-era Devnet genesis.
-export const DEVNET_GENESIS_HASH = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC";
+// Confirmed by the Devnet and independent OnFinality RPCs on 2026-10-11.
+export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 export const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 export const TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
 
-const LEGACY_DEVNET_GENESIS_HASHES = new Set([
-  "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-]);
 const PUBLIC_GENESIS_HASHES = new Set([
   DEVNET_GENESIS_HASH,
   MAINNET_GENESIS_HASH,
   TESTNET_GENESIS_HASH,
-  ...LEGACY_DEVNET_GENESIS_HASHES,
 ]);
 
 export function assertClusterGenesisConfiguration(cluster: KeeperCluster, expectedGenesisHash: string): void {
