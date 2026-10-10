@@ -1,6 +1,6 @@
 # S5 Pyth account-mode research
 
-**Status:** current-cluster fixed-feed account identity and parser observations are captured; the basket remains freshness-blocked, and S5C acceptance and S0B admission remain open. At 2026-10-10 23:08 UTC, both `https://api.devnet.solana.com` and `https://solana-devnet.api.onfinality.io/public` returned the exact pinned genesis hash. The public endpoint also returned finalized slot `509701000`; OnFinality's finalized-slot request returned HTTP 429. Exact response bodies, per-call timestamps and response SHA-256 values are preserved in [the genesis capture](s5-devnet-genesis-capture.json). This matches the upstream Solana SDK Devnet constant; that SDK is not pinned by this repository. The Solana docs `getGenesisHash` sample prints `GH7ome...`, which is a sample-output discrepancy. The latest feed snapshot is at slot `509700331`: SOL was 9 seconds old, while BTC and USDC were each 66 seconds old and failed the diagnostic 60-second freshness check. No ETF consumer transaction has run.
+**Status:** current-cluster fixed-feed account identity and parser observations are captured; the basket remains freshness-blocked, and S5C acceptance and S0B admission remain open. At 2026-10-10 23:08 UTC, both `https://api.devnet.solana.com` and `https://solana-devnet.api.onfinality.io/public` returned the exact pinned genesis hash. The public endpoint also returned finalized slot `509701000`; OnFinality's finalized-slot request returned HTTP 429. Exact response bodies, per-call timestamps and response SHA-256 values are preserved in [the genesis capture](s5-devnet-genesis-capture.json). This matches the upstream Solana SDK Devnet constant; that SDK is not pinned by this repository. The Solana docs `getGenesisHash` sample prints `GH7ome...`, which is a sample-output discrepancy. The latest feed snapshot is at confirmed slot `509701847`: all three feeds share a publish time 109 seconds before cluster time and fail the diagnostic 60-second freshness check. The preceding `509700331` snapshot had only SOL fresh. No ETF consumer transaction has run.
 
 ## Account model decision
 
@@ -100,7 +100,7 @@ The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `Pric
 
 The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. The direct observation asserts Full verification in the actual decoded account. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; native tests and the live account probe compile with the pinned versions, but an ETF SBF consumer transaction remains for S5H after S5E.
 
-No S5A oracle mode change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and fresh/stale fail-closed behavior across several point-in-time Devnet reads. The latest confirmed feed slot `509700331` had SOL fresh at 9 seconds; BTC and USDC were stale at 66 seconds under the diagnostic 60-second age ceiling. The prior slot `509680211` had only SOL fresh (11 seconds); BTC and USDC were stale at 309 seconds. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
+No S5A oracle mode change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and fresh/stale fail-closed behavior across several point-in-time Devnet reads. The latest confirmed feed slot `509701847` had all three feeds stale at 109 seconds under the diagnostic 60-second age ceiling; see the third current-cluster read below. The prior slot `509680211` had only SOL fresh (11 seconds); BTC and USDC were stale at 309 seconds. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
 
 ## Probe response integrity — offline checks
@@ -137,7 +137,19 @@ The confidence ceiling remained `u16::MAX` and is diagnostic only. No transactio
 
 ## Current RPC identity capture — 11 October 2026
 
-The capture at 2026-10-10 23:08:12 UTC records `EtWTRAB...` from both configured public Devnet and OnFinality endpoints. The public endpoint returned finalized slot `509701000`; OnFinality returned HTTP 429 for the slot request, so no second finalized slot is claimed. This capture did not reread the Pyth accounts and does not supersede the feed observation at slot `509700331`. See the response bodies and hashes in [`s5-devnet-genesis-capture.json`](s5-devnet-genesis-capture.json).
+The capture at 2026-10-10 23:08:12 UTC records `EtWTRAB...` from both configured public Devnet and OnFinality endpoints. The public endpoint returned finalized slot `509701000`; OnFinality returned HTTP 429 for the slot request, so no second finalized slot is claimed. This capture did not reread the Pyth accounts; a separate SDK-backed probe at confirmed slot `509701847` below supersedes the earlier feed snapshot. See the response bodies and hashes in [`s5-devnet-genesis-capture.json`](s5-devnet-genesis-capture.json).
+
+## Third current-cluster feed read — 11 October 2026
+
+The read-only SDK-backed probe fetched all three manifest accounts at confirmed slot `509701847`, cluster time `1791673892` (2026-10-10 23:11:32 UTC / 2026-10-11 07:11:32 +0800), on genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. All three accounts retained the expected Receiver owner, 134-byte allocation, embedded feed ID and `Full` verification. They shared publish time `1791673783`; each was 109 seconds old and rejected by the diagnostic 60-second age limit. Confidence ratios were 4, 7 and 10 bps. The probe sent no transaction.
+
+| Feed | Price × 10^exponent | Confidence × 10^exponent | Publish age | Confidence | Account-data SHA-256 | Adapter |
+|---|---:|---:|---:|---:|---|---|
+| SOL/USD | 110.22487814 | 0.03624839 | 109 s | 4 bps | `c7f805af6cbd3589765e6745c51e78c4c7a5fdbdf1a2ce35863b2dbe7bdff6bb` | fail: stale |
+| BTC/USD | 82,988.70083434 | 0.5498916566 | 109 s | 7 bps | `54bc2b4fb97a42bc10b7d6199c70ca1ea697fac788bada30348c8b4f170bd97e` | fail: stale |
+| USDC/USD | 0.99986771 | 0.00090229 | 109 s | 10 bps | `6c8cfcbd9415fdee941fdbf1e303a98678633790e8802b46ce2448e821999373` | fail: stale |
+
+This is an all-stale observation, not evidence to relax the age limit. Fixed-feed publisher recovery, a fresh account observation and approved risk limits remain open; no S5C/S0B admission or S5E consumer proof follows from account decoding alone.
 
 ## Primary sources
 
