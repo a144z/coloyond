@@ -250,7 +250,7 @@ Existing repository commands available for **future implementation validation**:
 | Sprint | Frozen base / contract revision | Parallel packages merged | Gate evidence | Decision / blocker |
 |---|---|---|---|---|
 | 0 | `c142f14b768cf02707d33a96e30d00d2bf020e2b` → `86b848d`; spec v1 (unfunded interface freeze) | S0A–E reports merged; S0F synthesis/contracts published | S0A–F documentation/link/diff checks pass; technical admission does not | **Implementation may proceed only on unfunded foundations. Funded gate held:** RPC/account authority, executable depth/economics, real wallet/origin/recovery and independent operator evidence missing. |
-| 1 | _pending_ | _pending_ | _pending_ | _pending_ |
+| 1 | `d0492667b7a3fc1990a9c1cde319b83c6fc7e71d` + S0F wire-format clarifications | S1C identity (`62f6898`), S1D wallet recovery (`cc75beb`), S1E read model (`6c59d7b`) merged | Browser `npm run typecheck`, S0F/S1 markdown links, JCS fixture digest check, and Git whitespace checks pass. Android JVM tests could not start: Java runtime missing. | **S1 gate pending.** S1A/B/F and the serial Anchor workspace bootstrap have not started because `cargo`, Anchor CLI and Solana CLI are absent; no `Cargo.toml`/lockfile can be resolved or built here. S1D remains an unfunded recovery primitive; no token-delta RPC or real wallet proof exists. Continue only after the toolchain and exact Vault/IDL boundary are available; funded actions stay disabled. |
 | 2 | _pending_ | _pending_ | _pending_ | _pending_ |
 | 3 | _pending_ | _pending_ | _pending_ | _pending_ |
 | 4 | _pending_ | _pending_ | _pending_ | _pending_ |
