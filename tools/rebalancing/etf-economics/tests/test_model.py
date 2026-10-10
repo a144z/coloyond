@@ -187,6 +187,55 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             quote_equal_weight_exact_in(Decimal("100"), Decimal("1"), 10_000)
 
+    def test_bps_inputs_require_non_bool_integers(self):
+        invalid_values = (True, False, 30.0, 30.5, "30")
+        for value in invalid_values:
+            with self.subTest(field="quote fee", value=value):
+                with self.assertRaises(ValueError):
+                    quote_equal_weight_exact_in(Decimal("100"), Decimal("1"), value)
+            for field in ("fee", "move", "haircut"):
+                with self.subTest(field=field, value=value):
+                    fee, move, haircut = 30, 100, 5
+                    if field == "fee":
+                        fee = value
+                    elif field == "move":
+                        move = value
+                    else:
+                        haircut = value
+                    with self.assertRaises(ValueError):
+                        arbitrage_scenario(
+                            Decimal("100"), Decimal("1"), fee, move, haircut, Decimal("0")
+                        )
+            for parameter in (
+                "move", "haircut", "base_fee", "deadband", "surcharge", "max_fee"
+            ):
+                with self.subTest(field=f"dynamic {parameter}", value=value):
+                    kwargs = {
+                        "external_move_bps": 100,
+                        "uncertainty_haircut_bps": 5,
+                        "base_fee_bps": 5,
+                        "deadband_bps": 25,
+                        "surcharge_bps_per_100bps": 10,
+                        "max_fee_bps": 100,
+                    }
+                    key = {
+                        "move": "external_move_bps",
+                        "haircut": "uncertainty_haircut_bps",
+                        "base_fee": "base_fee_bps",
+                        "deadband": "deadband_bps",
+                        "surcharge": "surcharge_bps_per_100bps",
+                        "max_fee": "max_fee_bps",
+                    }[parameter]
+                    kwargs[key] = value
+                    with self.assertRaises(ValueError):
+                        bounded_dynamic_fee_bps(**kwargs)
+
+        self.assertEqual(
+            quote_equal_weight_exact_in(Decimal("100"), Decimal("1"), 0),
+            Decimal("50") / Decimal("51"),
+        )
+        self.assertEqual(bounded_dynamic_fee_bps(0, 0, base_fee_bps=0, max_fee_bps=0), 0)
+
     def test_dynamic_fee_is_bounded_and_responds_only_to_signal_beyond_deadband(self):
         self.assertEqual(bounded_dynamic_fee_bps(20, 5), 5)
         self.assertEqual(bounded_dynamic_fee_bps(125, 0), 15)

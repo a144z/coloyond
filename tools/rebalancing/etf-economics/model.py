@@ -8,8 +8,14 @@ getcontext().prec = 60
 BPS = Decimal(10_000)
 
 
+def _require_integer_bps(**values: int) -> None:
+    if any(type(value) is not int for value in values.values()):
+        raise ValueError("basis-point values must be integers")
+
+
 def quote_equal_weight_exact_in(depth_usd: Decimal, amount_in_usd: Decimal, fee_bps: int) -> Decimal:
     """Return output tokens for a 50/50 pool whose two oracle prices start at $1."""
+    _require_integer_bps(fee_bps=fee_bps)
     if (
         not depth_usd.is_finite()
         or not amount_in_usd.is_finite()
@@ -39,6 +45,11 @@ def arbitrage_scenario(
     In reverse direction the input asset depreciates while the output remains
     at $1, so the trader pays less external value for that same quantity.
     """
+    _require_integer_bps(
+        fee_bps=fee_bps,
+        external_move_bps=external_move_bps,
+        uncertainty_haircut_bps=uncertainty_haircut_bps,
+    )
     if (
         external_move_bps < 0
         or uncertainty_haircut_bps < 0
@@ -124,6 +135,14 @@ def bounded_dynamic_fee_bps(
     This is a sensitivity candidate, not a production recommendation. It adds
     10 fee bps per full 100 bps of conservative signal beyond a 25 bps deadband.
     """
+    _require_integer_bps(
+        external_move_bps=external_move_bps,
+        uncertainty_haircut_bps=uncertainty_haircut_bps,
+        base_fee_bps=base_fee_bps,
+        deadband_bps=deadband_bps,
+        surcharge_bps_per_100bps=surcharge_bps_per_100bps,
+        max_fee_bps=max_fee_bps,
+    )
     if min(external_move_bps, uncertainty_haircut_bps, base_fee_bps, deadband_bps,
            surcharge_bps_per_100bps) < 0:
         raise ValueError("move, haircut, and fee parameters must be nonnegative")
