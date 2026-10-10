@@ -134,6 +134,7 @@ pub fn propose_condition_rule(
         bounds,
         activate_after_slot,
     });
+    clear_condition_state_tail(&ctx.accounts.condition_state)?;
     Ok(())
 }
 
@@ -201,6 +202,7 @@ pub fn execute_condition_rule(ctx: Context<ExecuteConditionRule>) -> Result<()> 
         configuration_revision: active_rule.expected_revisions.configuration,
         activate_after_slot: pending.activate_after_slot,
     });
+    clear_condition_state_tail(&ctx.accounts.condition_state)?;
     Ok(())
 }
 
@@ -264,6 +266,7 @@ pub fn observe_condition(ctx: Context<ObserveCondition>) -> Result<()> {
             ObservationStatus::Revoked => 2,
         },
     });
+    clear_condition_state_tail(&ctx.accounts.condition_state)?;
     Ok(())
 }
 
@@ -355,7 +358,14 @@ pub fn activate_condition(ctx: Context<ActivateCondition>, expected_nonce: u64) 
         configuration_revision: next_revision,
         target_bps: authorized.target_bps,
     });
+    clear_condition_state_tail(&ctx.accounts.condition_state)?;
     Ok(())
+}
+
+fn clear_condition_state_tail(account: &Account<ConditionState>) -> Result<()> {
+    let account_info = account.to_account_info();
+    let mut data = account_info.try_borrow_mut_data()?;
+    account.clear_serialized_tail(&mut data)
 }
 
 fn validate_state(state: &ConditionState, vault_key: Pubkey) -> Result<()> {

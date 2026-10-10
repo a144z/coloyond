@@ -129,6 +129,20 @@ pub struct ConditionState {
 impl ConditionState {
     pub const SPACE: usize = 8 + Self::INIT_SPACE;
 
+    /// Clear bytes Anchor's subsequent account serialization will not overwrite.
+    /// Borsh encodes these optional fields variably, while the PDA is allocated
+    /// at its maximum size; without this, shrinking transitions retain old data.
+    pub fn clear_serialized_tail(&self, account_data: &mut [u8]) -> Result<()> {
+        let mut serialized = Vec::with_capacity(Self::SPACE);
+        self.try_serialize(&mut serialized)?;
+        require!(
+            serialized.len() <= account_data.len(),
+            ConditionInstructionError::InvalidState
+        );
+        account_data[serialized.len()..].fill(0);
+        Ok(())
+    }
+
     pub fn is_uninitialized(&self) -> bool {
         self.version == 0
             && self.bump == 0
@@ -704,3 +718,7 @@ fn price_crossed(
 #[cfg(test)]
 #[path = "../tests/condition/core.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../tests/condition/account_serialization.rs"]
+mod account_serialization_tests;
