@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import struct
 import unittest
 
@@ -6,6 +8,8 @@ from probe import (
     base58_encode,
     CRON_PROGRAM_ID,
     decode_config,
+    decode_programdata_account,
+    decode_programdata_address,
     decode_task,
     decode_task_queue,
     discriminator,
@@ -103,6 +107,58 @@ class TukTukProbeTests(unittest.TestCase):
         ):
             with self.subTest(account=invalid), self.assertRaises(RuntimeError):
                 validate_executable_program_account(invalid, CRON_PROGRAM_ID)
+
+    def test_program_account_points_to_loader_programdata(self):
+        address_bytes = bytes(range(32))
+        account = {
+            "data": [base64.b64encode(struct.pack("<I", 2) + address_bytes).decode(), "base64"]
+        }
+        self.assertEqual(
+            decode_programdata_address(account, CRON_PROGRAM_ID),
+            base58_encode(address_bytes),
+        )
+        for invalid in (
+            {"data": [base64.b64encode(bytes(36)).decode(), "base64"]},
+            {"data": ["%%%", "base64"]},
+            {"data": [base64.b64encode(bytes(36)).decode(), "base58"]},
+            None,
+        ):
+            with self.subTest(account=invalid), self.assertRaises(RuntimeError):
+                decode_programdata_address(invalid, CRON_PROGRAM_ID)
+
+    def test_programdata_decoder_reports_slot_authority_and_code_fingerprint(self):
+        code = b"deployed-sbf-bytes"
+        programdata = struct.pack("<IQB", 3, 123_456, 1) + bytes(range(32)) + code
+        account = {
+            "owner": UPGRADEABLE_LOADER,
+            "executable": False,
+            "lamports": 987_654,
+            "data": [base64.b64encode(programdata).decode(), "base64"],
+        }
+        decoded = decode_programdata_account(account, "programdata-address")
+        self.assertEqual(decoded["deployment_slot"], 123_456)
+        self.assertEqual(decoded["upgrade_authority"], base58_encode(bytes(range(32))))
+        self.assertEqual(decoded["program_bytes"], len(code))
+        self.assertEqual(decoded["sha256"], hashlib.sha256(code).hexdigest())
+        self.assertEqual(decoded["lamports"], 987_654)
+
+    def test_programdata_decoder_accepts_immutable_program_and_rejects_bad_metadata(self):
+        code = b"immutable-program"
+        immutable = {
+            "owner": UPGRADEABLE_LOADER,
+            "executable": False,
+            "lamports": 10,
+            "data": [base64.b64encode(struct.pack("<IQB", 3, 99, 0) + code).decode(), "base64"],
+        }
+        self.assertIsNone(decode_programdata_account(immutable, "immutable")["upgrade_authority"])
+        for invalid in (
+            {**immutable, "owner": "11111111111111111111111111111111"},
+            {**immutable, "executable": True},
+            {**immutable, "data": [base64.b64encode(struct.pack("<IQB", 3, 99, 2) + code).decode(), "base64"]},
+            {**immutable, "data": [base64.b64encode(struct.pack("<IQB", 2, 99, 0) + code).decode(), "base64"]},
+        ):
+            with self.subTest(account=invalid), self.assertRaises(RuntimeError):
+                decode_programdata_account(invalid, "invalid")
 
     def test_accepts_pinned_devnet_genesis(self):
         self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)

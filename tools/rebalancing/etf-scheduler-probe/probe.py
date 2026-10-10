@@ -41,6 +41,59 @@ def validate_executable_program_account(account, program_id):
     }
 
 
+def decode_programdata_address(account, program_id):
+    """Read the ProgramData pointer from an upgradeable-loader Program state."""
+    encoded = account.get("data") if isinstance(account, dict) else None
+    if not isinstance(encoded, list) or len(encoded) != 2 or encoded[1] != "base64":
+        raise RuntimeError(f"program account has malformed loader data: {program_id}")
+    try:
+        raw = base64.b64decode(encoded[0], validate=True)
+    except (ValueError, TypeError) as error:
+        raise RuntimeError(f"program account has invalid loader data: {program_id}") from error
+    if len(raw) != 36 or int.from_bytes(raw[:4], "little") != 2:
+        raise RuntimeError(f"program account is not an upgradeable-loader Program: {program_id}")
+    return base58_encode(raw[4:36])
+
+
+def decode_programdata_account(account, programdata_address):
+    """Validate loader ProgramData metadata and fingerprint its deployed bytes."""
+    if (
+        not isinstance(account, dict)
+        or account.get("owner") != UPGRADEABLE_LOADER
+        or account.get("executable") is not False
+    ):
+        raise RuntimeError(f"ProgramData account has unexpected owner/state: {programdata_address}")
+    encoded = account.get("data")
+    if not isinstance(encoded, list) or len(encoded) != 2 or encoded[1] != "base64":
+        raise RuntimeError(f"ProgramData account has malformed data: {programdata_address}")
+    try:
+        raw = base64.b64decode(encoded[0], validate=True)
+    except (ValueError, TypeError) as error:
+        raise RuntimeError(f"ProgramData account has invalid base64: {programdata_address}") from error
+    if len(raw) < 13 or int.from_bytes(raw[:4], "little") != 3:
+        raise RuntimeError(f"account is not upgradeable-loader ProgramData: {programdata_address}")
+
+    authority_tag = raw[12]
+    if authority_tag == 0:
+        metadata_size = 13
+        upgrade_authority = None
+    elif authority_tag == 1 and len(raw) >= 45:
+        metadata_size = 45
+        upgrade_authority = base58_encode(raw[13:45])
+    else:
+        raise RuntimeError(f"ProgramData upgrade-authority option is malformed: {programdata_address}")
+    program_bytes = raw[metadata_size:]
+    if not program_bytes:
+        raise RuntimeError(f"ProgramData has no deployed bytes: {programdata_address}")
+    return {
+        "deployment_slot": int.from_bytes(raw[4:12], "little"),
+        "upgrade_authority": upgrade_authority,
+        "program_bytes": len(program_bytes),
+        "sha256": hashlib.sha256(program_bytes).hexdigest(),
+        "lamports": account.get("lamports"),
+    }
+
+
 def rpc(method, params=None):
     request = urllib.request.Request(
         RPC,
@@ -358,10 +411,31 @@ def main():
             [program_id, {"encoding": "base64", "commitment": "confirmed"}],
         )
         program = validate_executable_program_account(result["value"], program_id)
+        programdata_address = decode_programdata_address(result["value"], program_id)
+        programdata_result = rpc(
+            "getAccountInfo",
+            [
+                programdata_address,
+                {
+                    "encoding": "base64",
+                    "commitment": "confirmed",
+                    "minContextSlot": result["context"]["slot"],
+                },
+            ],
+        )
+        programdata = decode_programdata_account(
+            programdata_result["value"], programdata_address
+        )
         print(
             f"{label}_program={program_id} slot={result['context']['slot']} "
             f"executable={program['executable']} owner={program['owner']} "
-            f"space={program['space']} lamports={program['lamports']}"
+            f"space={program['space']} lamports={program['lamports']} "
+            f"programdata={programdata_address} programdata_context_slot="
+            f"{programdata_result['context']['slot']} deployment_slot="
+            f"{programdata['deployment_slot']} upgrade_authority="
+            f"{programdata['upgrade_authority']} code_bytes={programdata['program_bytes']} "
+            f"code_sha256={programdata['sha256']} "
+            f"programdata_lamports={programdata['lamports']}"
         )
     print("result=tuktuk-and-cron-program-accounts-present-and-executable")
 
