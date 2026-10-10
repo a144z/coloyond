@@ -20,6 +20,11 @@ fn all_three_asset_weight_pairs_bound_tiny_near_u64_quotes() {
         let [b0, b1, b2, w0, w1, w2, asset_in, asset_out, gross_in, fee_bps, net_in, exact_curve_floor, exact_gross_custody_max] =
             <[u64; 13]>::try_from(fields).expect("thirteen vector fields");
         let balances = [b0, b1, b2];
+        assert_eq!(
+            balances,
+            [u64::MAX - 1_000, u64::MAX - 2_000, u64::MAX - 3_000],
+            "unexpected near-u64 reserve anchor: {line}"
+        );
         let weights = [w0 as u16, w1 as u16, w2 as u16];
         assert_eq!(w0 + w1 + w2, 10_000, "weights must sum to 10,000: {line}");
         assert!(
