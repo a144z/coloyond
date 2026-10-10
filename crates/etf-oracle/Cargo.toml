@@ -1,0 +1,9 @@
+[package]
+name = "coloyond-etf-oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "coloyond_etf_oracle"
+path = "src/lib.rs"

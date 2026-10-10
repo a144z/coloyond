@@ -1,5 +1,9 @@
 [workspace]
-members = ["programs/coloyond-vault"]
+members = [
+    "programs/coloyond-vault",
+    "crates/etf-math",
+    "crates/etf-oracle",
+]
 resolver = "2"
 
 [profile.release]
