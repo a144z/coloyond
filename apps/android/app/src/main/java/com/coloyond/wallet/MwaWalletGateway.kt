@@ -20,6 +20,10 @@ import com.solana.transaction.Transaction
  */
 class MwaWalletGateway : WalletGateway {
 
+    /** S0E origin and real-wallet capability evidence are still missing; this gateway remains demo-only. */
+    val fundedActionsUnavailableReason: String =
+        "Funded actions are disabled until Coloyond has a verified app-owned HTTPS wallet identity and a proven wallet path."
+
     private val adapter = MobileWalletAdapter(
         connectionIdentity = ConnectionIdentity(
             identityUri = AppConfig.identityUri,
