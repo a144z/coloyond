@@ -199,3 +199,88 @@ fn three_asset_tiny_near_u64_quotes_match_exact_fee_and_custody_bounds() {
     );
     assert_eq!(directions.len(), 6, "cover every ordered three-asset pair");
 }
+
+#[test]
+fn three_asset_max_fee_transitions_match_exact_reference_bounds() {
+    let mut tested = 0usize;
+    let mut zero_net_cases = 0usize;
+    let mut dust_cases = 0usize;
+    let mut successful_quotes = 0usize;
+    let mut net_inputs = BTreeSet::new();
+
+    for line in include_str!("weighted_three_asset_max_fee_boundary_vectors.csv")
+        .lines()
+        .skip(1)
+    {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated integer vector"))
+            .collect();
+        let [b0, b1, b2, w0, w1, w2, asset_in, asset_out, gross_in, net_in, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 12]>::try_from(fields).expect("twelve vector fields");
+        let balances = [b0, b1, b2];
+        let weights = [w0 as u16, w1 as u16, w2 as u16];
+        let input_index = asset_in as usize;
+        let output_index = asset_out as usize;
+        let quote = quote_exact_in(
+            &balances,
+            &weights,
+            input_index,
+            output_index,
+            gross_in,
+            9_999,
+        );
+
+        assert_eq!(
+            net_in,
+            gross_in / 10_000,
+            "9,999-bps fee transition mismatch: {line}"
+        );
+        assert!(exact_curve_floor <= exact_gross_custody_max);
+        net_inputs.insert(net_in);
+
+        if net_in == 0 {
+            zero_net_cases += 1;
+            assert_eq!(quote, Err(MathError::NoOutput), "zero-net input: {line}");
+        } else {
+            match quote {
+                Ok(quote) => {
+                    successful_quotes += 1;
+                    assert_eq!(quote.amount_in_after_fee, net_in, "net input: {line}");
+                    assert_eq!(quote.fee_amount, gross_in - net_in, "fee: {line}");
+                    assert!(
+                        quote.amount_out <= exact_curve_floor,
+                        "curve overpay: {line}"
+                    );
+                    assert!(
+                        quote.amount_out <= exact_gross_custody_max,
+                        "custody bound exceeded: {line}"
+                    );
+                    assert!(
+                        exact_curve_floor - quote.amount_out <= 1,
+                        "shortfall exceeds one base unit: {line}"
+                    );
+                }
+                Err(MathError::NoOutput) if exact_curve_floor <= 1 => dust_cases += 1,
+                Err(error) => panic!("unexpected quote failure ({error:?}): {line}"),
+            }
+        }
+        tested += 1;
+    }
+
+    assert_eq!(tested, 2_160, "regenerate the selected max-fee corpus");
+    assert_eq!(zero_net_cases, 360, "cover every zero-net gross input");
+    assert_eq!(net_inputs, BTreeSet::from([0, 1, 2]));
+    assert!(
+        dust_cases > 0,
+        "include positive-net outputs rounded to dust"
+    );
+    assert!(
+        successful_quotes > 0,
+        "include successful positive-net quotes"
+    );
+    assert_eq!(
+        quote_exact_in(&[1, 1], &[5_000, 5_000], 0, 1, 10_000, 10_000),
+        Err(MathError::FeeOutOfRange)
+    );
+}
