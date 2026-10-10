@@ -302,6 +302,43 @@ fn generated_three_asset_swaps_preserve_invariant_and_improve_oracle_marked_drif
     eprintln!("checked {tested} generated three-asset swap states; max quote shortfall {maximum_quote_shortfall} base units");
 }
 
+#[test]
+fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
+    let mut tested = 0usize;
+    let mut maximum_relative_error_pptr = 0_u128;
+    for line in include_str!("swap_boundary_vectors.csv").lines().skip(1) {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        assert_eq!(fields.len(), 11);
+        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, asset_in, asset_out, amount_in, fee_bps, reference_floor] =
+            <[u64; 11]>::try_from(fields).expect("eleven vector fields");
+        let quote = quote_exact_in(
+            &[reserve0, reserve1, reserve2],
+            &[weight0 as u16, weight1 as u16, weight2 as u16],
+            asset_in as usize,
+            asset_out as usize,
+            amount_in,
+            fee_bps as u16,
+        )
+        .unwrap();
+        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
+        let error = reference_floor - quote.amount_out;
+        let reference = u128::from(reference_floor.max(1));
+        let scaled_error = u128::from(error) * 1_000_000_000_000;
+        let relative_error_pptr = (scaled_error + reference - 1) / reference;
+        maximum_relative_error_pptr = maximum_relative_error_pptr.max(relative_error_pptr);
+        assert!(
+            relative_error_pptr <= 1_000,
+            "boundary quote shortfall exceeds one ppb ({relative_error_pptr} pptr): {line}"
+        );
+        tested += 1;
+    }
+    assert_eq!(tested, 864, "regenerate and inspect the boundary vectors");
+    eprintln!("checked {tested} three-asset minimum-weight boundary vectors; max relative shortfall {maximum_relative_error_pptr} pptr");
+}
+
 fn gcd_u16(left: u16, right: u16) -> u16 {
     let mut a = left;
     let mut b = right;
