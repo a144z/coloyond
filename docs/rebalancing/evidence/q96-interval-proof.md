@@ -52,11 +52,11 @@ Multiplication by the integer weight ratio followed by floor division loses less
 
 The right-shift by eight bits computes `a = floor(z/256)` in Q96 units. Its distance below the exact exponent divided by 256 is less than `6,733/256 + 1 < 28` Q-units. Since `|d exp(-t)/dt| <= 1` for `t >= 0`, this shift contributes less than 28 Q-units to the reduced exponential interval.
 
-The exponent bound also justifies the approximation range: `-ln(x) <= ln(13/10)` and `r <= 99`, so the exact exponent is less than 26. One exact check is `ln(13/10) < 26/99`, which follows from `e^(26/99) > 1 + 26/99 + (26/99)^2/2 + (26/99)^3/6 > 13/10`. Hence the reduced argument is at most `26/256 = 13/128 < 0.102`.
+The exponent bound also justifies the approximation range: `-ln(x) <= ln(13/10)` and `r <= 99`, so the exact exponent is less than 26. One exact check is `ln(13/10) < 26/99`, which follows from `e^(26/99) > 1 + 26/99 + (26/99)^2/2 + (26/99)^3/6 > 13/10`. Hence the production quote path has `z < 26Q`, and the reduced argument is at most `26/256 = 13/128 < 0.102`.
 
 ## Exponential upper bound and error ledger
 
-For `0 <= a <= 13/128`, the alternating Taylor series for `exp(-a)` decreases term-by-term. Its degree-12 partial sum is an upper bound, with truncation error less than `a^13/13!`. In Q-units, the maximum tail is
+For `0 <= a <= 13/128`, the alternating Taylor series for `exp(-a)` decreases term-by-term. Its degree-12 partial sum is an upper bound, with truncation error less than `a^13/13!`. The private exponential helper enforces `0 <= z <= 26Q`; the inclusive endpoint is covered by the same Taylor bound, and the first Q-unit above it returns `PowerDomain`. The public quote path remains strictly below that endpoint by the reserve and weight-ratio proof above. In Q-units, the maximum tail is
 
 ```text
 Q * (13/128)^13 / 13!

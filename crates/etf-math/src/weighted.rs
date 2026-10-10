@@ -5,6 +5,7 @@ pub const MAX_IN_RATIO_BPS: u16 = 3_000;
 pub const MAX_OUT_RATIO_BPS: u16 = 3_000;
 
 const Q96: u128 = 1_u128 << 96;
+const MAX_EXP_ARGUMENT_Q96: u128 = 26 * Q96;
 const EXP_RANGE_REDUCTION_BITS: u32 = 8;
 const EXP_TAYLOR_TERMS: u32 = 12;
 const LOG_ODD_TERMS: u32 = 16;
@@ -137,15 +138,20 @@ fn negative_ln_q96_lower(base: u128) -> Result<u128, MathError> {
     sum.checked_mul(2).ok_or(MathError::ArithmeticOverflow)
 }
 
-/// Computes an upper bound for `exp(-z)` when `z >= 0` and `z < 26`, in Q96.
+/// Computes an upper bound for `exp(-z)` when `z` is in the closed interval
+/// `[0, 26]`, in Q96.
 fn exp_negative_q96_upper(z: u128) -> Result<u128, MathError> {
+    if z > MAX_EXP_ARGUMENT_Q96 {
+        return Err(MathError::PowerDomain);
+    }
+
     let reduced = z >> EXP_RANGE_REDUCTION_BITS;
     let mut term_lower = Q96;
     let mut term_upper = Q96;
     let mut sum_upper = Q96;
 
-    // At z < 26, the reduced argument is below 0.102. The alternating
-    // exponential series truncated at an even degree is an upper bound.
+    // At z <= 26, the reduced argument is at most 26/256 < 0.102. The
+    // alternating exponential series truncated at an even degree is an upper bound.
     for degree in 1..=EXP_TAYLOR_TERMS {
         term_lower = mul_q96_down(term_lower, reduced)? / u128::from(degree);
         term_upper = div_up(mul_q96_up(term_upper, reduced)?, u128::from(degree))?;
@@ -253,7 +259,7 @@ mod tests {
 
     use super::{
         exp_negative_q96_upper, mul_q96_down, mul_q96_up, negative_ln_q96_lower, pow_ratio_up,
-        ratio_q96_down, ratio_q96_parts, ratio_q96_up, Q96,
+        ratio_q96_down, ratio_q96_parts, ratio_q96_up, MAX_EXP_ARGUMENT_Q96, Q96,
     };
 
     #[test]
@@ -355,5 +361,14 @@ mod tests {
     fn q96_ratio_helpers_reject_out_of_domain_inputs() {
         assert!(ratio_q96_down(1, 0).is_err());
         assert!(ratio_q96_up(2, 1).is_err());
+    }
+
+    #[test]
+    fn q96_exp_enforces_its_inclusive_proven_domain() {
+        assert!(exp_negative_q96_upper(MAX_EXP_ARGUMENT_Q96).is_ok());
+        assert_eq!(
+            exp_negative_q96_upper(MAX_EXP_ARGUMENT_Q96 + 1),
+            Err(crate::MathError::PowerDomain)
+        );
     }
 }
