@@ -7,23 +7,27 @@
 // in basis points per asset against the vault's baked-in targets. When a
 // keeper is wired up later, this is the number that decides fill_auction.
 //
-// Usage, from the repository root (env configured like the sibling probes):
+// Usage, from the repository root (configuration lives in the gitignored
+// `.env.local` at the repository root; see `.env.local.example`; per-run
+// env assignments still win over the file):
 //   npx tsx tools/rebalancing/coloyond-drift-loop.mjs
 //   VAULT=<vault account base58>   optional; restricts the report to one vault
 //   RPC_NODES="url,url,..."        rotation list; defaults to the two official endpoints
+//   PROGRAM_ID=<base58>            optional; defaults to the generated program id
 //   MAX_ROUNDS=n                   default 1; 0 runs forever
 //   INTERVAL_MS=n                  default 85, the blueprint's pacing pause
+import { loaded as envKeysApplied } from "./env.mjs";
 import { Connection, PublicKey } from "@solana/web3.js";
 
 const RPC_NODES = (process.env.RPC_NODES ?? "https://api.devnet.solana.com,https://api.mainnet-beta.solana.com")
   .split(",")
   .map((url) => url.trim())
   .filter((url) => url !== "");
-const VAULT = process.env.VAULT ?? null;
+const VAULT = process.env.VAULT || null;
 const MAX_ROUNDS = Number(process.env.MAX_ROUNDS ?? 1);
 const INTERVAL_MS = Number(process.env.INTERVAL_MS ?? 85);
 
-const PROGRAM_ID = new PublicKey("FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6");
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6");
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const VAULT_ACCOUNT_SIZE = 353;
 const VAULT_DISCRIMINATOR = [211, 8, 232, 43, 2, 152, 117, 119];
@@ -175,6 +179,7 @@ async function once(round) {
 }
 
 async function main() {
+  if (envKeysApplied > 0) console.log(`[Coloyond Drift] ${envKeysApplied} key(s) applied from .env.local.`);
   let round = 0;
   while (MAX_ROUNDS === 0 || round < MAX_ROUNDS) {
     try {

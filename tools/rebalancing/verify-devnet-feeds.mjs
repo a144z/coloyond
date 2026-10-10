@@ -8,7 +8,9 @@
 // accounts embed the pinned feed ID when the pinned account is absent there.
 //
 // Usage: npx tsx tools/rebalancing/verify-devnet-feeds.mjs
-//   RPC_DEVNET / RPC_MAINNET override the cluster endpoints.
+//   RPC_DEVNET / RPC_MAINNET override the cluster endpoints, through the
+//   repository root .env.local file (see .env.local.example) or per-run env.
+import { loaded as envKeysApplied } from "./env.mjs";
 import { Connection, PublicKey } from "@solana/web3.js";
 
 const RPC_DEVNET = process.env.RPC_DEVNET ?? "https://api.devnet.solana.com";

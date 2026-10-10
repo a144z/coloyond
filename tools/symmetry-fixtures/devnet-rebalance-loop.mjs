@@ -5,7 +5,8 @@
 // permissionless rebalanceVaultTx. It rotates RPC endpoints on errors and pauses
 // a fixed interval between rounds, the way the blueprint sketch prescribes.
 //
-// Usage, from this folder (all configuration through env, like the probes):
+// Usage, from this folder (all configuration through the repository root
+// .env.local file or env assignments, like the probes):
 //   VAULT=<vault account pubkey>            the vault to watch
 //   KEYPAIR_JSON="[1,2,...,32 bytes]"        a devnet-funded signer; omit for a read-only dry run
 //   NET=devnet                              devnet only; this pass never signs mainnet
@@ -13,6 +14,7 @@
 //   FORCE=1                                 send even when drift is under the trigger
 //   MAX_ROUNDS=n                            default 1; 0 runs forever
 //   INTERVAL_MS=n                           default 85, the blueprint's pacing pause
+import "../rebalancing/env.mjs";
 import { Connection, Keypair } from "@solana/web3.js";
 import sdkPkg from "@symmetry-hq/sdk";
 const { SymmetryCore } = sdkPkg;

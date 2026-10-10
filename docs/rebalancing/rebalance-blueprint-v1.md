@@ -228,7 +228,10 @@ extract more money than the base fee allows.
 - `tools/rebalancing/coloyond-drift-loop.mjs` is diagnostic prototype code and
   must not be treated as a verified drift reading or trigger until its vault,
   custody, policy and Pyth decoders pass real-chain validation. The last
-  recorded attempt found no Coloyond Devnet deployment.
+  recorded attempt found no Coloyond Devnet deployment. Configuration for both
+  Devnet tools comes from the gitignored repository-root `.env.local`, listed
+  in `.env.local.example` and folded into the environment by
+  `tools/rebalancing/env.mjs`.
 - S3F has one complete Localnet condition-liveness run with shared RPC and
   synthetic Pyth data. It is not independent-operator, Devnet, or production
   liveness evidence; see [the retained transcript](evidence/s3-liveness-localnet-success-20261010.jsonl).
