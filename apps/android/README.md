@@ -1,6 +1,11 @@
-# coloyond Android scaffold
+# coloyond Android app
 
-Native Kotlin + Jetpack Compose starter generated with Solana Mobile's `kotlin-compose-minimal` template. The app contains a Mobile Wallet Adapter demo for connecting, signing a message, and disconnecting on **devnet**. It does not implement the strategy cards, vault integration, Jupiter swaps, or rebalancing features yet.
+Native Kotlin + Jetpack Compose app, started from Solana Mobile's `kotlin-compose-minimal` template. It has two screens, chosen with the chips at the top:
+
+- **Card probe** (default): the Task 1 device probe. It draws a sample card, exports it as a 1080×1350 PNG, shares the PNG and a strategy file, and shows the last import it received.
+- **Wallet**: a Mobile Wallet Adapter demo for connecting, signing a message and disconnecting on **devnet**.
+
+It also has a Symmetry V3 account decoder (`protocols/symmetry/AccountDecoder.kt`). The strategy records, the card generator, remix and the Glider handoff are not built yet.
 
 The application ID is `com.coloyond`. Open this directory (`apps/android`) as the project in Android Studio.
 
@@ -51,7 +56,7 @@ From `apps/android`, using the same environment:
 ./gradlew :app:testDebugUnitTest :app:lintDebug --console=plain
 ```
 
-The generated unit test is a template sanity check, not proof of wallet or product behavior. Instrumented tests require a connected Android device/emulator:
+The unit tests cover the RPC client, the memo transaction, the Symmetry decoder (against SDK fixtures in `app/src/test/resources/symmetry/`) and the bounded import read. They are not proof of wallet behavior. Instrumented tests require a connected Android device/emulator:
 
 ```sh
 ./gradlew :app:connectedDebugAndroidTest --console=plain
@@ -84,13 +89,30 @@ The generated project was staged under `scratchpad/kotlin-scaffold/coloyond`, th
 
 ## Verified build
 
-On 9 October 2026, Linux/WSL with JDK 17 completed:
+On 10 October 2026, Linux/WSL with JDK 17, a clean build on `main` completed:
 
 ```sh
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --console=plain
+./gradlew clean :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --console=plain
 ```
 
-The debug APK was produced, the single generated unit test passed, and lint completed successfully. APK inspection confirmed `com.coloyond`, minimum SDK 26, target SDK 37, and the `MainActivity` launcher. No device was connected, so APK installation, instrumented tests, and real wallet interactions were not exercised.
+The debug APK was produced, all 16 unit tests passed, and lint reported no errors. The APK was then installed on an Android 15 emulator (`Medium_Phone_API_35`). The card probe checks passed: rendering, PNG export, all three shares, link imports and file imports, both with the app running and with it stopped. The full table is in [the probe report](../../docs/integrations/2026-10-09-symmetry-jupiter-probe.md#device-probes-10-october-2026).
+
+Not yet checked: imports from real sender apps, a completed share to a target app, and wallet signing. These need a physical phone with a wallet installed.
+
+### Run the probe checks yourself
+
+With the app installed and on the Card probe screen:
+
+```sh
+adb shell am start -a android.intent.action.VIEW -d "coloyond://import#abc"   # Last import: link, 3-character payload
+adb shell am start -a android.intent.action.VIEW -d "coloyond://import"       # rejected (link has no payload)
+```
+
+Tap the three share buttons to open the share sheet. The exported PNG is in the app cache: `adb exec-out run-as com.coloyond cat cache/shared/coloyond-card.png > card.png`.
+
+### Emulator on WSL
+
+If the emulator runs on Windows and you build in WSL, use the Windows `adb.exe` for every command. A Linux `adb` server takes port 5037 and the Windows `adb` then fails with "protocol fault". Stop it with `adb kill-server` (Linux `adb`). If the emulator screen stays black, start it with `-gpu swiftshader_indirect`.
 
 ## Base infra — Solana Mobile hackathon ruleset pass
 
