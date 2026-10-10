@@ -15,7 +15,8 @@
 ## Evidence added in this package
 
 - High-precision reference outputs generated independently with Python `Decimal` at 90-digit precision for equal and unequal weights, 100/9,800 bps boundary weights, multiple fees, and larger reserve/input values.
-- Golden tests require the implementation never to exceed the integer-floor reference and to remain within one token base unit for the tested vectors.
+- A reproducible deterministic envelope generator now produces 1,036 two-asset vectors spanning reserve scales through `10^18`, weight extremes, balanced/skewed reserves, five input ratios and five fee levels. Tests require no overpayment and cap relative quote shortfall at one part per billion; the current run's worst relative shortfall was 10 parts per trillion. The largest absolute shortfall was 114 base units at the largest reserve scale, so a one-base-unit global bound is not claimed.
+- The original small-point golden tests remain within one token base unit of the independent integer-floor references.
 - A combined equal-weight case proves a nontrivial retained-fee quote can preserve the exact reserve product and strictly improve value-weight deviation under equal oracle prices.
 - Existing valuation tests cover decimal/exponent normalization, scale underflow, unsupported values, total-variation rounding and exact strict-improvement comparison.
 - `U256` edge tests cover zero, max-by-one and max-by-max products.
@@ -31,7 +32,7 @@ An independent read-only code review found no arithmetic unsoundness in the insp
 
 ## Open S5B acceptance work
 
-- Broader generated boundary/property vectors for fixed-point bounds, monotonicity and error propagation.
+- Further property/boundary vectors for fixed-point monotonicity, error propagation, and three-asset state/deviation behavior.
 - General weighted-invariant comparisons beyond the exact equal-weight product case; prove reserve-unit/exponent/oracle-price behavior across admitted pools.
 - Demonstrate useful swaps under realistic oracle-price and target-weight states across the supported weight/decimal envelope, including separation of invariant preservation from custody/share backing and value-weight improvement.
 - Measure compute units in the target Solana program/runtime and confirm the final fixed-scale/share formula contract.

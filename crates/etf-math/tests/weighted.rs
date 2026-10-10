@@ -112,6 +112,46 @@ fn matches_independent_decimal_golden_vectors_without_overpaying() {
 }
 
 #[test]
+fn generated_decimal_envelope_never_overpays_reference_quote() {
+    // Regenerated independently by reference_weighted_decimal.py using 90-digit
+    // Decimal arithmetic over reserve scales, all weight boundaries, five
+    // trade sizes, five fee levels, and both balanced and skewed reserves.
+    let mut tested = 0usize;
+    let mut maximum_absolute_error = 0u64;
+    let mut maximum_relative_error_pptr = 0u128;
+    for line in include_str!("weighted_decimal_vectors.csv").lines().skip(1) {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        assert_eq!(fields.len(), 7);
+        let [balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps, reference_floor] =
+            <[u64; 7]>::try_from(fields).expect("seven vector fields");
+        let quote = quote_exact_in(
+            &[balance_in, balance_out],
+            &[weight_in as u16, weight_out as u16],
+            0,
+            1,
+            gross_in,
+            fee_bps as u16,
+        )
+        .unwrap();
+        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
+        let error = reference_floor - quote.amount_out;
+        maximum_absolute_error = maximum_absolute_error.max(error);
+        maximum_relative_error_pptr = maximum_relative_error_pptr
+            .max(u128::from(error) * 1_000_000_000_000 / u128::from(reference_floor.max(1)));
+        tested += 1;
+    }
+    assert!(tested >= 1_000, "regenerate the expected envelope vectors");
+    assert!(
+        maximum_relative_error_pptr <= 1_000,
+        "quote error exceeds one part per billion: {maximum_relative_error_pptr} pptr"
+    );
+    eprintln!("checked {tested} Decimal vectors; max absolute error {maximum_absolute_error} base units, max relative error {maximum_relative_error_pptr} pptr");
+}
+
+#[test]
 fn retained_fee_quote_preserves_invariant_and_improves_value_weights() {
     let balances = [60_000_u64, 40_000_u64];
     let weights = [5_000_u16, 5_000_u16];
