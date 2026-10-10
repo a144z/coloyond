@@ -1,6 +1,6 @@
 # S5 scheduler source audit
 
-**Status:** TukTuk is the first replaceable L1 candidate. A direct Devnet read now confirms the candidate program account is executable under the upgradeable BPF loader; queue/task construction, task execution and public crank-turner availability remain unverified. Source review and a deployed program are not scheduler integration.
+**Status:** TukTuk is the first replaceable L1 candidate. Direct Devnet reads confirm the program is executable and inspect the live config and queue census. The source-backed decoder sees existing queues and task IDs, but the project has not created a queue, inspected any compiled task payload, confirmed any run transaction, or established public crank-turner availability. A deployed program and unrelated queues are not scheduler integration.
 
 ## Findings from official Helium sources
 
@@ -13,7 +13,9 @@
 
 ## Devnet status
 
-The read-only probe at [`tools/rebalancing/etf-scheduler-probe`](../../tools/rebalancing/etf-scheduler-probe/README.md) queried `https://api.devnet.solana.com`. At confirmed slot `509628407`, Devnet genesis was `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; program `tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA` existed with `executable=true`, owner `BPFLoaderUpgradeab1e11111111111111111111111`, account space 36 and 1,001,141,440 lamports. This proves deployment presence only. No task queue, compiled task, funding, task transaction, external crank-turner, execution cadence or reward was read or exercised. No scheduler transaction has been sent.
+The read-only probe at [`tools/rebalancing/etf-scheduler-probe`](../../tools/rebalancing/etf-scheduler-probe/README.md) queried `https://api.devnet.solana.com`. The program account was confirmed executable under the expected loader, with space 36 and 1,001,141,440 lamports. A later account scan at confirmed slot `509634043`, block time `1791657675` (2026-10-10 18:41:15 UTC), found Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, config PDA `HGBovqKte26DbEMBma3T1TvvdmAFYSSgjncRoKECqfXq`, `min_task_queue_id=2`, `next_task_queue_id=315`, and `min_deposit=1,000,000,000` lamports. The confirmed queue read was at slot `509634043` (not older than the config read); it found 312 `TaskQueueV0` accounts, 98 with task bitmap entries, 628 total occupied task IDs, 19 with zero queue-authority count, and configured crank rewards from 0 to 1,000,000,000 lamports. These are live account facts, not a public-executor or liveness claim. Queue-account lamports include rent-exempt allocation and are not reported as spendable funding. The `hpl-crons` queue was one example with occupied task IDs; no task payload or execution transaction was inspected. No scheduler transaction has been sent.
+
+The decoder matches the current official Borsh account fields, validates queue bitmap length and capacity, and accepts only zero allocation padding. Four local parser tests cover config fields, bitmap occupancy, base58 leading zeros, malformed data and allocated padding. Queue account presence, occupancy, crank-reward configuration or raw lamports cannot establish actual task-run economics or prove a distinct external crank-turner is executing tasks.
 
 ## Required proof before S5/CP5 can pass
 
@@ -31,5 +33,6 @@ If TukTuk fails the direct Devnet checks, evaluate another demonstrated L1 sched
 - [Helium TukTuk repository and operator documentation](https://github.com/helium/tuktuk)
 - [TukTuk task state definitions](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/state.rs)
 - [TukTuk task queue instruction](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/instructions/queue_task_v0.rs)
+- [TukTuk task-queue initialization and minimum-deposit transfer](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/instructions/initialize_task_queue_v0.rs)
 - [TukTuk run-task instruction](https://github.com/helium/tuktuk/blob/main/solana-programs/programs/tuktuk/src/instructions/run_task_v0.rs)
 - [TukTuk maintained `Anchor.toml`](https://github.com/helium/tuktuk/blob/main/solana-programs/Anchor.toml)
