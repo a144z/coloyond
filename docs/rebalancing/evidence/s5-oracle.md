@@ -1,6 +1,6 @@
 # S5 Pyth account-mode research
 
-**Status:** primary-source inventory and one direct Devnet fixed-feed/parser observation complete; S5C acceptance and S0B admission remain open. The observed accounts were live at the recorded slot, but feed freshness is transient and no ETF consumer transaction has run.
+**Status:** primary-source inventory and repeated direct Devnet fixed-feed/parser observations complete; S5C acceptance and S0B admission remain open. The observed accounts were live at their recorded slots, but feed freshness is transient and no ETF consumer transaction has run.
 
 ## Account model decision
 
@@ -69,13 +69,25 @@ The probe ran again at confirmed slot `509637269`, block time `1791658448` (2026
 
 No transaction was sent. Repeated snapshots show transient recovery and staleness, while this latest sample has no feed fresh enough for the candidate three-asset pool. This supports fail-closed behavior; it does not establish a production freshness policy or a feed-liveness SLA.
 
+## Refreshed read-only Devnet observation — 10 October 2026
+
+The repository probe ran at confirmed slot `509642309`, block time `1791659662` (2026-10-10 19:14:22 UTC), against the same Devnet genesis. All accounts retained the expected Receiver owner, 134-byte layout, embedded feed IDs and `Full` verification. The SOL and BTC observations passed the diagnostic 60-second age check at 22 seconds; USDC was 338 seconds old and rejected. This is a partial recovery, not a usable three-asset snapshot.
+
+| Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Adapter at 60 seconds | Data SHA-256 |
+|---|---:|---:|---:|---|---|
+| SOL/USD | `11020148771 ± 3097187`, exponent `-8` | 22 seconds | 3 bps | accepted under diagnostic limits | `34dc11149a77e33366a82db0ca1308ea0b0c4c16fca9f89b29f43b2b35f71e33` |
+| BTC/USD | `8295307892802 ± 2652107198`, exponent `-8` | 22 seconds | 4 bps | accepted under diagnostic limits | `c21f80d7ef81b8541fbf24ac95f0300f5108dfb8f9e9866d5d1092916951d13a` |
+| USDC/USD | `99988576 ± 91423`, exponent `-8` | 338 seconds | 10 bps | rejected: stale | `94250ce4c085afd7f4d93dee4b0240768837f4c5bc63430ae221427908363b19` |
+
+The probe used a 60-second maximum age and `u16::MAX` confidence ceiling for diagnosis only. No transaction was sent. The adapter accepts two feeds and rejects the third, so the basket-wide all-feeds prerequisite still fails. This observation establishes neither approved risk limits nor a freshness SLA.
+
 ## 11 October 2026 compatibility finding
 
 The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `PriceUpdateV2` parser and `get_price_no_older_than` method enforce the Receiver account discriminator, feed ID, maximum age and Full verification when used through Anchor `Account<PriceUpdateV2>`. A fixed sponsored feed is a different lifecycle (long-lived shard/feed PDA) from a user-posted ephemeral update, but Pyth's current official Push Oracle program source shows `update_price_feed` CPI-calls the Receiver's `post_update` using that PDA as the `price_update_account`, then deserializes it with `PriceUpdateV2::try_deserialize` and verifies the embedded feed ID. The direct observation above confirms all three candidate accounts use the Receiver owner and decode with the pinned SDK as Full-verified `PriceUpdateV2` data. Thus the current Rust parser is a viable account-mode match for this sample; no custom raw-byte parser is justified from the evidence found so far.
 
 The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. The direct observation asserts Full verification in the actual decoded account. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; native tests and the live account probe compile with the pinned versions, but an ETF SBF consumer transaction remains for S5H after S5E.
 
-No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and both fresh and stale fail-closed behavior across several point-in-time Devnet reads. The latest slot `509637269` had all three feeds stale under the diagnostic 60-second age ceiling. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
+No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and both fresh and stale fail-closed behavior across several point-in-time Devnet reads. The refreshed slot `509642309` had SOL/BTC fresh at 22 seconds and USDC stale at 338 seconds under the diagnostic 60-second age ceiling. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
 
 ## Primary sources
