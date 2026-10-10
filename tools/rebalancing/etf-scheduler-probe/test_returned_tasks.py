@@ -1,7 +1,11 @@
 import struct
 import unittest
 
-from returned_tasks import parse_run_task_return, validate_compiled_requeue
+from returned_tasks import FreeTaskAccount, parse_run_task_return, validate_compiled_requeue
+from task_pda import derive_tuktuk_task_address
+
+
+TASK_QUEUE = "11111111111111111111111111111111"
 
 
 def u32(value):
@@ -102,6 +106,8 @@ class ReturnedTaskWireTests(unittest.TestCase):
                 queue_capacity=8,
                 min_crank_reward=5,
                 free_task_ids=[1],
+                task_queue=TASK_QUEUE,
+                free_task_accounts=[FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 1), True)],
             )
 
     def test_rejects_truncated_trailing_and_over_limit_data(self):
@@ -140,6 +146,8 @@ class ReturnedTaskWireTests(unittest.TestCase):
                 queue_capacity=8,
                 min_crank_reward=5,
                 free_task_ids=[1],
+                task_queue=TASK_QUEUE,
+                free_task_accounts=[FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 1), True)],
             )
 
 
@@ -150,6 +158,11 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
             "queue_capacity": 8,
             "min_crank_reward": 5,
             "free_task_ids": [1, 2],
+            "task_queue": TASK_QUEUE,
+            "free_task_accounts": [
+                FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 2), True),
+                FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 1), True),
+            ],
         }
         context.update(overrides)
         return validate_compiled_requeue(parse_run_task_return(payload), **context)
@@ -188,6 +201,47 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     self.validate(returned(task(source=child_source)))
+
+    def test_supplied_empty_task_pda_matches_the_single_child_id(self):
+        self.assertTrue(
+            self.validate(
+                returned(task()),
+                free_task_ids=[7],
+                free_task_accounts=[FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 7), True)],
+            )
+        )
+
+    def test_rejects_mismatched_or_reversed_child_task_pdas(self):
+        first = FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 1), True)
+        second = FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 2), True)
+        with self.assertRaisesRegex(ValueError, "PDA does not match"):
+            self.validate(returned(task()), free_task_ids=[1], free_task_accounts=[second])
+        with self.assertRaisesRegex(ValueError, "PDA does not match"):
+            self.validate(
+                returned(task(), task()),
+                free_task_ids=[1, 2],
+                free_task_accounts=[first, second],
+            )
+
+    def test_multiple_children_use_ids_from_end_and_accounts_from_front(self):
+        accounts = [
+            FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, task_id), True)
+            for task_id in (2, 1)
+        ]
+        self.assertTrue(self.validate(returned(task(), task()), free_task_accounts=accounts))
+
+    def test_rejects_nonempty_task_account_fixture(self):
+        account = FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 2), False)
+        with self.assertRaisesRegex(ValueError, "marked empty"):
+            self.validate(returned(task()), free_task_accounts=[account, self.context_account(1)])
+
+    def test_rejects_task_account_count_mismatch(self):
+        with self.assertRaisesRegex(ValueError, "count must match"):
+            self.validate(returned(task()), free_task_accounts=[])
+
+    @staticmethod
+    def context_account(task_id):
+        return FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, task_id), True)
 
 
 if __name__ == "__main__":

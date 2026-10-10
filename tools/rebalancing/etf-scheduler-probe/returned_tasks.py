@@ -8,6 +8,8 @@ available. The alternate tasks_accounts storage path is intentionally excluded.
 from dataclasses import dataclass
 from typing import Optional
 
+from task_pda import derive_tuktuk_task_address
+
 
 MAX_DIRECT_RETURN_BYTES = 1_000
 MAX_DESCRIPTION_BYTES = 40
@@ -41,6 +43,14 @@ class ReturnedTask:
 class RunTaskReturn:
     tasks: tuple[ReturnedTask, ...]
     tasks_accounts: tuple[bytes, ...]
+
+
+@dataclass(frozen=True)
+class FreeTaskAccount:
+    """Offline fixture for the address/emptiness facts a crank supplies."""
+
+    address: str
+    is_empty: bool
 
 
 class _Reader:
@@ -175,6 +185,8 @@ def validate_compiled_requeue(
     queue_capacity,
     min_crank_reward,
     free_task_ids,
+    task_queue,
+    free_task_accounts,
     occupied_task_ids=(),
 ):
     """Check deterministic child-task constraints for the supported direct path.
@@ -206,10 +218,14 @@ def validate_compiled_requeue(
         raise ValueError("min_crank_reward: expected u64")
     if not isinstance(free_task_ids, (list, tuple)):
         raise ValueError("free_task_ids: expected a sequence")
+    if not isinstance(free_task_accounts, (list, tuple)):
+        raise ValueError("free_task_accounts: expected a sequence")
     if len(free_task_ids) > parent_free_tasks:
         raise ValueError("free task IDs exceed the parent task declaration")
     if len(returned.tasks) > len(free_task_ids):
         raise ValueError("returned children exceed crank-turner supplied free task IDs")
+    if len(free_task_accounts) != len(free_task_ids):
+        raise ValueError("free task account count must match supplied free task IDs")
     if len(set(free_task_ids)) != len(free_task_ids):
         raise ValueError("free task IDs must be unique")
     occupied = set(occupied_task_ids)
@@ -222,6 +238,18 @@ def validate_compiled_requeue(
             raise ValueError("free task ID must be below queue capacity")
         if task_id in occupied:
             raise ValueError("free task ID is already occupied")
+
+    # TukTuk pops IDs from the end while consuming remaining task accounts
+    # from the front. This validates only caller-supplied fixture facts.
+    for index, account in enumerate(free_task_accounts):
+        if not isinstance(account, FreeTaskAccount):
+            raise ValueError("free task account: expected an address/emptiness fixture")
+        expected_id = free_task_ids[len(free_task_ids) - 1 - index]
+        expected_address = derive_tuktuk_task_address(task_queue, expected_id)
+        if account.address != expected_address:
+            raise ValueError("free task account PDA does not match reverse-consumed task ID")
+        if not isinstance(account.is_empty, bool) or not account.is_empty:
+            raise ValueError("free task account fixture must be marked empty")
 
     for task in returned.tasks:
         if len(task.description.encode("utf-8")) > MAX_DESCRIPTION_BYTES:
