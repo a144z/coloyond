@@ -108,6 +108,11 @@ fn emergency_role_can_pause_but_cannot_propose_or_resume() {
     assert!(state.resume_risk(key(6)).is_err());
     state.resume_risk(key(5)).unwrap();
     assert!(!state.risk_paused);
+    assert_eq!(
+        state.resume_risk(key(5)),
+        Err(error!(GovernanceError::RiskNotPaused))
+    );
+    assert!(!state.risk_paused);
     state.require_risk_allowed().unwrap();
 }
 
