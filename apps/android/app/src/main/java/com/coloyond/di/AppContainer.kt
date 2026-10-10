@@ -6,6 +6,8 @@ import com.coloyond.core.rpc.HttpRpcTransport
 import com.coloyond.core.rpc.SolanaRpc
 import com.coloyond.core.storage.PendingIntentStore
 import com.coloyond.core.storage.PrefsStore
+import com.coloyond.generation.InferenceAdapter
+import com.coloyond.platform.CardStorage
 import com.coloyond.wallet.MockWalletGateway
 import com.coloyond.wallet.MwaWalletGateway
 import com.coloyond.wallet.WalletRepository
@@ -18,6 +20,8 @@ class AppContainer(context: Context) {
 
     val prefs = PrefsStore(context)
     val pendingIntents = PendingIntentStore(context)
+    val cards = CardStorage(context)
+    val inference = InferenceAdapter()
 
     val rpc = SolanaRpc(
         transport = HttpRpcTransport(

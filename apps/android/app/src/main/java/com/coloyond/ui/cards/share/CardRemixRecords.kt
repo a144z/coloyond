@@ -8,6 +8,21 @@ import com.coloyond.strategy.StrategyRecords
 import com.coloyond.strategy.ValidatedRecord
 import com.coloyond.strategy.asObject
 
+data class CardRemixSelection(val strategy: ValidatedRecord, val parentExpression: ValidatedRecord) {
+    init {
+        val checkedStrategy = StrategyRecords.validateStrategy(strategy.value)
+        require(checkedStrategy.id == strategy.id) { "Strategy identity changed" }
+        val checkedParent = StrategyRecords.validateExpression(
+            parentExpression.value,
+            coloyond = parentExpression.id.startsWith("cbe2:"),
+        )
+        require(checkedParent.id == parentExpression.id) { "Parent expression identity changed" }
+        require(checkedParent.value.asObject("parent expression").getValue("strategyId") == JsonValue.Str(checkedStrategy.id)) {
+            "A visual remix must keep the same strategy"
+        }
+    }
+}
+
 /** Creates a new expression while preserving the original strategy and immutable parent link. */
 object CardRemixRecords {
     fun expression(

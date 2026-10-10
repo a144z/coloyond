@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
@@ -30,14 +31,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.coloyond.di.AppContainer
 import com.coloyond.platform.ImportIntents
-import com.coloyond.platform.ImportProbeResult
-import com.coloyond.ui.screens.ProbeScreen
+import com.coloyond.platform.ValidatedImport
+import com.coloyond.ui.screens.CardJourneyScreen
 import com.coloyond.ui.theme.ColoyondTheme
 import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 class MainActivity : ComponentActivity() {
-    private var lastImport by mutableStateOf<ImportProbeResult?>(null)
+    private var lastImport by mutableStateOf<ValidatedImport?>(null)
+    private var importVersion by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +55,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel: MainViewModel = viewModel { MainViewModel(container) }
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-                var showProbe by rememberSaveable { mutableStateOf(true) }
+                var showCards by rememberSaveable { mutableStateOf(true) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Column(modifier = Modifier.padding(innerPadding)) {
@@ -61,11 +63,17 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            FilterChip(selected = showProbe, onClick = { showProbe = true }, label = { Text("Card probe") })
-                            FilterChip(selected = !showProbe, onClick = { showProbe = false }, label = { Text("Wallet") })
+                            FilterChip(selected = showCards, onClick = { showCards = true }, label = { Text("Cards") })
+                            FilterChip(selected = !showCards, onClick = { showCards = false }, label = { Text("Wallet") })
                         }
-                        if (showProbe) {
-                            ProbeScreen(lastImport = lastImport)
+                        if (showCards) {
+                            CardJourneyScreen(
+                                storage = container.cards,
+                                inference = container.inference,
+                                imported = lastImport,
+                                importVersion = importVersion,
+                                onImportConsumed = { lastImport = null },
+                            )
                         } else {
                             WalletScreen(
                                 state = state,
@@ -89,7 +97,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleImport(intent: Intent) {
-        ImportIntents.read(intent, contentResolver)?.let { lastImport = it }
+        ImportIntents.readValidated(intent, contentResolver)?.let {
+            lastImport = it
+            importVersion += 1
+        }
     }
 }
 

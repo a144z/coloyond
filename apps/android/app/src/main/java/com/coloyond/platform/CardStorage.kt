@@ -27,6 +27,34 @@ class CardStorage(private val root: File) {
     private val expressions = File(root, "expressions")
     private val images = File(root, "png")
     private val imageDigests = File(root, "png-digests")
+    private val drafts = File(root, "drafts")
+
+    /** Persists only the explicit nonexecutable AllocationDraftV1 record. */
+    fun saveDraft(strategy: ValidatedRecord): ValidatedRecord = synchronized(processLock) {
+        val checked = StrategyRecords.validateStrategy(strategy.value)
+        require(checked.id == strategy.id && checked.id.startsWith("cbd1:")) { "Only a validated allocation draft can be saved" }
+        require(checked.value.asObject("draft").field("kind").asString("kind") == "allocation-draft")
+        writeImmutable(File(drafts, fileName(checked.id, ".json")), checked.canonicalJson.toByteArray(Charsets.UTF_8))
+        checked
+    }
+
+    fun loadDraft(id: String): ValidatedRecord? {
+        if (!draftIdPattern.matches(id)) return null
+        val file = File(drafts, fileName(id, ".json"))
+        if (!file.isFile || file.length() > StrategyRecords.MAX_IMPORT_BYTES) return null
+        return runCatching {
+            val checked = StrategyRecords.validateStrategy(StrategyRecords.parse(file.readText(Charsets.UTF_8)))
+            checked.takeIf { it.id == id && it.id.startsWith("cbd1:") }
+        }.getOrNull()
+    }
+
+    fun listDrafts(): List<ValidatedRecord> = drafts.listFiles()
+        .orEmpty()
+        .asSequence()
+        .filter { it.isFile && it.name.endsWith(".json") }
+        .mapNotNull { file -> loadDraft(file.name.removeSuffix(".json").replace('_', ':')) }
+        .sortedBy { it.id }
+        .toList()
 
     /**
      * Saves each content object once. The expression is written last, so it is
@@ -128,6 +156,7 @@ class CardStorage(private val root: File) {
     companion object {
         private val processLock = Any()
         private val strategyIdPattern = Regex("(?:cb1|cb2|cb3|cbd1):[0-9a-f]{64}")
+        private val draftIdPattern = Regex("cbd1:[0-9a-f]{64}")
         private val expressionIdPattern = Regex("cbe[12]:[0-9a-f]{64}")
         private const val MAX_PNG_BYTES = 16 * 1024 * 1024L
     }

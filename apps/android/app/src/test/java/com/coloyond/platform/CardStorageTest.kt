@@ -41,6 +41,20 @@ class CardStorageTest {
     }
 
     @Test
+    fun savesAndReloadsOnlyValidatedAllocationDrafts() {
+        val draft = StrategyRecords.validateStrategy(StrategyRecords.parse(draftJson("6000", "4000")))
+        val storage = CardStorage(temporary.newFolder())
+
+        val saved = storage.saveDraft(draft)
+        assertEquals(draft.id, saved.id)
+        assertTrue(saved.viewOnly)
+        assertEquals(draft.id, storage.loadDraft(draft.id)?.id)
+        assertEquals(listOf(draft.id), storage.listDrafts().map { it.id })
+        assertNull(storage.loadDraft("cb1:${"0".repeat(64)}"))
+        assertTrue(runCatching { storage.saveDraft(records().first) }.isFailure)
+    }
+
+    @Test
     fun identicalSaveIsIdempotentButChangedPngCannotReplaceSavedArt() {
         val (strategy, expression) = records()
         val root = temporary.newFolder()

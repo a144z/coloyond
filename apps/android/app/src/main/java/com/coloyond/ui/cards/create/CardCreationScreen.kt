@@ -65,6 +65,8 @@ import com.coloyond.platform.SceneRenderer.drawCard
 import com.coloyond.strategy.asObject
 import com.coloyond.strategy.asString
 import com.coloyond.strategy.ValidatedRecord
+import com.coloyond.ui.cards.share.CardRemixRecords
+import com.coloyond.ui.cards.share.CardRemixSelection
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -86,19 +88,31 @@ fun CardCreationScreen(
     credentials: () -> InferenceCredentials?,
     storage: CardStorage,
     onDraftSaved: (ValidatedRecord) -> Unit,
+    initialDraft: ValidatedRecord? = null,
+    importedStrategy: ValidatedRecord? = null,
+    remix: CardRemixSelection? = null,
     acceptedCaptionHistory: () -> List<String> = { emptyList() },
     onCaptionAccepted: (String) -> Unit = {},
     onSaved: (SavedCard) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    require(listOf(initialDraft, importedStrategy, remix).count { it != null } <= 1) { "Choose one card creation source" }
+    val initialWeights = remember(initialDraft?.id) {
+        initialDraft?.let { runCatching { CardCreationRecords.targetWeights(it) }.getOrNull() }.orEmpty()
+    }
     val publishedIds = remember(publishedVaults) { publishedVaults.map { it.strategy.id } }
-    var mode by rememberSaveable { mutableStateOf(if (publishedVaults.isEmpty()) "draft" else "published") }
+    var mode by rememberSaveable { mutableStateOf(when {
+        remix != null -> "remix"
+        importedStrategy != null -> "imported"
+        initialDraft != null || publishedVaults.isEmpty() -> "draft"
+        else -> "published"
+    }) }
     var selectedVaultId by rememberSaveable { mutableStateOf(publishedVaults.firstOrNull()?.strategy?.id.orEmpty()) }
-    var firstMint by rememberSaveable { mutableStateOf("") }
-    var secondMint by rememberSaveable { mutableStateOf("") }
-    var firstPercent by rememberSaveable { mutableStateOf("50.00") }
-    var secondPercent by rememberSaveable { mutableStateOf("50.00") }
-    var twoAssets by rememberSaveable { mutableStateOf(true) }
+    var firstMint by rememberSaveable(initialDraft?.id) { mutableStateOf(initialWeights.getOrNull(0)?.mint.orEmpty()) }
+    var secondMint by rememberSaveable(initialDraft?.id) { mutableStateOf(initialWeights.getOrNull(1)?.mint.orEmpty()) }
+    var firstPercent by rememberSaveable(initialDraft?.id) { mutableStateOf(initialWeights.getOrNull(0)?.let { CardCreationRecords.formatPercent(it.weightBps).removeSuffix("%") } ?: "50.00") }
+    var secondPercent by rememberSaveable(initialDraft?.id) { mutableStateOf(initialWeights.getOrNull(1)?.let { CardCreationRecords.formatPercent(it.weightBps).removeSuffix("%") } ?: "50.00") }
+    var twoAssets by rememberSaveable(initialDraft?.id) { mutableStateOf(initialWeights.size > 1 || initialDraft == null) }
 
     var generatedScene by remember { mutableStateOf<GeneratedScene?>(null) }
     var captionCandidates by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -109,7 +123,7 @@ fun CardCreationScreen(
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var savedCard by remember { mutableStateOf<SavedCard?>(null) }
-    var savedDraftId by rememberSaveable { mutableStateOf<String?>(null) }
+    var savedDraftId by rememberSaveable(initialDraft?.id) { mutableStateOf(initialDraft?.id) }
     val requestToken = remember { mutableIntStateOf(0) }
     var activeRequest by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
@@ -134,6 +148,8 @@ fun CardCreationScreen(
     }
     val selectedStrategy = when (mode) {
         "published" -> selectedVault?.strategy
+        "imported" -> importedStrategy
+        "remix" -> remix?.strategy
         else -> draftWeights
     }
     val selectionId = selectedStrategy?.id
@@ -165,7 +181,15 @@ fun CardCreationScreen(
         if (selectedVaultId !in publishedIds) selectedVaultId = publishedIds.firstOrNull().orEmpty()
         if (publishedIds.isEmpty() && mode == "published") mode = "draft"
     }
-    LaunchedEffect(mode, selectionId) {
+    LaunchedEffect(remix?.parentExpression?.id, importedStrategy?.id, initialDraft?.id, publishedIds) {
+        mode = when {
+            remix != null -> "remix"
+            importedStrategy != null -> "imported"
+            initialDraft != null || publishedIds.isEmpty() -> "draft"
+            else -> "published"
+        }
+    }
+    LaunchedEffect(mode, selectionId, remix?.parentExpression?.id, importedStrategy?.id, initialDraft?.id) {
         cancelAndInvalidate()
         if (mode != "draft" || selectionId != savedDraftId) savedDraftId = null
     }
@@ -294,15 +318,27 @@ fun CardCreationScreen(
         val acceptedCaption = if (captionEnabled && captionText.isNotBlank() && Captions.validateUserCaption(captionText, verifiedTickers) != null) captionText else null
         val origin = acceptedCaption?.let { captionOrigin }
         try {
-            val expression = CardCreationRecords.expression(
-                strategy = strategy,
-                scene = scene.value,
-                sceneHash = scene.sceneHash,
-                caption = acceptedCaption,
-                captionOrigin = origin,
-                generationOrigin = scene.origin,
-                verifiedTickerSymbols = verifiedTickers,
-            )
+            val expression = if (remix == null) {
+                CardCreationRecords.expression(
+                    strategy = strategy,
+                    scene = scene.value,
+                    sceneHash = scene.sceneHash,
+                    caption = acceptedCaption,
+                    captionOrigin = origin,
+                    generationOrigin = scene.origin,
+                    verifiedTickerSymbols = verifiedTickers,
+                )
+            } else {
+                CardRemixRecords.expression(
+                    strategy = strategy,
+                    parentExpression = remix.parentExpression,
+                    scene = scene.value,
+                    caption = acceptedCaption,
+                    captionOrigin = origin?.recordValue ?: "none",
+                    generationOrigin = scene.origin,
+                    verifiedTickerSymbols = verifiedTickers,
+                )
+            }
             val png = when (val result = CardExport.renderCardPng(expression, strategy, typeface)) {
                 is CardExport.Result.Png -> result.bytes
                 is CardExport.Result.ViewOnly -> throw IllegalStateException("This renderer version is view-only")
@@ -323,11 +359,23 @@ fun CardCreationScreen(
     } else true
     val previewCaption = if (validCaption && captionEnabled && captionText.isNotBlank()) captionText else null
     val previewCaptionOrigin = if (previewCaption == null) null else captionOrigin
-    val previewExpression = remember(selectedStrategy, generatedScene, previewCaption, previewCaptionOrigin) {
+    val previewExpression = remember(selectedStrategy, generatedScene, previewCaption, previewCaptionOrigin, remix) {
         val strategy = selectedStrategy
         val scene = generatedScene
         if (strategy == null || scene == null) null else runCatching {
-            CardCreationRecords.expression(strategy, scene.value, scene.sceneHash, previewCaption, previewCaptionOrigin, scene.origin, verifiedTickers)
+            if (remix == null) {
+                CardCreationRecords.expression(strategy, scene.value, scene.sceneHash, previewCaption, previewCaptionOrigin, scene.origin, verifiedTickers)
+            } else {
+                CardRemixRecords.expression(
+                    strategy = strategy,
+                    parentExpression = remix.parentExpression,
+                    scene = scene.value,
+                    caption = previewCaption,
+                    captionOrigin = previewCaptionOrigin?.recordValue ?: "none",
+                    generationOrigin = scene.origin,
+                    verifiedTickerSymbols = verifiedTickers,
+                )
+            }
         }.getOrNull()
     }
 
@@ -345,7 +393,7 @@ fun CardCreationScreen(
             Text("A saved target, expressed as an image. Artwork never changes the strategy.", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodyMedium)
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        if (remix == null && importedStrategy == null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             ModeButton("Published vault", mode == "published", Modifier.weight(1f)) {
                 if (mode != "published") {
                     cancelAndInvalidate()
@@ -381,7 +429,7 @@ fun CardCreationScreen(
                     }
                 }
             }
-        } else {
+        } else if (mode == "draft") {
             SectionHeading("DESIRED WEIGHTS")
             Text("Drafts are local, inspect-only allocations. They do not identify a vault or authorize transactions.", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
             Text("The saved draft contract is scoped to Solana mainnet-beta.", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
@@ -430,17 +478,27 @@ fun CardCreationScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 border = BorderStroke(1.dp, Ink),
             ) { Text(if (savedDraftId == draftWeights?.id) "Draft saved" else "Save allocation draft", color = Ink) }
+        } else if (mode == "remix") {
+            SectionHeading("VISUAL REMIX · SAME STRATEGY")
+            Text("The allocation and strategy identity are locked to the original card. Only the new artwork and optional caption will change.", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
+        } else {
+            SectionHeading("IMPORTED STRATEGY · UNVERIFIED")
+            Text("This validated import is not proof of a published vault. Artwork keeps its original strategy identity; no transaction or live balance is available.", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
         }
 
         selectedStrategy?.let { strategy ->
-            SectionHeading(if (mode == "draft") "ALLOCATION DRAFT" else "SAVED STRATEGY REVISION")
+            SectionHeading(when (mode) { "draft" -> "ALLOCATION DRAFT"; "remix" -> "UNCHANGED STRATEGY"; "imported" -> "IMPORTED STRATEGY"; else -> "SAVED STRATEGY REVISION" })
             WeightList(
-                title = if (mode == "draft") "Allocation draft · desired weights" else "Target weights · saved configuration",
+                title = when (mode) { "draft" -> "Allocation draft · desired weights"; "remix" -> "Same strategy · target weights"; "imported" -> "Imported target weights · unverified"; else -> "Target weights · saved configuration" },
                 weights = CardCreationRecords.targetWeights(strategy),
                 symbols = selectedSymbols,
             )
             if (mode == "published") ActualComposition(selectedActual, selectedSymbols)
-            else Text("Actual composition unavailable · a draft has no vault balances", color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
+            else Text(when (mode) {
+                "remix" -> "No live balance observation is attached to this card."
+                "imported" -> "Publication, network state and balances have not been verified."
+                else -> "Actual composition unavailable · a draft has no vault balances"
+            }, color = Ink.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
             if (mode == "published") StrategyFacts(selectedVault)
         }
 
