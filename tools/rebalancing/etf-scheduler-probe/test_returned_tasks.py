@@ -51,9 +51,9 @@ def compiled_transaction_with_indexes(program_index, account_indexes):
     )
 
 
-def compiled_transaction_with_header(header, account_count):
+def compiled_transaction_with_account_counts(counts, account_count):
     return (
-        bytes(header)
+        bytes(counts)
         + items([bytes((index,)) * 32 for index in range(account_count)])
         + items([])
         + items([])
@@ -102,7 +102,7 @@ class ReturnedTaskWireTests(unittest.TestCase):
         self.assertEqual((child.trigger, child.timestamp), ("timestamp", 1_800_000_000))
         self.assertEqual(child.transaction_kind, "compiled")
         self.assertEqual(child.crank_reward, 7)
-        self.assertEqual(child.signer_counts, (1, 0, 0))
+        self.assertEqual(child.account_class_counts, (1, 0, 0))
         self.assertEqual(child.accounts, (b"a" * 32,))
         self.assertEqual(child.instructions[0].account_indexes, b"\0")
         self.assertEqual(child.instructions[0].data, b"\x01\x02")
@@ -251,24 +251,25 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.validate(returned(task(source=child_source)))
 
-    def test_validates_compiled_message_header_account_classes(self):
-        for header, account_count in (
+    def test_validates_compiled_account_class_counts(self):
+        for counts, account_count in (
             ((0, 0, 0), 0),
-            ((2, 2, 2), 4),
+            ((1, 1, 0), 2),
+            ((1, 0, 1), 2),
             ((1, 0, 0), 1),
         ):
-            with self.subTest(header=header, account_count=account_count):
-                source = b"\0" + compiled_transaction_with_header(header, account_count)
+            with self.subTest(counts=counts, account_count=account_count):
+                source = b"\0" + compiled_transaction_with_account_counts(counts, account_count)
                 self.assertTrue(self.validate(returned(task(source=source))))
 
-        for header, account_count in (
-            ((0, 1, 0), 1),
-            ((1, 0, 1), 1),
+        for counts, account_count in (
+            ((1, 1, 1), 2),
+            ((1, 0, 2), 2),
             ((2, 0, 0), 1),
         ):
-            with self.subTest(header=header, account_count=account_count):
-                source = b"\0" + compiled_transaction_with_header(header, account_count)
-                with self.assertRaisesRegex(ValueError, "header counts exceed"):
+            with self.subTest(counts=counts, account_count=account_count):
+                source = b"\0" + compiled_transaction_with_account_counts(counts, account_count)
+                with self.assertRaisesRegex(ValueError, "account-class counts exceed"):
                     self.validate(returned(task(source=source)))
 
     def test_accepts_maximum_returned_signer_seed_bounds_for_multiple_groups(self):

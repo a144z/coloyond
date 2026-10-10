@@ -30,7 +30,7 @@ class ReturnedTask:
     transaction_kind: str
     transaction_url: Optional[str]
     remote_signer: Optional[bytes]
-    signer_counts: tuple[int, int, int]
+    account_class_counts: tuple[int, int, int]
     accounts: tuple[bytes, ...]
     instructions: tuple[CompiledInstruction, ...]
     signer_seeds: tuple[tuple[bytes, ...], ...]
@@ -91,7 +91,9 @@ class _Reader:
 
 
 def _compiled_transaction(reader):
-    signer_counts = (reader.uint(1), reader.uint(1), reader.uint(1))
+    # TukTuk encodes writable signers, readonly signers, then writable
+    # non-signers; these are account-class counts, not Solana MessageHeader fields.
+    account_class_counts = (reader.uint(1), reader.uint(1), reader.uint(1))
     account_count = reader.vector_count(32)
     accounts = tuple(reader.take(32) for _ in range(account_count))
 
@@ -109,7 +111,7 @@ def _compiled_transaction(reader):
         seed_count = reader.vector_count(4)
         signer_seeds.append(tuple(reader.byte_vector() for _ in range(seed_count)))
 
-    return signer_counts, accounts, tuple(instructions), tuple(signer_seeds)
+    return account_class_counts, accounts, tuple(instructions), tuple(signer_seeds)
 
 
 def _returned_task(reader):
@@ -127,12 +129,12 @@ def _returned_task(reader):
         transaction_kind = "compiled"
         transaction_url = None
         remote_signer = None
-        signer_counts, accounts, instructions, signer_seeds = _compiled_transaction(reader)
+        account_class_counts, accounts, instructions, signer_seeds = _compiled_transaction(reader)
     elif source_tag == 1:
         transaction_kind = "remote"
         transaction_url = reader.string()
         remote_signer = reader.take(32)
-        signer_counts, accounts, instructions, signer_seeds = (0, 0, 0), (), (), ()
+        account_class_counts, accounts, instructions, signer_seeds = (0, 0, 0), (), (), ()
     else:
         raise ValueError("unknown TransactionSourceV0 enum tag")
 
@@ -152,7 +154,7 @@ def _returned_task(reader):
         transaction_kind,
         transaction_url,
         remote_signer,
-        signer_counts,
+        account_class_counts,
         accounts,
         instructions,
         signer_seeds,
@@ -280,14 +282,9 @@ def validate_compiled_requeue(
             raise ValueError("returned task crank reward must be None or queue minimum")
         if task.free_tasks + 1 > queue_capacity:
             raise ValueError("returned task free_tasks plus itself exceeds queue capacity")
-        required_signatures, readonly_signed, readonly_unsigned = task.signer_counts
         account_count = len(task.accounts)
-        if (
-            required_signatures > account_count
-            or readonly_signed > required_signatures
-            or readonly_unsigned > account_count - required_signatures
-        ):
-            raise ValueError("compiled message header counts exceed their account classes")
+        if sum(task.account_class_counts) > account_count:
+            raise ValueError("CompiledV0 account-class counts exceed its account keys")
         for instruction in task.instructions:
             if instruction.program_id_index >= len(task.accounts):
                 raise ValueError("compiled program index is outside its account vector")
