@@ -1,0 +1,69 @@
+# S2C — read-only solver and transaction probe
+
+**Result: BLOCKED / NOT PASSED.** This package adds a reproducible, wallet-free probe harness, but this run did not establish executable WSOL/USDC depth, a direct venue route, safe profitable spread, transaction landing cost, or an independently funded taker. It records no market-liquidity or fee claims. No wallet/keypair was read, no signature was produced, and no transaction was sent.
+
+## What was implemented
+
+`tools/rebalancing/solver-probe/probe.py` has two explicit operations:
+
+- `status` reads finalized genesis hash/slot/health and canonical WSOL/USDC mint account owner, decimals and supply from an explicitly supplied RPC endpoint.
+- `simulate` accepts an unsigned base64 transaction, refuses any non-zero signature byte, reads the base fee, and calls `simulateTransaction` with signature verification off and recent blockhash replacement on. It reports bytes, transaction version, static/lookup key slots, compute-budget settings, simulated CU, logs, and RPC error.
+
+This is transaction-shape tooling, not a route finder or an auction executor. The simulator does not resolve address lookup table pubkeys, and RPC simulation is not a landed transaction or proof of token deltas/depth. The generic probe makes no Jupiter dependency. Any future venue adapter must produce both-direction, size-ladder quotes directly from verified pool state; a Router quote alone is not independent venue evidence.
+
+The expected S2D ABI is `fill_auction(expected_intent_sequence, sell_amount, gross_buy_amount, bounty_amount)`. The fill records a per-fill bounty-claim liability; it has no inline bounty recipient or payout account. This package does not add the Anchor fill instruction or a client ABI.
+
+## Reproduction and observed result
+
+Run package tests:
+
+```sh
+python3 -m unittest discover -s tools/rebalancing/solver-probe -p 'test_*.py' -v
+```
+
+Result on 10 Oct 2026: **5 tests passed** for legacy/v0 message parsing, lookup-index accounting, compute-budget parsing, signature detection, and malformed shortvec rejection.
+
+Attempted read-only Devnet admission check:
+
+```sh
+SOLANA_RPC_URL=https://api.devnet.solana.com \
+  python3 tools/rebalancing/solver-probe/probe.py status --cluster devnet
+```
+
+Result: `BLOCKED`, `getGenesisHash` could not resolve the public RPC hostname (`nodename nor servname provided, or not known`). No slot, mint account, owner, decimals, or supply was returned. Mainnet RPC, direct Orca/Meteora/Raydium pool state, route quotes, pool depth, an unsigned route-plus-fill simulation, a fill landing, realized fees, and solver net returns were not measured in this run. A failure to reach RPC does not indicate that the assets or pools are absent.
+
+## What the result does and does not prove
+
+| Evidence | Status |
+|---|---|
+| Transaction parser behavior | Locally tested; 5 focused tests pass |
+| Finalized Devnet WSOL/USDC mint state | Unavailable due DNS failure |
+| Direct DEX pool IDs/state and size-ladder depth | Not measured |
+| Jupiter Router build | Not attempted; it is optional and does not establish independent depth |
+| Safe-price spread and no-bid economics | Not computable: live route/oracle inputs and approved auction bounds are absent |
+| Complete `fill_auction` transaction simulation | Not run: no RPC route/program deployment available in this environment |
+| CU, account slots, serialized bytes, fee quote | Harness implemented; no representative composed transaction supplied |
+| Landing cost / realized execution | Not measured; simulation cannot prove landing |
+| Separately funded WSOL/USDC taker | Not demonstrated; no live transaction was submitted |
+
+The manifest and S0F keep funded entry disabled and leave fee/bounty, auction loss, oracle age/confidence/depeg, and pilot parameters unset. This package sets no defaults or safe spread threshold. Keep no-bid behavior fail-closed until live venue and oracle facts are available and the complete transaction passes the frozen program checks. S0D/S2C therefore remain blocked; this implementation does not clear either admission gate.
+
+## Future operator capture
+
+Use an operator-controlled RPC URL, without saving its credential-bearing URL in evidence:
+
+```sh
+SOLANA_RPC_URL='https://your-rpc.example' \
+  python3 tools/rebalancing/solver-probe/probe.py status --cluster devnet \
+  --output /tmp/solver-devnet-status.json
+```
+
+After a route builder and deployed S2D program can produce a complete unsigned transaction, save only its unsigned serialized bytes as base64 and run:
+
+```sh
+SOLANA_RPC_URL='https://your-rpc.example' \
+  python3 tools/rebalancing/solver-probe/probe.py simulate \
+  --transaction /tmp/unsigned-fill.txt --output /tmp/solver-simulation.json
+```
+
+Keep route evidence separate and include RPC context slot/time, both directions, measured sizes, pool addresses and read slots, consumed input/output, venue fees/impact/minimum output, all route and fill accounts, LUTs, logs, simulated CU, byte/account limits, and the no-route/insufficient-depth result. A later actual Devnet fill belongs to its separately authorized S2E experiment and must use isolated test wallets; this evidence does not claim one occurred.
