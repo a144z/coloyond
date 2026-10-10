@@ -104,12 +104,15 @@ def parse_transaction(raw: bytes) -> TxShape:
     ix_count, mpos = shortvec(message, mpos)
     compute_unit_limit = None
     compute_unit_price = None
+    instruction_indices: list[int] = []
     for _ in range(ix_count):
         if mpos >= len(message):
             raise ProbeError("truncated instruction")
         program_index = message[mpos]
         mpos += 1
         account_indices, mpos = shortvec(message, mpos)
+        instruction_indices.append(program_index)
+        instruction_indices.extend(message[mpos : mpos + account_indices])
         mpos += account_indices
         data_len, mpos = shortvec(message, mpos)
         end = mpos + data_len
@@ -142,6 +145,8 @@ def parse_transaction(raw: bytes) -> TxShape:
         raise ProbeError("unexpected trailing message bytes")
     if readonly_signed > required_sigs or readonly_unsigned > account_count - required_sigs:
         raise ProbeError("invalid account header")
+    if any(index >= account_count + writable + readonly for index in instruction_indices):
+        raise ProbeError("instruction account index outside transaction account keys")
     return TxShape(
         bytes=len(raw),
         signature_count=sig_count,

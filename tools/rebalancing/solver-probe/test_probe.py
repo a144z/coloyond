@@ -64,6 +64,26 @@ class TransactionParsingTests(unittest.TestCase):
         self.assertEqual(parsed.lookup_accounts, 2)
         self.assertEqual(parsed.account_key_slots, 4)
 
+    def test_instruction_indexes_must_reference_transaction_account_keys(self):
+        raw = bytearray(fixture())
+        instruction_offset = 1 + 64 + 3 + 1 + 2 * 32 + 32 + 1
+        raw[instruction_offset] = 2
+        with self.assertRaisesRegex(ProbeError, "outside transaction account keys"):
+            parse_transaction(bytes(raw))
+
+        raw = bytearray(fixture())
+        raw[instruction_offset + 1] = 1
+        raw.insert(instruction_offset + 2, 2)
+        with self.assertRaisesRegex(ProbeError, "outside transaction account keys"):
+            parse_transaction(bytes(raw))
+
+        # Versioned transactions may reference loaded address-table keys too.
+        raw = bytearray(fixture(versioned=True, lookup=True))
+        instruction_offset += 1  # version prefix
+        raw[instruction_offset + 1] = 1
+        raw.insert(instruction_offset + 2, 3)
+        self.assertEqual(parse_transaction(bytes(raw)).account_key_slots, 4)
+
     def test_nonempty_signature_is_detected(self):
         raw = bytearray(fixture())
         raw[1] = 1
