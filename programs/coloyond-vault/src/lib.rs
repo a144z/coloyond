@@ -16,9 +16,10 @@ declare_id!("FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6");
 pub mod coloyond_vault {
     use super::*;
 
-    /// Seed valuation is intentionally unavailable until S2 verifies oracle inputs.
-    pub fn initialize_vault(_ctx: Context<InitializeVault>) -> Result<()> {
-        err!(S1FError::SeedOracleUnavailable)
+    /// Initialization now validates the seed against the pinned feeds
+    /// instead of refusing, so a seeded vault can run the auction loop.
+    pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Result<()> {
+        instructions::handlers::initialize_vault(ctx, init)
     }
 
     pub fn deposit_proportional(
@@ -87,10 +88,4 @@ pub mod coloyond_vault {
     ) -> Result<()> {
         instructions::auction_handlers::finish_or_expire(ctx, expected_intent_sequence)
     }
-}
-
-#[error_code]
-pub enum S1FError {
-    #[msg("Seed initialization is disabled until S2 verifies a fresh oracle valuation")]
-    SeedOracleUnavailable,
 }

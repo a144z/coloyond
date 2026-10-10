@@ -30,7 +30,7 @@ fn vault(amounts: [u64; 2], shares: u64, locked: u64) -> Vault {
         bounty_liabilities: [0; 2],
         sequence: 0,
     };
-    v.initialize_for_accounting_test(
+    v.initialize(
         1,
         Pubkey::new_unique(),
         1,
@@ -63,7 +63,7 @@ fn seed_is_atomic_and_records_disclosed_reserve_and_locked_supply() {
         sequence: 0,
     };
     let config = v.assets;
-    v.initialize_for_accounting_test(
+    v.initialize(
         7,
         Pubkey::new_unique(),
         1,
@@ -82,7 +82,7 @@ fn seed_is_atomic_and_records_disclosed_reserve_and_locked_supply() {
 
     let before = v.accounted_amounts;
     assert!(v
-        .initialize_for_accounting_test(
+        .initialize(
             7,
             v.authority,
             1,

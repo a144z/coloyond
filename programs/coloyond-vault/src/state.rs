@@ -43,11 +43,11 @@ pub struct Vault {
 impl Vault {
     pub const SPACE: usize = 8 + Self::INIT_SPACE;
 
-    /// Fixture-only initialization for accounting tests. A production seed
-    /// needs S2's verified oracle valuation; no on-chain caller may use this
-    /// until that quote is validated by an instruction context.
-    #[cfg(test)]
-    pub(crate) fn initialize_for_accounting_test(
+    /// The atomic first-seed transition used by the `initialize_vault`
+    /// instruction. The instruction context additionally requires an
+    /// oracle-validated seed valuation and performs the token side effects.
+    #[allow(clippy::too_many_arguments)]
+    pub fn initialize(
         &mut self,
         bump: u8,
         authority: Pubkey,

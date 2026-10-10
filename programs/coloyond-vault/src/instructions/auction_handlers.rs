@@ -538,7 +538,7 @@ fn transfer_vault_output<'info>(
     )
 }
 
-fn validate_policy(
+pub(crate) fn validate_policy(
     policy: &Account<AuctionPolicy>,
     vault_key: Pubkey,
     vault: &crate::state::Vault,
@@ -583,7 +583,7 @@ fn validate_intent_envelope(intent: &Account<RebalanceIntent>, vault_key: Pubkey
 }
 
 #[allow(clippy::too_many_arguments)]
-fn validated_prices(
+pub(crate) fn validated_prices(
     policy: &Account<AuctionPolicy>,
     sol_key: Pubkey,
     sol_owner: Pubkey,
@@ -620,7 +620,7 @@ fn to_q9(price: ValidatedPrice) -> Result<u64> {
     u64::try_from(price.to_fixed(9)?).map_err(|_| error!(AuctionError::ArithmeticOverflow))
 }
 
-fn prices_by_asset(policy: &AuctionPolicy, feed_prices: [u64; 2]) -> Result<[u64; 2]> {
+pub(crate) fn prices_by_asset(policy: &AuctionPolicy, feed_prices: [u64; 2]) -> Result<[u64; 2]> {
     let mut prices = [0; 2];
     for i in 0..2 {
         let index = policy.asset_feed_indices[i] as usize;

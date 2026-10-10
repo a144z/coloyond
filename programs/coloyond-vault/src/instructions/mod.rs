@@ -116,8 +116,89 @@ impl GovernanceAccount {
     }
 }
 
+/// Everything `initialize_vault` decides at deploy time. Numeric risk and
+/// governance values arrive as instruction arguments because S0F froze no
+/// defaults; the Devnet deployment records the admitted values in the
+/// deployment manifest.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct VaultInit {
+    pub configuration_revision: u64,
+    pub target_bps: [u16; ASSET_COUNT],
+    pub seed_amounts: [u64; ASSET_COUNT],
+    pub reserve_contributions: [u64; ASSET_COUNT],
+    pub initial_shares: u64,
+    pub minimum_locked_shares: u64,
+    pub governance_authority: Pubkey,
+    pub emergency_authority: Pubkey,
+    pub min_delay_slots: u64,
+    pub maximum_age_seconds: u64,
+    pub maximum_confidence_bps: u16,
+    pub maximum_usdc_deviation_bps: u16,
+    pub minimum_drift_bps: u16,
+    pub maximum_trade_value_q9: u64,
+    pub cooldown_slots: u64,
+    pub curve_start_rate_bps: u16,
+    pub curve_end_rate_bps: u16,
+    pub duration_slots: u64,
+    pub fee_bps: u16,
+    pub maximum_fee_bps: u16,
+    pub maximum_bounty_per_fill: u64,
+    pub maximum_nav_loss_bps: u16,
+    pub maximum_cumulative_nav_loss_bps: u16,
+    pub asset_feed_indices: [u8; ASSET_COUNT],
+}
+
+/// The deployer seeds custody atomically: both asset transfers and the first
+/// share mint happen in the same instruction that creates the vault, its
+/// governance account and its auction policy, after the pinned feeds validate.
+/// The share mint must already exist with the vault PDA as its mint authority.
 #[derive(Accounts)]
-pub struct InitializeVault {}
+pub struct InitializeVault<'info> {
+    #[account(
+        init,
+        payer = seeder,
+        space = Vault::SPACE,
+        seeds = [VAULT_SEED],
+        bump
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        init,
+        payer = seeder,
+        space = GovernanceAccount::SPACE,
+        seeds = [GOVERNANCE_SEED, vault.key().as_ref()],
+        bump
+    )]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(
+        init,
+        payer = seeder,
+        space = AuctionPolicy::SPACE,
+        seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()],
+        bump
+    )]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(mut)]
+    pub share_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub seeder: Signer<'info>,
+    #[account(mut, token::mint = share_mint, token::authority = seeder)]
+    pub seeder_shares: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_a, token::authority = seeder)]
+    pub seeder_asset_a: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_b, token::authority = seeder)]
+    pub seeder_asset_b: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub custody_a: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub custody_b: Account<'info, TokenAccount>,
+    pub mint_a: Account<'info, Mint>,
+    pub mint_b: Account<'info, Mint>,
+    pub sol_usd: Box<Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>>,
+    pub usdc_usd: Box<Account<'info, pyth_solana_receiver_sdk::price_update::PriceUpdateV2>>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct DepositProportional<'info> {

@@ -1,5 +1,5 @@
 {
-  "address": "",
+  "address": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
   "metadata": {
     "name": "coloyond_vault",
     "version": "0.1.0",
@@ -571,8 +571,143 @@
         63,
         164
       ],
-      "accounts": [],
-      "args": []
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction_policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "share_mint",
+          "writable": true
+        },
+        {
+          "name": "seeder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "seeder_shares",
+          "writable": true
+        },
+        {
+          "name": "seeder_asset_a",
+          "writable": true
+        },
+        {
+          "name": "seeder_asset_b",
+          "writable": true
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "sol_usd"
+        },
+        {
+          "name": "usdc_usd"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "init",
+          "type": {
+            "defined": {
+              "name": "VaultInit"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "pause_risk",
@@ -2043,6 +2178,172 @@
           },
           {
             "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultInit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "configuration_revision",
+            "type": "u64"
+          },
+          {
+            "name": "target_bps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "seed_amounts",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "reserve_contributions",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "initial_shares",
+            "type": "u64"
+          },
+          {
+            "name": "minimum_locked_shares",
+            "type": "u64"
+          },
+          {
+            "name": "governance_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "emergency_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_delay_slots",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_age_seconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_confidence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_usdc_deviation_bps",
+            "type": "u16"
+          },
+          {
+            "name": "minimum_drift_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_trade_value_q9",
+            "type": "u64"
+          },
+          {
+            "name": "cooldown_slots",
+            "type": "u64"
+          },
+          {
+            "name": "curve_start_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "curve_end_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "duration_slots",
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_bounty_per_fill",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_nav_loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_cumulative_nav_loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "asset_feed_indices",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "seeder",
+            "type": "pubkey"
+          },
+          {
+            "name": "configuration_revision",
+            "type": "u64"
+          },
+          {
+            "name": "seed_amounts",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "reserve_contributions",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "total_shares",
             "type": "u64"
           }
         ]

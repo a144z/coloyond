@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/coloyond_vault.json`.
  */
 export type ColoyondVault = {
-  "address": "",
+  "address": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
   "metadata": {
     "name": "coloyondVault",
     "version": "0.1.0",
@@ -337,7 +337,7 @@ export type ColoyondVault = {
               },
               {
                 "kind": "arg",
-                "path": "expectedIntentSequence"
+                "path": "expected_intent_sequence"
               }
             ]
           }
@@ -577,8 +577,143 @@ export type ColoyondVault = {
         63,
         164
       ],
-      "accounts": [],
-      "args": []
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "shareMint",
+          "writable": true
+        },
+        {
+          "name": "seeder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "seederShares",
+          "writable": true
+        },
+        {
+          "name": "seederAssetA",
+          "writable": true
+        },
+        {
+          "name": "seederAssetB",
+          "writable": true
+        },
+        {
+          "name": "custodyA",
+          "writable": true
+        },
+        {
+          "name": "custodyB",
+          "writable": true
+        },
+        {
+          "name": "mintA"
+        },
+        {
+          "name": "mintB"
+        },
+        {
+          "name": "solUsd"
+        },
+        {
+          "name": "usdcUsd"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "init",
+          "type": {
+            "defined": {
+              "name": "vaultInit"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "pauseRisk",
@@ -2049,6 +2184,172 @@ export type ColoyondVault = {
           },
           {
             "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vaultInit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "targetBps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "seedAmounts",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "reserveContributions",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "initialShares",
+            "type": "u64"
+          },
+          {
+            "name": "minimumLockedShares",
+            "type": "u64"
+          },
+          {
+            "name": "governanceAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "emergencyAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "minDelaySlots",
+            "type": "u64"
+          },
+          {
+            "name": "maximumAgeSeconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximumConfidenceBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumUsdcDeviationBps",
+            "type": "u16"
+          },
+          {
+            "name": "minimumDriftBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumTradeValueQ9",
+            "type": "u64"
+          },
+          {
+            "name": "cooldownSlots",
+            "type": "u64"
+          },
+          {
+            "name": "curveStartRateBps",
+            "type": "u16"
+          },
+          {
+            "name": "curveEndRateBps",
+            "type": "u16"
+          },
+          {
+            "name": "durationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumBountyPerFill",
+            "type": "u64"
+          },
+          {
+            "name": "maximumNavLossBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumCumulativeNavLossBps",
+            "type": "u16"
+          },
+          {
+            "name": "assetFeedIndices",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "vaultInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "seeder",
+            "type": "pubkey"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "seedAmounts",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "reserveContributions",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "totalShares",
             "type": "u64"
           }
         ]
