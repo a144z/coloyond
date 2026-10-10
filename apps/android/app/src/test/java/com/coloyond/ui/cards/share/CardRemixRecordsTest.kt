@@ -5,6 +5,8 @@ import com.coloyond.strategy.JsonValue
 import com.coloyond.strategy.StrategyRecords
 import com.coloyond.strategy.asArray
 import com.coloyond.strategy.asObject
+import com.coloyond.strategy.asString
+import com.coloyond.ui.cards.create.CardTargetWeight
 import com.coloyond.ui.cards.create.CardCreationRecords
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -16,6 +18,7 @@ class CardRemixRecordsTest {
     fun sameStrategyRemixCreatesNewIdentityWithImmutableParentReference() {
         val strategy = StrategyRecords.validateStrategy(StrategyRecords.parse(draft("6000", "4000")))
         val parent = CardCreationRecords.expression(strategy, scene(seed = 4), scene(seed = 4).let(StrategyRecords::validateScene).id, null, null, GenerationOrigin.LOCAL_PREVIEW)
+        val originalParent = parent.canonicalJson
         val nextScene = scene(seed = 5)
         val remix = CardRemixRecords.expression(
             strategy = strategy,
@@ -29,6 +32,8 @@ class CardRemixRecordsTest {
         assertEquals(strategy.id, remix.value.asObject("remix").getValue("strategyId").let { (it as JsonValue.Str).value })
         assertEquals(parent.id, remix.value.asObject("remix").getValue("parentExpressionId").let { (it as JsonValue.Str).value })
         assertNotEquals(parent.id, remix.id)
+        assertEquals(originalParent, parent.canonicalJson)
+        assertEquals(parent.id, StrategyRecords.validateExpression(parent.value).id)
         assertEquals(null, parent.value.asObject("parent").getValue("parentExpressionId").let { if (it == JsonValue.Null) null else it })
     }
 
@@ -42,6 +47,23 @@ class CardRemixRecordsTest {
         assertTrue(runCatching {
             CardRemixRecords.expression(other, parent, scene(seed = 5), null, "none", GenerationOrigin.LOCAL_PREVIEW)
         }.isFailure)
+    }
+
+    @Test
+    fun unmatchedWeightExplorationStaysAnAllocationDraft() {
+        val strategy = StrategyRecords.validateStrategy(StrategyRecords.parse(draft("6000", "4000")))
+        val parent = CardCreationRecords.expression(strategy, scene(seed = 4), scene(seed = 4).let(StrategyRecords::validateScene).id, null, null, GenerationOrigin.LOCAL_PREVIEW)
+        val changedWeights = CardCreationRecords.allocationDraft(listOf(
+            CardTargetWeight("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 5_000),
+            CardTargetWeight("So11111111111111111111111111111111111111112", 5_000),
+        ))
+        val fields = changedWeights.value.asObject("allocation draft")
+
+        assertTrue(changedWeights.id.startsWith("cbd1:"))
+        assertTrue(changedWeights.viewOnly)
+        assertEquals("allocation-draft", fields.getValue("kind").asString("kind"))
+        assertTrue(fields.keys.none { it in setOf("protocol", "vaultAddress", "shareMint") })
+        assertTrue(runCatching { CardRemixSelection(changedWeights, parent) }.isFailure)
     }
 
     private fun scene(seed: Int): JsonValue {

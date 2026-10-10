@@ -1,5 +1,6 @@
 package com.coloyond.platform
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,6 +18,9 @@ class GliderHandoffTest {
         assertTrue(text.contains("$mintB — 32.50%"))
         assertTrue(text.contains(GliderHandoff.DISCLOSURE))
         assertTrue(GliderHandoff.URL == "https://glider.fi")
+        assertFalse(text.contains("API key", ignoreCase = true))
+        assertFalse(text.contains("partner", ignoreCase = true))
+        assertFalse(text.contains("completed", ignoreCase = true))
     }
 
     @Test
