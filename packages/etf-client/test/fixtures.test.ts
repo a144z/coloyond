@@ -187,6 +187,13 @@ test("unknown enums, unsafe numeric wire values, and missing-vs-zero are rejecte
   assert.ok(validateReadModelDocument(missing).some((error) => error.includes("cannot carry")));
 });
 
+test("commitment must be a JSON string rather than a coercible array", () => {
+  const malformed = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = malformed.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  (snapshot.network as Record<string, unknown>).commitment = ["confirmed"];
+  assert.ok(validateReadModelDocument(malformed).some((error) => error.endsWith("network.commitment: unsupported commitment")));
+});
+
 test("bounded integer-valued JSON number fields accept integral values and reject booleans", () => {
   const integral = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = integral.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;

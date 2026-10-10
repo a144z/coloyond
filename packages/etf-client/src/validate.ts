@@ -91,7 +91,7 @@ function validateSnapshot(fixture: UnknownRecord, path: string, errors: string[]
   }
   requiredText(network, ["cluster", "genesisHash", "rpcLabel"], `${path}.network`, errors);
   integerString(network.contextSlot, `${path}.network.contextSlot`, errors);
-  if (!["processed", "confirmed", "finalized"].includes(String(network.commitment))) {
+  if (typeof network.commitment !== "string" || !["processed", "confirmed", "finalized"].includes(network.commitment)) {
     errors.push(`${path}.network.commitment: unsupported commitment`);
   }
   text(fixture.protocolRevision ?? fixture.configRevision, `${path}.protocolRevision`, errors);
