@@ -148,8 +148,7 @@ object ReadModelV1Mapper {
                 ColoyondAddresses.DEVNET_USDC_MINT -> ColoyondAddresses.USDC_USD_FEED
                 else -> return null
             }
-            val oracle = oracles.firstOrNull { it.address == feedAddress } ?: return null
-            val priceQ18 = oracle.priceQ18?.toBigIntegerOrNull() ?: return null
+            val priceQ18 = valuationPriceQ18(feedAddress, oracles) ?: return null
             val amount = BigInteger(asset.custodyState.amount)
             val price = BigDecimal(priceQ18).movePointLeft(18)
             BigDecimal(amount).multiply(price).movePointLeft(asset.decimals)
@@ -179,12 +178,21 @@ object ReadModelV1Mapper {
                 ColoyondAddresses.DEVNET_USDC_MINT -> ColoyondAddresses.USDC_USD_FEED
                 else -> return null
             }
-            val priceQ18 = oracles.firstOrNull { it.address == address }?.priceQ18?.toBigIntegerOrNull() ?: return null
+            val priceQ18 = valuationPriceQ18(address, oracles) ?: return null
             BigDecimal(BigInteger(asset.custodyState.amount))
                 .multiply(BigDecimal(priceQ18).movePointLeft(18))
                 .movePointLeft(asset.decimals)
         }
         return values.fold(BigDecimal.ZERO, BigDecimal::add)
+    }
+
+    private fun valuationPriceQ18(address: String, oracles: List<OracleRead>): BigInteger? {
+        val oracle = oracles.firstOrNull { it.address == address } ?: return null
+        if (
+            oracle.blockers.isNotEmpty() ||
+            oracle.verificationLevel !is PythPriceUpdateV2Decoder.VerificationLevel.Full
+        ) return null
+        return oracle.priceQ18?.toBigIntegerOrNull()
     }
 
     private fun walletBalance(
