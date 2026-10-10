@@ -1,0 +1,115 @@
+use coloyond_etf_math::{quote_exact_in, MathError};
+
+const FEE_LEVELS_BPS: [u16; 4] = [0, 30, 5_000, 9_999];
+const INPUT_RATIOS_BPS: [u64; 13] = [
+    1, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_000, 2_999, 3_000,
+];
+const SMALL_INPUTS: [u64; 6] = [1, 2, 5, 10, 100, 1_000];
+
+#[test]
+fn near_u64_quotes_are_monotonic_in_input_and_fee_for_every_weight_step() {
+    let max = u128::from(u64::MAX);
+    let reserve_anchors = [
+        [((max * 5) / 8) as u64, ((max * 3) / 8) as u64],
+        [((max * 7) / 10) as u64, ((max * 3) / 10) as u64],
+    ];
+    let mut input_checks = 0usize;
+    let mut fee_checks = 0usize;
+
+    for weight_in in (100_u16..10_000).step_by(100) {
+        let weights = [weight_in, 10_000 - weight_in];
+        for anchor in reserve_anchors {
+            for (asset_in, asset_out) in [(0, 1), (1, 0)] {
+                let balance_in = anchor[asset_in];
+                let mut amounts = SMALL_INPUTS.to_vec();
+                amounts.extend(
+                    INPUT_RATIOS_BPS
+                        .iter()
+                        .map(|ratio| (u128::from(balance_in) * u128::from(*ratio) / 10_000) as u64),
+                );
+                amounts.sort_unstable();
+                amounts.dedup();
+
+                for fee_bps in FEE_LEVELS_BPS {
+                    let mut prior_output = 0_u64;
+                    let mut saw_executable_quote = false;
+                    let mut saw_output_cap = false;
+                    for amount_in in &amounts {
+                        match quote_exact_in(
+                            &anchor,
+                            &weights,
+                            asset_in,
+                            asset_out,
+                            *amount_in,
+                            fee_bps,
+                        ) {
+                            Ok(quote) => {
+                                assert!(!saw_output_cap, "quote recovered after output cap");
+                                assert!(
+                                    saw_executable_quote || prior_output == 0,
+                                    "NoOutput followed by a positive quote"
+                                );
+                                assert!(
+                                    quote.amount_out >= prior_output,
+                                    "output fell as input rose: weights={weights:?}, reserves={anchor:?}, in={asset_in}, out={asset_out}, fee={fee_bps}, amount={amount_in}"
+                                );
+                                prior_output = quote.amount_out;
+                                saw_executable_quote = true;
+                            }
+                            Err(MathError::NoOutput) => assert!(
+                                !saw_executable_quote && !saw_output_cap,
+                                "NoOutput must be a prefix of the increasing-input sequence"
+                            ),
+                            Err(MathError::OutputTooLarge) => saw_output_cap = true,
+                            Err(error) => panic!(
+                                "unexpected quote error {error:?}: weights={weights:?}, reserves={anchor:?}, in={asset_in}, out={asset_out}, fee={fee_bps}, amount={amount_in}"
+                            ),
+                        }
+                        input_checks += 1;
+                    }
+                }
+
+                for amount_in in amounts {
+                    let mut prior_phase = 0_u8;
+                    let mut prior_output = None;
+                    for fee_bps in FEE_LEVELS_BPS {
+                        match quote_exact_in(
+                            &anchor,
+                            &weights,
+                            asset_in,
+                            asset_out,
+                            amount_in,
+                            fee_bps,
+                        ) {
+                            Err(MathError::OutputTooLarge) => {
+                                assert_eq!(prior_phase, 0, "output cap returned after becoming executable");
+                            }
+                            Ok(quote) => {
+                                assert!(prior_phase <= 1, "executable quote followed NoOutput");
+                                if let Some(previous) = prior_output {
+                                    assert!(
+                                        quote.amount_out <= previous,
+                                        "output rose as fee rose: weights={weights:?}, reserves={anchor:?}, in={asset_in}, out={asset_out}, amount={amount_in}, fee={fee_bps}"
+                                    );
+                                }
+                                prior_phase = 1;
+                                prior_output = Some(quote.amount_out);
+                            }
+                            Err(MathError::NoOutput) => {
+                                prior_phase = 2;
+                                prior_output = Some(0);
+                            }
+                            Err(error) => panic!(
+                                "unexpected quote error {error:?}: weights={weights:?}, reserves={anchor:?}, in={asset_in}, out={asset_out}, fee={fee_bps}, amount={amount_in}"
+                            ),
+                        }
+                        fee_checks += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    assert_eq!(input_checks, 30_096);
+    assert_eq!(fee_checks, 30_096);
+}
