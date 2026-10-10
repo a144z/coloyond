@@ -74,6 +74,29 @@ fn full_redemption_returns_every_custody_base_unit() {
 }
 
 #[test]
+fn partial_redemption_dust_rounding_preserves_remaining_share_backing() {
+    let reserves = [3_u64, 4, 5];
+    let share_supply = 10_u64;
+    let shares_to_burn = 3_u64;
+    let quote = quote_proportional_redeem(shares_to_burn, share_supply, &reserves).unwrap();
+
+    assert_eq!(quote.amounts_out, [0, 1, 1]);
+    for index in 0..reserves.len() {
+        assert_eq!(
+            quote.amounts_out[index],
+            (u128::from(shares_to_burn) * u128::from(reserves[index]) / u128::from(share_supply))
+                as u64
+        );
+        let remaining_reserve = reserves[index] - quote.amounts_out[index];
+        assert!(
+            u128::from(remaining_reserve) * u128::from(share_supply)
+                >= u128::from(reserves[index]) * u128::from(share_supply - shares_to_burn),
+            "partial redemption diluted remaining asset {index}"
+        );
+    }
+}
+
+#[test]
 fn share_quotes_reject_invalid_and_unrepresentable_transitions() {
     assert_eq!(
         quote_proportional_deposit(&[1, 1], &[1, 1], 0),
