@@ -79,7 +79,7 @@ No `rebalance()` instruction exchanges assets by itself. Every swap requires a t
 
 ## 5. Value weights and trade direction
 
-For each asset, normalize the raw price `p_i × 10^e_i` and base-unit reserve `r_i` using that mint's decimals `d_i` into the one fixed USD scale selected by S5B. Let `V_i` be that normalized oracle-marked value, `V = ΣV_i`, and configured target `t_i = target_weight_bps_i / 10,000`. Target weights sum to exactly 10,000 bps and are also the normalized exponents in the weighted constant-mean invariant.
+For each asset, normalize the raw price `p_i × 10^e_i` and base-unit reserve `r_i` using that mint's decimals `d_i` into the one fixed USD scale selected by S5B. The current pure-math implementation candidate uses integer `10^-12 USD` units, rounds down, and rejects nonzero values below that resolution; this is not contract-frozen until S5B review. See the [S5B math work log](../evidence/s5-math.md). Let `V_i` be that normalized oracle-marked value, `V = ΣV_i`, and configured target `t_i = target_weight_bps_i / 10,000`. Target weights sum to exactly 10,000 bps and are also the normalized exponents in the weighted constant-mean invariant.
 
 The deviation metric is the total-variation distance in basis points:
 
@@ -87,7 +87,7 @@ The deviation metric is the total-variation distance in basis points:
 D_bps = 5,000 × Σ_i |V_i / V − target_weight_bps_i / 10,000|
 ```
 
-S5B chooses the fixed-point scale and conservative rounding implementation. `swap_exact_in` computes pre- and post-swap values with the same accepted oracle observations and includes the retained input fee in post-swap custody. It rejects a trade unless `D_post < D_pre`, the quote is inside the configured oracle-relative band, output is nonzero, inventory and size bounds hold, and `min_amount_out` is met. A result that rounds to equal deviation is rejected. This constrains direction but does not eliminate MEV, latency risk, or adverse selection.
+S5B freezes the fixed-point scale and conservative rounding implementation. `swap_exact_in` computes pre- and post-swap values with the same accepted oracle observations and includes the retained input fee in post-swap custody. It rejects a trade unless `D_post < D_pre`, the quote is inside the configured oracle-relative band, output is nonzero, inventory and size bounds hold, and `min_amount_out` is met. A result that rounds to equal deviation is rejected. This constrains direction but does not eliminate MEV, latency risk, or adverse selection.
 
 `poke` records eligibility when deviation reaches the configured start band; clearing eligibility uses the configured lower stop band and cooldown. S5B/S5D2 freeze numeric precision, dust, bounds and bands before program implementation. A scheduled task is an optional liveness signal, not a prerequisite for a trade.
 
