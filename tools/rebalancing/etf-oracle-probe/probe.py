@@ -89,7 +89,14 @@ def validate_rpc_response(body, *, expected_id, method):
     if has_result == has_error:
         raise RuntimeError(f"{method}: expected exactly one of result or error")
     if has_error:
-        raise RuntimeError(f"{method}: JSON-RPC error response: {body['error']}")
+        error = body["error"]
+        if not isinstance(error, dict):
+            raise RuntimeError(f"{method}: malformed JSON-RPC error object")
+        code = error.get("code")
+        message = error.get("message")
+        if isinstance(code, bool) or not isinstance(code, int) or not isinstance(message, str):
+            raise RuntimeError(f"{method}: malformed JSON-RPC error object")
+        raise RuntimeError(f"{method}: JSON-RPC error response {code}: {message}")
     return body["result"]
 
 

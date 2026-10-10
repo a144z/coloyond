@@ -55,12 +55,29 @@ class OracleProbeResponseTests(unittest.TestCase):
                 validate_rpc_response(body, expected_id=7, method="getSlot")
 
     def test_reports_json_rpc_error_instead_of_returning_a_result(self):
-        with self.assertRaisesRegex(RuntimeError, "JSON-RPC error response"):
+        with self.assertRaisesRegex(RuntimeError, "JSON-RPC error response -32000: unavailable"):
             validate_rpc_response(
-                {"jsonrpc": "2.0", "id": 7, "error": {"code": -32000}},
+                {"jsonrpc": "2.0", "id": 7, "error": {"code": -32000, "message": "unavailable"}},
                 expected_id=7,
                 method="getSlot",
             )
+        malformed = (
+            None,
+            [],
+            {},
+            {"code": True, "message": "bad"},
+            {"code": -1},
+            {"code": -1, "message": 3},
+        )
+        for error in malformed:
+            with self.subTest(error=error), self.assertRaisesRegex(
+                RuntimeError, "malformed JSON-RPC error"
+            ):
+                validate_rpc_response(
+                    {"jsonrpc": "2.0", "id": 7, "error": error},
+                    expected_id=7,
+                    method="getSlot",
+                )
 
     def test_accepts_complete_batch_and_returns_decoded_bytes(self):
         slot, decoded = validate_account_batch_result(result([account(b"sol"), account(b"btc")]), EXPECTED)
