@@ -248,7 +248,7 @@ pub struct FillAuction<'info> {
     pub vault: Box<Account<'info, Vault>>,
     #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
     pub governance: Box<Account<'info, GovernanceAccount>>,
-    #[account(seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    #[account(mut, seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
     pub auction_policy: Box<Account<'info, AuctionPolicy>>,
     #[account(mut, seeds = [REBALANCE_INTENT_SEED, vault.key().as_ref()], bump)]
     pub rebalance_intent: Box<Account<'info, RebalanceIntent>>,
@@ -281,6 +281,35 @@ pub struct FillAuction<'info> {
     pub executor: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+}
+
+/// An executor can settle only the unique receipt created by its fill. The
+/// receipt is closed to its recorded executor, making PDA replay impossible.
+#[derive(Accounts)]
+#[instruction(expected_intent_sequence: u64)]
+pub struct ClaimBounty<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(
+        mut,
+        close = executor,
+        seeds = [BOUNTY_CLAIM_SEED, vault.key().as_ref(), &expected_intent_sequence.to_le_bytes()],
+        bump
+    )]
+    pub bounty_claim: Box<Account<'info, BountyClaim>>,
+    #[account(mut, address = vault.assets[0].custody)]
+    pub custody_a: Box<Account<'info, TokenAccount>>,
+    #[account(mut, address = vault.assets[1].custody)]
+    pub custody_b: Box<Account<'info, TokenAccount>>,
+    #[account(address = vault.assets[0].mint)]
+    pub mint_a: Box<Account<'info, Mint>>,
+    #[account(address = vault.assets[1].mint)]
+    pub mint_b: Box<Account<'info, Mint>>,
+    #[account(mut)]
+    pub executor_asset: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub executor: Signer<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]

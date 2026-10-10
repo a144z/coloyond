@@ -272,7 +272,8 @@ export type ColoyondVault = {
                 "path": "vault"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
           "name": "rebalanceIntent",
@@ -403,6 +404,105 @@ export type ColoyondVault = {
         },
         {
           "name": "bountyAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claimBounty",
+      "discriminator": [
+        225,
+        157,
+        163,
+        238,
+        239,
+        169,
+        75,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bountyClaim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121,
+                  95,
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "expected_intent_sequence"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodyA",
+          "writable": true
+        },
+        {
+          "name": "custodyB",
+          "writable": true
+        },
+        {
+          "name": "mintA"
+        },
+        {
+          "name": "mintB"
+        },
+        {
+          "name": "executorAsset",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "expectedIntentSequence",
           "type": "u64"
         }
       ]
@@ -1973,7 +2073,27 @@ export type ColoyondVault = {
             "type": "u64"
           },
           {
+            "name": "reserveFeeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "holderFeeAmount",
+            "type": "u64"
+          },
+          {
             "name": "bountyAmount",
+            "type": "u64"
+          },
+          {
+            "name": "reserveAfter",
+            "type": "u64"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "epochBountySpent",
             "type": "u64"
           },
           {
@@ -2050,6 +2170,38 @@ export type ColoyondVault = {
       }
     },
     {
+      "name": "BountyClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          },
+          {
+            "name": "intentSequence",
+            "type": "u64"
+          },
+          {
+            "name": "assetIndex",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "AuctionPolicy",
       "type": {
         "kind": "struct",
@@ -2117,6 +2269,41 @@ export type ColoyondVault = {
             "type": "u16"
           },
           {
+            "name": "feeReserveShareBps",
+            "type": "u16"
+          },
+          {
+            "name": "reserveFloor",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "epochBountyBudget",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "bountyEpoch",
+            "type": "u64"
+          },
+          {
+            "name": "bountyEpochSpent",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
             "name": "maximumBountyPerFill",
             "type": "u64"
           },
@@ -2168,6 +2355,10 @@ export type ColoyondVault = {
           {
             "name": "amount",
             "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
           }
         ]
       }
@@ -2485,6 +2676,28 @@ export type ColoyondVault = {
           {
             "name": "maximumFeeBps",
             "type": "u16"
+          },
+          {
+            "name": "feeReserveShareBps",
+            "type": "u16"
+          },
+          {
+            "name": "reserveFloor",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "epochBountyBudget",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
           },
           {
             "name": "maximumBountyPerFill",
@@ -3279,6 +3492,19 @@ export type ColoyondVault = {
         80,
         59,
         60
+      ]
+    },
+    {
+      "name": "BountyClaimed",
+      "discriminator": [
+        140,
+        202,
+        21,
+        51,
+        211,
+        65,
+        142,
+        21
       ]
     },
     {
