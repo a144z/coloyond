@@ -64,6 +64,31 @@ test("oracle omission is allowed but explicit null is malformed", () => {
   assert.ok(validateReadModelDocument(explicitNull).some((error) => error.includes("oracle: expected object")));
 });
 
+test("failed snapshots reject available payloads while stale oracle diagnostics remain valid", () => {
+  assert.deepEqual(validateReadModelDocument(document), []);
+  const staleOracle = parseReadModelDocument(document).fixtures.find(
+    (fixture) => fixture.id === "oracle-stale",
+  );
+  assert.ok(staleOracle && staleOracle.kind === "oracle-observation" && staleOracle.status === "stale");
+  assert.equal((staleOracle as Record<string, unknown>).ageSeconds, "61");
+
+  for (const [field, payload] of [
+    ["oracle", { rawPrice: "123" }],
+    ["balances", [{ mint: "fixture-mint", rawAmount: "1" }]],
+    ["pool", { shareSupply: "1" }],
+  ] as const) {
+    const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+    const unavailable = candidate.fixtures.find((fixture) => fixture.id === "snapshot-unavailable")!;
+    unavailable[field] = payload;
+    assert.ok(
+      validateReadModelDocument(candidate).some((error) =>
+        error.includes(`.${field}: failed snapshot cannot carry available payload`),
+      ),
+      `failed snapshot must reject ${field}`,
+    );
+  }
+});
+
 test("null protocol revision falls back to config revision", () => {
   const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;

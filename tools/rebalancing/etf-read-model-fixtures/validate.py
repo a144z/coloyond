@@ -168,6 +168,10 @@ def _validate_observation(fixture, path, errors):
     value = fixture.get("value")
     if "value" in fixture and value is not None:
         errors.append(f"{path}.value: unavailable observation cannot carry a usable or numeric placeholder")
+    if fixture.get("kind") == "observation":
+        for field in ("oracle", "balances", "pool"):
+            if field in fixture:
+                errors.append(f"{path}.{field}: failed snapshot cannot carry available payload")
 
 
 def _validate_receipt(fixture, path, errors):

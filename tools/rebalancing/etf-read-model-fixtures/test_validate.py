@@ -52,6 +52,34 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         self.assertTrue(any("stable snake_case reason code" in error for error in errors))
         self.assertTrue(any("usable or numeric placeholder" in error for error in errors))
 
+    def test_failed_snapshots_reject_usable_payloads_but_keep_oracle_diagnostics(self):
+        document = load_fixture()
+        stale_oracle = next(item for item in document["fixtures"] if item["id"] == "oracle-stale")
+        self.assertEqual(stale_oracle["ageSeconds"], "61")
+        self.assertEqual(validate_document(document), [])
+
+        payloads = {
+            "oracle": {"rawPrice": "123"},
+            "balances": [{"mint": "fixture-mint", "rawAmount": "1"}],
+            "pool": {"shareSupply": "1"},
+        }
+        for field, payload in payloads.items():
+            with self.subTest(field=field):
+                candidate = copy.deepcopy(document)
+                unavailable = next(
+                    item
+                    for item in candidate["fixtures"]
+                    if item["id"] == "snapshot-unavailable"
+                )
+                unavailable[field] = payload
+                errors = validate_document(candidate)
+                self.assertTrue(
+                    any(
+                        f".{field}: failed snapshot cannot carry available payload" in error
+                        for error in errors
+                    )
+                )
+
     def test_receiver_and_push_feed_oracle_shapes_are_not_interchangeable(self):
         document = load_fixture()
         receiver = document["fixtures"][0]["oracle"]

@@ -131,6 +131,11 @@ function validateObservation(fixture: UnknownRecord, path: string, errors: strin
   if ("value" in fixture && fixture.value !== null) {
     errors.push(`${path}.value: unavailable observation cannot carry a usable or numeric placeholder`);
   }
+  if (fixture.kind === "observation") {
+    for (const field of ["oracle", "balances", "pool"]) {
+      if (field in fixture) errors.push(`${path}.${field}: failed snapshot cannot carry available payload`);
+    }
+  }
 }
 
 function validateReceipt(fixture: UnknownRecord, path: string, errors: string[]): void {
