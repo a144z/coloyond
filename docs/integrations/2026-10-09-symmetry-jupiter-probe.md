@@ -23,12 +23,21 @@ Symmetry's documentation describes acquisition only through the protocol: `buyVa
 
 Spec V1 allows only secondary-market Jupiter share-token purchase and sale, with no primary deposit or redemption fallback. No Symmetry vault meets that rule, so financial actions stay disabled.
 
-### Gate 3: keeper activity — not yet evaluated
+### Gate 3: keeper activity — FAILED for the V1 scope
 
-Vault-level signatures exist, but most recent activity is from March–July 2026, and the automation timestamp is 0 for nearly all vaults. A settled-instruction classifier is still needed before this is evidence either way.
+`scan-automation.mjs` reads each vault's automation settings and `last_automation_execution_timestamp`:
+
+- No funded 1–2-asset vault is configured for automated rebalancing. Mankey, Solana Strategy, FDRY Quant Alpha, Solana Grid Strategy and Corpus Reference have rebalance activation thresholds of 0, and the decoded fixtures for Mankey and Solana Strategy show `allowAutomation = 0`. Meems has thresholds set but has never run automation.
+- Recent automation runs exist only on larger vaults: MemeIndex 10 Solana (5 assets, 22 September 2026), Mag 7 (7 assets, zero supply, 18 September 2026) and Cai Shen (6 assets, 21 July 2026).
+
+No vault in the V1 scope has keeper rebalancing to observe, so the "protocol keeps the weights" claim cannot be made for any of them.
+
+### Decision (10 October 2026)
+
+Option 1: keep the V1 spec. Financial actions stay disabled. The app shows Symmetry vaults as labeled read-only facts, including whether automation is on, and the full creative, share and remix flow ships. The Kotlin decoder and device probes continue.
 
 ## Still to do
 
 - Kotlin account decoder and configuration projection, checked against SDK fixtures.
 - Device probes: Compose PNG export, `FileProvider` sharing, import intents, MWA sign-only support.
-- Launch decision after the product decision on gate 4.
+- Configuration projection and keeper classifier.
