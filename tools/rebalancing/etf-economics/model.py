@@ -10,7 +10,14 @@ BPS = Decimal(10_000)
 
 def quote_equal_weight_exact_in(depth_usd: Decimal, amount_in_usd: Decimal, fee_bps: int) -> Decimal:
     """Return output tokens for a 50/50 pool whose two oracle prices start at $1."""
-    if depth_usd <= 0 or amount_in_usd <= 0 or fee_bps < 0 or fee_bps >= 10_000:
+    if (
+        not depth_usd.is_finite()
+        or not amount_in_usd.is_finite()
+        or depth_usd <= 0
+        or amount_in_usd <= 0
+        or fee_bps < 0
+        or fee_bps >= 10_000
+    ):
         raise ValueError("depth/input must be positive and fee must be in [0, 10000)")
     reserve = depth_usd / 2
     net_in = amount_in_usd * (BPS - fee_bps) / BPS
@@ -32,7 +39,12 @@ def arbitrage_scenario(
     In reverse direction the input asset depreciates while the output remains
     at $1, so the trader pays less external value for that same quantity.
     """
-    if external_move_bps < 0 or uncertainty_haircut_bps < 0 or transaction_cost_usd < 0:
+    if (
+        external_move_bps < 0
+        or uncertainty_haircut_bps < 0
+        or not transaction_cost_usd.is_finite()
+        or transaction_cost_usd < 0
+    ):
         raise ValueError("external move, uncertainty haircut, and transaction cost must be nonnegative")
     if direction not in ("output_appreciates", "input_depreciates"):
         raise ValueError("direction must be output_appreciates or input_depreciates")

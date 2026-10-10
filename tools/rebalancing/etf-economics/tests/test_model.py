@@ -24,6 +24,23 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
             quote_equal_weight_exact_in(Decimal("100000"), amount, 100),
         )
 
+    def test_non_finite_decimal_inputs_are_rejected(self):
+        for invalid in (Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")):
+            with self.subTest(value=invalid):
+                with self.assertRaises(ValueError):
+                    quote_equal_weight_exact_in(invalid, Decimal("1"), 30)
+                with self.assertRaises(ValueError):
+                    quote_equal_weight_exact_in(Decimal("100"), invalid, 30)
+                scenario_args = (
+                    Decimal("100"), Decimal("1"), 30, 100, 0, invalid
+                )
+                with self.assertRaises(ValueError):
+                    arbitrage_scenario(*scenario_args)
+                with self.assertRaises(ValueError):
+                    break_even_move_bps(
+                        Decimal("100"), Decimal("1"), 30, 0, invalid
+                    )
+
     def test_fixed_notional_amm_price_impact_falls_as_depth_increases(self):
         amount = Decimal("100")
         fee_bps = 30
