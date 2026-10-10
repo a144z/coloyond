@@ -11,11 +11,17 @@ fi
 
 runtime_dir="${COLOYOND_LOCALNET_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/coloyond/localnet}"
 wallet_path="${COLOYOND_LOCALNET_WALLET:-$runtime_dir/wallet.json}"
+emergency_key_path="${COLOYOND_LOCALNET_EMERGENCY_KEYPAIR:-$runtime_dir/emergency-authority.json}"
 ledger_dir="$runtime_dir/ledger"
 fixture_dir="$runtime_dir/fixtures"
 pid_file="$runtime_dir/validator.pid"
 log_file="$runtime_dir/validator.log"
-rpc_url="http://127.0.0.1:8899"
+rpc_port="${COLOYOND_LOCALNET_RPC_PORT:-8899}"
+faucet_port="${COLOYOND_LOCALNET_FAUCET_PORT:-9900}"
+gossip_port="${COLOYOND_LOCALNET_GOSSIP_PORT:-8001}"
+dynamic_port_range="${COLOYOND_LOCALNET_DYNAMIC_PORT_RANGE:-1024-65535}"
+rpc_url="http://127.0.0.1:$rpc_port"
+ws_url="ws://127.0.0.1:$((rpc_port + 1))"
 program_id="FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"
 program_so="$repo_root/target/deploy/coloyond_vault.so"
 tools_version="${COLOYOND_SBF_TOOLS_VERSION:-v1.57}"
@@ -26,6 +32,7 @@ public_manifest="$repo_root/public/localnet-manifest.json"
 mkdir -p "$runtime_dir" "$fixture_dir"
 chmod 700 "$runtime_dir"
 mkdir -p "$(dirname "$wallet_path")"
+mkdir -p "$(dirname "$emergency_key_path")"
 
 if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
   echo "Localnet validator is already running (pid $(cat "$pid_file")). Use stop.sh first."
@@ -44,11 +51,23 @@ if [[ ! -f "$wallet_path" ]]; then
 fi
 chmod 600 "$wallet_path"
 wallet_pubkey="$(solana address --keypair "$wallet_path")"
+if [[ ! -f "$emergency_key_path" ]]; then
+  umask 077
+  solana-keygen new --no-bip39-passphrase --silent --outfile "$emergency_key_path" >"$runtime_dir/emergency-keygen.log" 2>&1
+  chmod 600 "$emergency_key_path"
+  echo "Created a throwaway Localnet emergency authority at $emergency_key_path (secret suppressed)."
+fi
+chmod 600 "$emergency_key_path"
+emergency_pubkey="$(solana address --keypair "$emergency_key_path")"
 
 echo "Building Localnet fixture accounts..."
 cargo run --offline --quiet --manifest-path "$generator_manifest" -- \
   --output-dir "$fixture_dir" \
-  --wallet-address "$wallet_pubkey"
+  --wallet-address "$wallet_pubkey" \
+  --emergency-authority "$emergency_pubkey" \
+  --rpc-url "$rpc_url" \
+  --ws-url "$ws_url" \
+  --minimum-delay-slots "${COLOYOND_LOCALNET_MIN_DELAY_SLOTS:-1}"
 
 account_pubkey() {
   python3 - "$fixture_dir/$1.json" <<'PY'
@@ -76,7 +95,10 @@ fi
 mkdir -p "$ledger_dir"
 solana-test-validator --reset --ledger "$ledger_dir" \
   --bind-address 127.0.0.1 \
-  --rpc-port 8899 \
+  --rpc-port "$rpc_port" \
+  --faucet-port "$faucet_port" \
+  --gossip-port "$gossip_port" \
+  --dynamic-port-range "$dynamic_port_range" \
   --bpf-program "$program_id" "$program_so" \
   --account "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE" "$fixture_dir/sol-usd.json" \
   --account "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX" "$fixture_dir/usdc-usd.json" \

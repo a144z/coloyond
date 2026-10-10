@@ -29,8 +29,6 @@ use serde::Serialize;
 use solana_program_pack::Pack;
 use spl_token::state::{Account as SplAccount, AccountState, Mint as SplMint};
 
-const LOCALNET_RPC: &str = "http://127.0.0.1:8899";
-const LOCALNET_WS: &str = "ws://127.0.0.1:8900";
 const USDC_DECIMALS: u8 = 6;
 const WSOL_DECIMALS: u8 = 9;
 const USDC_PRICE: i64 = 1;
@@ -42,8 +40,8 @@ const USD_EXPONENT: i32 = 0;
 struct LocalnetManifest {
     schema_version: u8,
     cluster: &'static str,
-    rpc_url: &'static str,
-    ws_url: &'static str,
+    rpc_url: String,
+    ws_url: String,
     expected_genesis_hash: &'static str,
     program_id: String,
     vault: String,
@@ -71,6 +69,7 @@ struct LocalnetManifest {
     system_program_id: String,
     fixture_kind: &'static str,
     fixture_notice: &'static str,
+    oracle_publish_time: String,
     auction_duration_slots: String,
     start_sell_asset: u8,
     start_amount: String,
@@ -117,10 +116,24 @@ fn run() -> std::result::Result<(), String> {
     let mut args = env::args().skip(1);
     let mut output_dir = None;
     let mut wallet = None;
+    let mut emergency_authority = None;
+    let mut rpc_url = None;
+    let mut ws_url = None;
+    let mut minimum_delay_slots = 1;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--output-dir" => output_dir = args.next().map(PathBuf::from),
             "--wallet-address" => wallet = args.next(),
+            "--emergency-authority" => emergency_authority = args.next(),
+            "--rpc-url" => rpc_url = args.next(),
+            "--ws-url" => ws_url = args.next(),
+            "--minimum-delay-slots" => {
+                minimum_delay_slots = args
+                    .next()
+                    .ok_or("missing value for --minimum-delay-slots")?
+                    .parse::<u64>()
+                    .map_err(|error| error.to_string())?;
+            }
             _ => return Err(format!("unknown argument: {arg}")),
         }
     }
@@ -129,6 +142,20 @@ fn run() -> std::result::Result<(), String> {
         .ok_or("missing --wallet-address")?
         .parse::<Pubkey>()
         .map_err(|error| format!("invalid wallet address: {error}"))?;
+    let emergency_authority = emergency_authority
+        .ok_or("missing --emergency-authority")?
+        .parse::<Pubkey>()
+        .map_err(|error| format!("invalid emergency authority: {error}"))?;
+    if emergency_authority == wallet {
+        return Err(
+            "governance and emergency authorities must be distinct Localnet signers".into(),
+        );
+    }
+    if minimum_delay_slots == 0 {
+        return Err("minimum delay slots must be positive".into());
+    }
+    let rpc_url = rpc_url.ok_or("missing --rpc-url")?;
+    let ws_url = ws_url.ok_or("missing --ws-url")?;
     fs::create_dir_all(&output_dir).map_err(|error| error.to_string())?;
 
     let (vault_key, vault_bump) = Pubkey::find_program_address(&[VAULT_SEED], &VAULT_PROGRAM_ID);
@@ -199,12 +226,8 @@ fn run() -> std::result::Result<(), String> {
         share_mint,
         allowed_mints: [wsol_mint, usdc_mint],
         governance_authority: wallet,
-        emergency_authority: Pubkey::find_program_address(
-            &[b"localnet-emergency-authority"],
-            &VAULT_PROGRAM_ID,
-        )
-        .0,
-        min_delay_slots: 1,
+        emergency_authority,
+        min_delay_slots: minimum_delay_slots,
         configuration_revision: 1,
         target_bps: [5_000; ASSET_COUNT],
         proposal_nonce: 0,
@@ -241,13 +264,21 @@ fn run() -> std::result::Result<(), String> {
         asset_feed_indices: [0, 1],
     };
 
-    write_anchor_account(&output_dir, vault_key, VAULT_PROGRAM_ID, &vault, "vault")?;
+    write_anchor_account(
+        &output_dir,
+        vault_key,
+        VAULT_PROGRAM_ID,
+        &vault,
+        "vault",
+        Some(Vault::SPACE),
+    )?;
     write_anchor_account(
         &output_dir,
         governance_key,
         VAULT_PROGRAM_ID,
         &governance,
         "governance",
+        Some(GovernanceAccount::SPACE),
     )?;
     write_anchor_account(
         &output_dir,
@@ -255,6 +286,7 @@ fn run() -> std::result::Result<(), String> {
         VAULT_PROGRAM_ID,
         &policy,
         "auction-policy",
+        Some(AuctionPolicy::SPACE),
     )?;
 
     write_account(
@@ -305,10 +337,20 @@ fn run() -> std::result::Result<(), String> {
         )?;
     }
 
-    let now = SystemTime::now()
+    let publish_offset = env::var("COLOYOND_LOCALNET_ORACLE_PUBLISH_OFFSET_SECONDS")
+        .ok()
+        .map(|value| value.parse::<i64>().map_err(|error| error.to_string()))
+        .transpose()?
+        .unwrap_or(0);
+    if publish_offset < 0 {
+        return Err("COLOYOND_LOCALNET_ORACLE_PUBLISH_OFFSET_SECONDS must not be negative".into());
+    }
+    let now = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
-        .as_secs() as i64;
+        .as_secs() as i64)
+        .checked_add(publish_offset)
+        .ok_or("oracle publish time overflowed")?;
     let sol = make_price_update(SOL_USD_FEED_ID, SOL_PRICE, now)?;
     let usdc = make_price_update(USDC_USD_FEED_ID, USDC_PRICE, now)?;
     write_anchor_account(
@@ -317,6 +359,7 @@ fn run() -> std::result::Result<(), String> {
         PYTH_RECEIVER_PROGRAM_ID,
         &sol,
         "sol-usd",
+        None,
     )?;
     write_anchor_account(
         &output_dir,
@@ -324,13 +367,14 @@ fn run() -> std::result::Result<(), String> {
         PYTH_RECEIVER_PROGRAM_ID,
         &usdc,
         "usdc-usd",
+        None,
     )?;
 
     let manifest = LocalnetManifest {
         schema_version: 1,
         cluster: "localnet",
-        rpc_url: LOCALNET_RPC,
-        ws_url: LOCALNET_WS,
+        rpc_url,
+        ws_url,
         expected_genesis_hash: "pending-validator-startup",
         program_id: VAULT_PROGRAM_ID.to_string(),
         vault: vault_key.to_string(),
@@ -358,6 +402,7 @@ fn run() -> std::result::Result<(), String> {
         system_program_id: anchor_lang::system_program::ID.to_string(),
         fixture_kind: "localnet-oracle-fixture",
         fixture_notice: "The wSOL and USDC mints are Localnet-only test tokens. SOL/USD ($100) and USDC/USD ($1) are synthetic Localnet fixture values loaded into the fixed Pyth account addresses; they are not Pyth-authenticated market data. The vault auction and SPL Token transfers execute against the compiled SBF program on the local Solana validator.",
+        oracle_publish_time: now.to_string(),
         auction_duration_slots: duration_slots.to_string(),
         start_sell_asset: 0,
         start_amount: "1000000000".into(),
@@ -449,11 +494,20 @@ fn write_anchor_account<T: AccountSerialize>(
     owner: Pubkey,
     account: &T,
     name: &str,
+    allocated_size: Option<usize>,
 ) -> std::result::Result<(), String> {
     let mut data = Vec::new();
     account
         .try_serialize(&mut data)
         .map_err(|error| format!("serialize {name}: {error}"))?;
+    if let Some(allocated_size) = allocated_size {
+        if data.len() > allocated_size {
+            return Err(format!(
+                "serialized {name} exceeds its declared Anchor account space"
+            ));
+        }
+        data.resize(allocated_size, 0);
+    }
     write_account(output_dir, key, owner, data, name)
 }
 
