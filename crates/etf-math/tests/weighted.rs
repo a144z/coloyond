@@ -339,6 +339,88 @@ fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
     eprintln!("checked {tested} three-asset minimum-weight boundary vectors; max relative shortfall {maximum_relative_error_pptr} pptr");
 }
 
+#[test]
+fn quotes_are_monotonic_in_input_and_fee_at_weight_boundaries() {
+    let weight_profiles = [
+        [100_u16, 100, 9_800],
+        [100, 4_900, 5_000],
+        [4_900, 100, 5_000],
+        [5_000, 4_900, 100],
+        [9_800, 100, 100],
+        [3_333, 3_333, 3_334],
+    ];
+    let reserves = [1_000_000_000_u64; 3];
+    let input_ratios_bps = [1_u64, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_000, 3_000];
+    let fee_levels_bps = [0_u16, 1, 30, 100, 500, 1_000, 2_500, 5_000];
+    let mut accepted_quotes = 0;
+
+    for weights in weight_profiles {
+        for asset_in in 0..3 {
+            for asset_out in 0..3 {
+                if asset_in == asset_out {
+                    continue;
+                }
+
+                for fee_bps in fee_levels_bps {
+                    let mut previous_output = 0;
+                    let mut output_limit_reached = false;
+                    for ratio_bps in input_ratios_bps {
+                        let amount_in = reserves[asset_in] * ratio_bps / 10_000;
+                        match quote_exact_in(
+                            &reserves, &weights, asset_in, asset_out, amount_in, fee_bps,
+                        ) {
+                            Ok(quote) => {
+                                assert!(!output_limit_reached);
+                                assert!(
+                                    quote.amount_out >= previous_output,
+                                    "output fell as input rose: weights={weights:?}, in={asset_in}, out={asset_out}, fee={fee_bps}, ratio={ratio_bps}"
+                                );
+                                previous_output = quote.amount_out;
+                                accepted_quotes += 1;
+                            }
+                            Err(MathError::NoOutput) => {
+                                assert_eq!(
+                                    previous_output, 0,
+                                    "positive output regressed to NoOutput"
+                                )
+                            }
+                            Err(MathError::OutputTooLarge) => output_limit_reached = true,
+                            Err(error) => panic!("unexpected quote error: {error:?}"),
+                        }
+                    }
+                }
+
+                for ratio_bps in input_ratios_bps {
+                    let amount_in = reserves[asset_in] * ratio_bps / 10_000;
+                    let mut previous_output = None;
+                    for fee_bps in fee_levels_bps {
+                        match quote_exact_in(
+                            &reserves, &weights, asset_in, asset_out, amount_in, fee_bps,
+                        ) {
+                            Ok(quote) => {
+                                if let Some(previous) = previous_output {
+                                    assert!(
+                                        quote.amount_out <= previous,
+                                        "output rose as fee rose: weights={weights:?}, in={asset_in}, out={asset_out}, ratio={ratio_bps}, fee={fee_bps}"
+                                    );
+                                }
+                                previous_output = Some(quote.amount_out);
+                                accepted_quotes += 1;
+                            }
+                            Err(MathError::NoOutput) => previous_output = Some(0),
+                            Err(MathError::OutputTooLarge) => {
+                                assert!(previous_output.is_none());
+                            }
+                            Err(error) => panic!("unexpected quote error: {error:?}"),
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(accepted_quotes > 1_000);
+}
+
 fn gcd_u16(left: u16, right: u16) -> u16 {
     let mut a = left;
     let mut b = right;
