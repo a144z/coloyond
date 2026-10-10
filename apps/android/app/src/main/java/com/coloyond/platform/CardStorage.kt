@@ -37,7 +37,7 @@ class CardStorage(private val root: File) {
         require(checkedStrategy.id == strategy.id) { "Strategy identity changed" }
         val strategyId = expression.value.asObject("expression").field("strategyId").asString("strategyId")
         require(strategyId == checkedStrategy.id) { "Expression belongs to another strategy" }
-        val checkedExpression = StrategyRecords.validateExpression(expression.value, coloyond = strategyId.startsWith("cbe2:"))
+        val checkedExpression = StrategyRecords.validateExpression(expression.value, coloyond = strategyId.startsWith("cb3:"))
         require(checkedExpression.id == expression.id) { "Expression identity changed" }
         require(expressionIdPattern.matches(checkedExpression.id)) { "Unsupported expression identity" }
         require(strategyIdPattern.matches(checkedStrategy.id)) { "Unsupported strategy identity" }
