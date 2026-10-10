@@ -37,6 +37,12 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         errors = validate_document(document)
         self.assertTrue(any("rawAmount: expected base-10 integer string" in error for error in errors))
 
+    def test_malformed_balances_return_validation_errors_without_raising(self):
+        document = load_fixture()
+        document["fixtures"][0]["balances"] = None
+        errors = validate_document(document)
+        self.assertTrue(any("balances: expected array" in error for error in errors))
+
     def test_observation_tags_require_stable_reason_and_no_numeric_placeholder(self):
         document = load_fixture()
         stale = next(item for item in document["fixtures"] if item["id"] == "oracle-stale")

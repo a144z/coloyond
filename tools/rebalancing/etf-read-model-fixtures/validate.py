@@ -250,9 +250,11 @@ def validate_document(document):
                     slot = network.get("contextSlot")
                     if isinstance(slot, str) and slot.isdigit() and int(slot) > JS_SAFE_INTEGER:
                         large_wire_integer = True
-                for balance in fixture.get("balances", []):
-                    if isinstance(balance, dict) and balance.get("rawAmount") == str(U64_MAX):
-                        max_u64_amount = True
+                balances = fixture.get("balances")
+                if isinstance(balances, list):
+                    for balance in balances:
+                        if isinstance(balance, dict) and balance.get("rawAmount") == str(U64_MAX):
+                            max_u64_amount = True
         elif kind == "wallet-action":
             _validate_receipt(fixture, path, errors)
         else:
