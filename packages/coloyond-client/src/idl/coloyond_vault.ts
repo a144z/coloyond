@@ -1867,6 +1867,421 @@ export type ColoyondVault = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "cancelAuctionPolicyProposal",
+      "discriminator": [
+        79,
+        171,
+        123,
+        243,
+        136,
+        211,
+        87,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governanceAuthority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "executeAuctionPolicy",
+      "discriminator": [
+        142,
+        182,
+        162,
+        73,
+        57,
+        62,
+        13,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custodyA"
+        },
+        {
+          "name": "custodyB"
+        },
+        {
+          "name": "mintA"
+        },
+        {
+          "name": "mintB"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "proposeAuctionPolicy",
+      "discriminator": [
+        132,
+        207,
+        102,
+        109,
+        243,
+        67,
+        62,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governanceAuthority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custodyA"
+        },
+        {
+          "name": "custodyB"
+        },
+        {
+          "name": "mintA"
+        },
+        {
+          "name": "mintB"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "config",
+          "type": {
+            "defined": {
+              "name": "AuctionPolicyConfig"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1959,6 +2374,19 @@ export type ColoyondVault = {
         50,
         207,
         153
+      ]
+    },
+    {
+      "name": "PendingAuctionPolicy",
+      "discriminator": [
+        49,
+        207,
+        160,
+        175,
+        160,
+        195,
+        219,
+        130
       ]
     }
   ],
@@ -3768,6 +4196,241 @@ export type ColoyondVault = {
           }
         ]
       }
+    },
+    {
+      "name": "AuctionPolicyConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maximumAgeSeconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximumConfidenceBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumUsdcDeviationBps",
+            "type": "u16"
+          },
+          {
+            "name": "minimumDriftBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumTradeValueQ9",
+            "type": "u64"
+          },
+          {
+            "name": "cooldownSlots",
+            "type": "u64"
+          },
+          {
+            "name": "curveStartRateBps",
+            "type": "u16"
+          },
+          {
+            "name": "curveEndRateBps",
+            "type": "u16"
+          },
+          {
+            "name": "durationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "feeReserveShareBps",
+            "type": "u16"
+          },
+          {
+            "name": "reserveFloor",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "epochBountyBudget",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "maximumBountyPerFill",
+            "type": "u64"
+          },
+          {
+            "name": "maximumCumulativeNavLossBps",
+            "type": "u16"
+          },
+          {
+            "name": "maximumNavLossBps",
+            "type": "u16"
+          },
+          {
+            "name": "assetFeedIndices",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionPolicyInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "vaultSequence",
+            "type": "u64"
+          },
+          {
+            "name": "initializedAtSlot",
+            "type": "u64"
+          },
+          {
+            "name": "initializedEpoch",
+            "type": "u64"
+          },
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "AuctionPolicyConfig"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionPolicyProposalCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "vaultSequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionPolicyProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "vaultSequence",
+            "type": "u64"
+          },
+          {
+            "name": "proposedAtSlot",
+            "type": "u64"
+          },
+          {
+            "name": "activateAfterSlot",
+            "type": "u64"
+          },
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "AuctionPolicyConfig"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingAuctionPolicy",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "governanceAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "vaultSequence",
+            "type": "u64"
+          },
+          {
+            "name": "proposedAtSlot",
+            "type": "u64"
+          },
+          {
+            "name": "activateAfterSlot",
+            "type": "u64"
+          },
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "AuctionPolicyConfig"
+              }
+            }
+          }
+        ]
+      }
     }
   ],
   "events": [
@@ -3938,6 +4601,45 @@ export type ColoyondVault = {
         173,
         58,
         116
+      ]
+    },
+    {
+      "name": "AuctionPolicyInitialized",
+      "discriminator": [
+        211,
+        67,
+        143,
+        158,
+        251,
+        53,
+        245,
+        48
+      ]
+    },
+    {
+      "name": "AuctionPolicyProposalCancelled",
+      "discriminator": [
+        220,
+        196,
+        66,
+        151,
+        147,
+        76,
+        118,
+        196
+      ]
+    },
+    {
+      "name": "AuctionPolicyProposed",
+      "discriminator": [
+        174,
+        159,
+        86,
+        119,
+        83,
+        154,
+        215,
+        62
       ]
     }
   ]

@@ -60,6 +60,21 @@ pub mod coloyond_vault {
         instructions::handlers::resume_risk(ctx)
     }
 
+    pub fn propose_auction_policy(
+        ctx: Context<ProposeAuctionPolicy>,
+        config: auction::AuctionPolicyConfig,
+    ) -> Result<()> {
+        instructions::policy_handlers::propose_auction_policy(ctx, config)
+    }
+
+    pub fn execute_auction_policy(ctx: Context<ExecuteAuctionPolicy>) -> Result<()> {
+        instructions::policy_handlers::execute_auction_policy(ctx)
+    }
+
+    pub fn cancel_auction_policy_proposal(ctx: Context<CancelAuctionPolicyProposal>) -> Result<()> {
+        instructions::policy_handlers::cancel_auction_policy_proposal(ctx)
+    }
+
     pub fn start_rebalance(
         ctx: Context<StartRebalance>,
         sell_asset: u8,
