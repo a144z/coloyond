@@ -336,6 +336,60 @@ mod tests {
     }
 
     #[test]
+    fn every_pinned_feed_matches_independent_address_and_id_vectors() {
+        let cases = [
+            (
+                PinnedFeed::SolUsd,
+                "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+                "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+            ),
+            (
+                PinnedFeed::BtcUsd,
+                "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo",
+                "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+            ),
+            (
+                PinnedFeed::UsdcUsd,
+                "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+                "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+            ),
+        ];
+
+        for (feed, expected_address, expected_id_hex) in cases {
+            let expected_address = expected_address.parse::<Pubkey>().unwrap();
+            assert_eq!(feed.address(), expected_address);
+            assert_eq!(feed.id_hex(), expected_id_hex);
+            let expected_feed_id = get_feed_id_from_hex(expected_id_hex).unwrap();
+            let value = PriceUpdateV2 {
+                write_authority: Pubkey::new_unique(),
+                verification_level: VerificationLevel::Full,
+                price_message: PriceFeedMessage {
+                    feed_id: expected_feed_id,
+                    price: 100_000_000,
+                    conf: 1_000,
+                    exponent: -8,
+                    publish_time: NOW,
+                    prev_publish_time: NOW - 1,
+                    ema_price: 100_000_000,
+                    ema_conf: 1_000,
+                },
+                posted_slot: 1,
+            };
+
+            let validated = validate_fixed_feed(
+                feed,
+                expected_address,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &value,
+                &clock(),
+                limits(),
+            )
+            .unwrap();
+            assert_eq!(validated.mantissa, 100_000_000);
+        }
+    }
+
+    #[test]
     fn confidence_interval_uses_exact_fixed_point_price_plus_and_minus_confidence() {
         let value = update(
             PinnedFeed::SolUsd,
@@ -602,7 +656,7 @@ mod tests {
         assert_eq!(decoded.price_message.feed_id, value.price_message.feed_id);
 
         let mut full_with_allocation_byte = bytes.clone();
-        full_with_allocation_byte.push(0);
+        full_with_allocation_byte.push(0xa5);
         let decoded_padded_full = decode_fixed_feed_account(
             PinnedFeed::UsdcUsd,
             USDC_USD_FEED_ACCOUNT,
