@@ -85,6 +85,14 @@ class OracleProbeResponseTests(unittest.TestCase):
             with self.subTest(malformed=malformed), self.assertRaises(RuntimeError):
                 validate_account_batch_result(malformed, ())
 
+    def test_context_slot_requires_u64_range(self):
+        for slot in (0, (1 << 64) - 1):
+            with self.subTest(slot=slot):
+                self.assertEqual(validate_account_batch_result(result([], slot=slot), ())[0], slot)
+        for slot in (-1, 1 << 64, True):
+            with self.subTest(slot=slot), self.assertRaisesRegex(RuntimeError, "context slot must be a u64"):
+                validate_account_batch_result(result([], slot=slot), ())
+
     def test_rejects_missing_account(self):
         with self.assertRaisesRegex(RuntimeError, "account is absent"):
             validate_account_batch_result(result([None, account()]), EXPECTED)
