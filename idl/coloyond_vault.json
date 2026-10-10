@@ -1,5 +1,5 @@
 {
-  "address": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+  "address": "",
   "metadata": {
     "name": "coloyond_vault",
     "version": "0.1.0",
@@ -179,6 +179,382 @@
         },
         {
           "name": "min_shares_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fill_auction",
+      "discriminator": [
+        51,
+        225,
+        89,
+        197,
+        65,
+        5,
+        178,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction_policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rebalance_intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty_claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121,
+                  95,
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "expected_intent_sequence"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "sol_usd",
+          "address": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
+        },
+        {
+          "name": "usdc_usd",
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+        },
+        {
+          "name": "taker_in",
+          "writable": true
+        },
+        {
+          "name": "taker_out",
+          "writable": true
+        },
+        {
+          "name": "taker",
+          "signer": true
+        },
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_intent_sequence",
+          "type": "u64"
+        },
+        {
+          "name": "sell_amount",
+          "type": "u64"
+        },
+        {
+          "name": "gross_buy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "bounty_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "finish_or_expire",
+      "discriminator": [
+        87,
+        244,
+        172,
+        88,
+        190,
+        34,
+        32,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction_policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rebalance_intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "sol_usd",
+          "address": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
+        },
+        {
+          "name": "usdc_usd",
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_intent_sequence",
           "type": "u64"
         }
       ]
@@ -521,9 +897,198 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "start_rebalance",
+      "discriminator": [
+        61,
+        251,
+        146,
+        164,
+        48,
+        29,
+        208,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction_policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rebalance_intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "sol_usd",
+          "address": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
+        },
+        {
+          "name": "usdc_usd",
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "sell_asset",
+          "type": "u8"
+        },
+        {
+          "name": "initial_sell_amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "AuctionPolicy",
+      "discriminator": [
+        2,
+        104,
+        14,
+        217,
+        253,
+        100,
+        255,
+        33
+      ]
+    },
+    {
+      "name": "BountyClaim",
+      "discriminator": [
+        130,
+        113,
+        6,
+        57,
+        79,
+        54,
+        78,
+        205
+      ]
+    },
     {
       "name": "GovernanceAccount",
       "discriminator": [
@@ -535,6 +1100,32 @@
         81,
         15,
         22
+      ]
+    },
+    {
+      "name": "PriceUpdateV2",
+      "discriminator": [
+        34,
+        241,
+        35,
+        99,
+        157,
+        126,
+        244,
+        205
+      ]
+    },
+    {
+      "name": "RebalanceIntent",
+      "discriminator": [
+        38,
+        161,
+        149,
+        244,
+        144,
+        119,
+        200,
+        124
       ]
     },
     {
@@ -551,148 +1142,66 @@
       ]
     }
   ],
-  "events": [
-    {
-      "name": "DepositRecorded",
-      "discriminator": [
-        0,
-        223,
-        90,
-        235,
-        183,
-        248,
-        79,
-        67
-      ]
-    },
-    {
-      "name": "RedemptionRecorded",
-      "discriminator": [
-        249,
-        2,
-        221,
-        44,
-        24,
-        250,
-        99,
-        43
-      ]
-    },
-    {
-      "name": "RiskPauseChanged",
-      "discriminator": [
-        187,
-        81,
-        218,
-        209,
-        143,
-        122,
-        187,
-        36
-      ]
-    },
-    {
-      "name": "TargetsActivated",
-      "discriminator": [
-        60,
-        214,
-        221,
-        19,
-        123,
-        190,
-        202,
-        77
-      ]
-    },
-    {
-      "name": "TargetsProposed",
-      "discriminator": [
-        156,
-        177,
-        52,
-        11,
-        233,
-        173,
-        58,
-        116
-      ]
-    }
-  ],
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidVault",
-      "msg": "Vault version or address is invalid"
+      "name": "WrongFeedAccount",
+      "msg": "Oracle account is not the pinned feed account"
     },
     {
       "code": 6001,
-      "name": "InvalidRoles",
-      "msg": "Governance and emergency roles must be distinct, nonzero signers"
+      "name": "WrongOracleOwner",
+      "msg": "Oracle account owner is not the pinned Pyth Receiver program"
     },
     {
       "code": 6002,
-      "name": "InvalidDelay",
-      "msg": "Timelock delay must be explicitly configured and nonzero"
+      "name": "InvalidOraclePolicy",
+      "msg": "Oracle policy is unset or outside representable bounds"
     },
     {
       "code": 6003,
-      "name": "InvalidAssetSet",
-      "msg": "Vault asset set is invalid"
+      "name": "InvalidConfiguredFeedId",
+      "msg": "Configured Pyth feed ID is invalid"
     },
     {
       "code": 6004,
-      "name": "AssetNotAllowed",
-      "msg": "Mint is outside the immutable two-asset allowlist"
+      "name": "InvalidPythPrice",
+      "msg": "Pyth update has the wrong feed, stale data, or is not fully verified"
     },
     {
       "code": 6005,
-      "name": "UnauthorizedGovernance",
-      "msg": "Only governance may propose or resume policy"
+      "name": "NonPositivePrice",
+      "msg": "Price must be positive"
     },
     {
       "code": 6006,
-      "name": "UnauthorizedEmergency",
-      "msg": "Only the emergency authority may pause risk"
+      "name": "FuturePublishTime",
+      "msg": "Pyth publish time is in the future"
     },
     {
       "code": 6007,
-      "name": "RiskPaused",
-      "msg": "Risk-increasing operations are paused"
+      "name": "ConfidenceTooWide",
+      "msg": "Pyth confidence interval exceeds the configured policy"
     },
     {
       "code": 6008,
-      "name": "ProposalPending",
-      "msg": "A policy proposal is already pending"
+      "name": "UsdcOutsidePolicy",
+      "msg": "USDC/USD is outside the configured depeg policy"
     },
     {
       "code": 6009,
-      "name": "StaleRevision",
-      "msg": "Expected configuration revision is stale"
+      "name": "PrecisionLoss",
+      "msg": "Price conversion would discard source precision"
     },
     {
       "code": 6010,
-      "name": "InvalidTargets",
-      "msg": "Target weights must be positive and total 10000 basis points"
+      "name": "ArithmeticOverflow",
+      "msg": "Price conversion overflowed"
     },
     {
       "code": 6011,
-      "name": "TimelockActive",
-      "msg": "A proposal has not reached its activation slot"
-    },
-    {
-      "code": 6012,
-      "name": "NoPendingProposal",
-      "msg": "No policy proposal is pending"
-    },
-    {
-      "code": 6013,
-      "name": "ProposalReplay",
-      "msg": "Proposal nonce is stale or has already been consumed"
-    },
-    {
-      "code": 6014,
-      "name": "ArithmeticOverflow",
-      "msg": "Governance arithmetic overflow"
+      "name": "UnsupportedExponent",
+      "msg": "Pyth exponent cannot be represented safely"
     }
   ],
   "types": [
@@ -720,6 +1229,247 @@
           {
             "name": "target_bps",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionFillRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent_sequence",
+            "type": "u64"
+          },
+          {
+            "name": "previous_intent_sequence",
+            "type": "u64"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          },
+          {
+            "name": "taker",
+            "type": "pubkey"
+          },
+          {
+            "name": "sell_asset",
+            "type": "u8"
+          },
+          {
+            "name": "sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "gross_buy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bounty_amount",
+            "type": "u64"
+          },
+          {
+            "name": "cumulative_nav_loss_q9",
+            "type": "u128"
+          },
+          {
+            "name": "remaining_sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bounty_claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "publish_times",
+            "type": {
+              "array": [
+                "i64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionFinished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent_sequence",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "expired",
+            "type": "bool"
+          },
+          {
+            "name": "completed",
+            "type": "bool"
+          },
+          {
+            "name": "stale_configuration",
+            "type": "bool"
+          },
+          {
+            "name": "publish_times",
+            "type": {
+              "array": [
+                "i64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionPolicy",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "configuration_revision",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_age_seconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_confidence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_usdc_deviation_bps",
+            "type": "u16"
+          },
+          {
+            "name": "minimum_drift_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_trade_value_q9",
+            "type": "u64"
+          },
+          {
+            "name": "cooldown_slots",
+            "type": "u64"
+          },
+          {
+            "name": "last_completed_slot",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "curve_start_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "curve_end_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "duration_slots",
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_bounty_per_fill",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_cumulative_nav_loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_nav_loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "asset_feed_indices",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyClaim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "asset_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
@@ -858,6 +1608,251 @@
           {
             "name": "activate_after_slot",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceFeedMessage",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "price",
+            "type": "i64"
+          },
+          {
+            "name": "conf",
+            "type": "u64"
+          },
+          {
+            "name": "exponent",
+            "type": "i32"
+          },
+          {
+            "name": "publish_time",
+            "type": "i64"
+          },
+          {
+            "name": "prev_publish_time",
+            "type": "i64"
+          },
+          {
+            "name": "ema_price",
+            "type": "i64"
+          },
+          {
+            "name": "ema_conf",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceUpdateV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "write_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "verification_level",
+            "type": {
+              "defined": {
+                "name": "VerificationLevel"
+              }
+            }
+          },
+          {
+            "name": "price_message",
+            "type": {
+              "defined": {
+                "name": "PriceFeedMessage"
+              }
+            }
+          },
+          {
+            "name": "posted_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RebalanceIntent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "target_revision",
+            "type": "u64"
+          },
+          {
+            "name": "policy_revision",
+            "type": "u64"
+          },
+          {
+            "name": "sell_asset",
+            "type": "u8"
+          },
+          {
+            "name": "initial_sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "start_slot",
+            "type": "u64"
+          },
+          {
+            "name": "end_slot",
+            "type": "u64"
+          },
+          {
+            "name": "start_publish_times",
+            "type": {
+              "array": [
+                "i64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "last_publish_times",
+            "type": {
+              "array": [
+                "i64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "start_prices_q9",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "start_nav_q9",
+            "type": "u128"
+          },
+          {
+            "name": "cumulative_nav_loss_q9",
+            "type": "u128"
+          },
+          {
+            "name": "curve_start_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "curve_end_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_bounty_per_fill",
+            "type": "u64"
+          },
+          {
+            "name": "maximum_cumulative_nav_loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "maximum_nav_loss_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RebalanceStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "target_revision",
+            "type": "u64"
+          },
+          {
+            "name": "sell_asset",
+            "type": "u8"
+          },
+          {
+            "name": "initial_sell_amount",
+            "type": "u64"
+          },
+          {
+            "name": "start_slot",
+            "type": "u64"
+          },
+          {
+            "name": "end_slot",
+            "type": "u64"
+          },
+          {
+            "name": "prices_q9",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "publish_times",
+            "type": {
+              "array": [
+                "i64",
+                2
+              ]
+            }
           }
         ]
       }
@@ -1049,6 +2044,26 @@
           {
             "name": "sequence",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VerificationLevel",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Partial",
+            "fields": [
+              {
+                "name": "num_signatures",
+                "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "Full"
           }
         ]
       }
