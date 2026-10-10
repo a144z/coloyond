@@ -6,7 +6,7 @@ use crate::{
         self, ActivateTargets, DepositProportional, InitializeVault, PauseRisk, ProposeTargets,
         RedeemInKind, ResumeRisk, VAULT_SEED, VaultInit,
     },
-    state::VaultError,
+    state::{VaultError, ASSET_COUNT},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, MintTo, Transfer};
@@ -165,7 +165,9 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
 }
 
 /// Build the versioned policy from the deployment-time admission values. The
-/// handler stores the result and rejects it through the shared validator.
+/// fee ledger fields (share, floors, epoch budget and spend) start at zero and
+/// are tuned afterwards through the governed policy path. The handler stores
+/// the result and rejects it through the shared validator.
 fn policy_from_init(init: &VaultInit, vault_key: Pubkey, vault: &crate::state::Vault) -> auction::AuctionPolicy {
     auction::AuctionPolicy {
         version: AUCTION_POLICY_VERSION,
@@ -183,6 +185,11 @@ fn policy_from_init(init: &VaultInit, vault_key: Pubkey, vault: &crate::state::V
         duration_slots: init.duration_slots,
         fee_bps: init.fee_bps,
         maximum_fee_bps: init.maximum_fee_bps,
+        fee_reserve_share_bps: 0,
+        reserve_floor: [0; ASSET_COUNT],
+        epoch_bounty_budget: [0; ASSET_COUNT],
+        bounty_epoch: 0,
+        bounty_epoch_spent: [0; ASSET_COUNT],
         maximum_bounty_per_fill: init.maximum_bounty_per_fill,
         maximum_nav_loss_bps: init.maximum_nav_loss_bps,
         maximum_cumulative_nav_loss_bps: init.maximum_cumulative_nav_loss_bps,

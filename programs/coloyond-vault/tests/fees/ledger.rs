@@ -36,7 +36,7 @@ fn vault(amounts: [u64; ASSET_COUNT], reserve: [u64; ASSET_COUNT]) -> Vault {
         sequence: 0,
     };
     vault
-        .initialize_for_accounting_test(
+        .initialize(
             1,
             Pubkey::new_unique(),
             1,
