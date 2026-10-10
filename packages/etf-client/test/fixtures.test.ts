@@ -19,6 +19,25 @@ test("large slots and token amounts remain decimal strings", () => {
   assert.equal(snapshot.balances?.[0]?.rawAmount, "18446744073709551615");
 });
 
+test("integer string extremes pass and oversized decimals are rejected", () => {
+  const boundary = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = boundary.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  const network = snapshot.network as Record<string, unknown>;
+  const balances = snapshot.balances as Record<string, unknown>[];
+  const oracle = snapshot.oracle as Record<string, unknown>;
+  network.contextSlot = ((1n << 64n) - 1n).toString();
+  balances[0]!.rawAmount = ((1n << 64n) - 1n).toString();
+  oracle.publishTime = (-(1n << 63n)).toString();
+  oracle.rawPrice = ((1n << 63n) - 1n).toString();
+  assert.deepEqual(validateReadModelDocument(boundary), []);
+
+  network.contextSlot = "9".repeat(10_000);
+  oracle.publishTime = `-${"9".repeat(10_000)}`;
+  const errors = validateReadModelDocument(boundary);
+  assert.ok(errors.some((error) => error.includes("contextSlot: integer string is outside")));
+  assert.ok(errors.some((error) => error.includes("publishTime: integer string is outside")));
+});
+
 test("unknown receipts cannot opt into automatic resend", () => {
   const bad = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const unknown = bad.fixtures.find((fixture) => fixture.id === "receipt-unknown-must-not-resend")!;

@@ -42,6 +42,11 @@ def _integer_string(value, path, errors, *, signed=False, minimum=0, maximum=U64
     if not isinstance(value, str) or pattern.fullmatch(value) is None:
         errors.append(f"{path}: expected base-10 integer string")
         return None
+    digit_count = len(value) - value.startswith("-")
+    maximum_digits = max(len(str(abs(minimum))), len(str(maximum)))
+    if digit_count > maximum_digits:
+        errors.append(f"{path}: integer string is outside the supported wire range")
+        return None
     parsed = int(value)
     if parsed < minimum or parsed > maximum:
         errors.append(f"{path}: integer string is outside the supported wire range")

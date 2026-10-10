@@ -37,6 +37,21 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         errors = validate_document(document)
         self.assertTrue(any("rawAmount: expected base-10 integer string" in error for error in errors))
 
+    def test_integer_string_extremes_pass_and_oversized_decimals_return_errors(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        snapshot["network"]["contextSlot"] = str((1 << 64) - 1)
+        snapshot["balances"][0]["rawAmount"] = str((1 << 64) - 1)
+        snapshot["oracle"]["publishTime"] = str(-(1 << 63))
+        snapshot["oracle"]["rawPrice"] = str((1 << 63) - 1)
+        self.assertEqual(validate_document(document), [])
+
+        snapshot["network"]["contextSlot"] = "9" * 10_000
+        snapshot["oracle"]["publishTime"] = "-" + "9" * 10_000
+        errors = validate_document(document)
+        self.assertTrue(any("contextSlot: integer string is outside" in error for error in errors))
+        self.assertTrue(any("publishTime: integer string is outside" in error for error in errors))
+
     def test_malformed_balances_return_validation_errors_without_raising(self):
         document = load_fixture()
         document["fixtures"][0]["balances"] = None

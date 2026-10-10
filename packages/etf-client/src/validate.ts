@@ -36,6 +36,15 @@ function integerString(
     errors.push(`${path}: expected base-10 integer string`);
     return false;
   }
+  const digitCount = value.length - (value.startsWith("-") ? 1 : 0);
+  const maximumDigits = Math.max(
+    (minimum < 0n ? -minimum : minimum).toString().length,
+    maximum.toString().length,
+  );
+  if (digitCount > maximumDigits) {
+    errors.push(`${path}: integer string is outside the supported wire range`);
+    return false;
+  }
   const parsed = BigInt(value);
   if (parsed < minimum || parsed > maximum) {
     errors.push(`${path}: integer string is outside the supported wire range`);
