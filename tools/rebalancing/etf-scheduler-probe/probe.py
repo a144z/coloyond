@@ -1,4 +1,4 @@
-"""Read-only status check for the candidate TukTuk Devnet program and queues."""
+"""Read-only status check for TukTuk and its companion Cron program on Devnet."""
 
 import base64
 import hashlib
@@ -11,6 +11,7 @@ from task_pda import derive_tuktuk_task_address
 RPC = "https://api.devnet.solana.com"
 DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
 PROGRAM_ID = "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
+CRON_PROGRAM_ID = "cronAjRZnJn3MTP3B9kE62NWDrjSuAPVXf9c4hu4grM"
 UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 MAX_TASK_QUEUE_SAMPLES = 5
@@ -24,6 +25,20 @@ def validate_devnet_genesis(value):
             f"cluster mismatch: expected Devnet genesis {DEVNET_GENESIS_HASH}, got {value!r}"
         )
     return value
+
+
+def validate_executable_program_account(account, program_id):
+    """Require an observed program account to be executable under the loader."""
+    if not isinstance(account, dict):
+        raise RuntimeError(f"program account is absent or malformed: {program_id}")
+    if account.get("executable") is not True or account.get("owner") != UPGRADEABLE_LOADER:
+        raise RuntimeError(f"program account has unexpected executable/owner state: {program_id}")
+    return {
+        "executable": account["executable"],
+        "owner": account["owner"],
+        "space": account.get("space"),
+        "lamports": account.get("lamports"),
+    }
 
 
 def rpc(method, params=None):
@@ -336,16 +351,19 @@ def sampled_task_account(queue_address, task_id, minimum_context_slot):
 
 def main():
     genesis = validate_devnet_genesis(rpc("getGenesisHash"))
-    result = rpc("getAccountInfo", [PROGRAM_ID, {"encoding": "base64", "commitment": "confirmed"}])
-    account = result["value"]
-    if account is None:
-        raise RuntimeError(f"candidate program is absent: {PROGRAM_ID}")
-    print(f"cluster=devnet genesis={genesis} slot={result['context']['slot']}")
-    print(f"program={PROGRAM_ID}")
-    print(f"executable={account['executable']} owner={account['owner']} space={account['space']} lamports={account['lamports']}")
-    if not account["executable"] or account["owner"] != UPGRADEABLE_LOADER:
-        raise RuntimeError("candidate does not match the expected executable/upgradeable-loader shape")
-    print("result=program-account-present-and-executable")
+    print(f"cluster=devnet genesis={genesis}")
+    for label, program_id in (("tuktuk", PROGRAM_ID), ("cron", CRON_PROGRAM_ID)):
+        result = rpc(
+            "getAccountInfo",
+            [program_id, {"encoding": "base64", "commitment": "confirmed"}],
+        )
+        program = validate_executable_program_account(result["value"], program_id)
+        print(
+            f"{label}_program={program_id} slot={result['context']['slot']} "
+            f"executable={program['executable']} owner={program['owner']} "
+            f"space={program['space']} lamports={program['lamports']}"
+        )
+    print("result=tuktuk-and-cron-program-accounts-present-and-executable")
 
     config_slot, configs = program_accounts("TuktukConfigV0")
     if len(configs) != 1:

@@ -4,11 +4,14 @@ import unittest
 from probe import (
     DEVNET_GENESIS_HASH,
     base58_encode,
+    CRON_PROGRAM_ID,
     decode_config,
     decode_task,
     decode_task_queue,
     discriminator,
     validate_devnet_genesis,
+    validate_executable_program_account,
+    UPGRADEABLE_LOADER,
 )
 
 
@@ -79,6 +82,28 @@ def task_account(transaction, trigger_tag=0, trigger_time=0, padding=b"", descri
 
 
 class TukTukProbeTests(unittest.TestCase):
+    def test_cron_program_identity_is_the_maintained_candidate(self):
+        self.assertEqual(CRON_PROGRAM_ID, "cronAjRZnJn3MTP3B9kE62NWDrjSuAPVXf9c4hu4grM")
+
+    def test_program_account_validation_requires_executable_upgradeable_program(self):
+        account = {
+            "executable": True,
+            "owner": UPGRADEABLE_LOADER,
+            "space": 36,
+            "lamports": 1_000_000,
+        }
+        self.assertEqual(
+            validate_executable_program_account(account, CRON_PROGRAM_ID),
+            account,
+        )
+        for invalid in (
+            None,
+            {**account, "executable": False},
+            {**account, "owner": "11111111111111111111111111111111"},
+        ):
+            with self.subTest(account=invalid), self.assertRaises(RuntimeError):
+                validate_executable_program_account(invalid, CRON_PROGRAM_ID)
+
     def test_accepts_pinned_devnet_genesis(self):
         self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
 
