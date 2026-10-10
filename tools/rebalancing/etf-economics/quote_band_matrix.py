@@ -7,6 +7,7 @@ selected policy, a live market observation, or proof of on-chain execution.
 from __future__ import annotations
 
 import csv
+from fractions import Fraction
 import hashlib
 from pathlib import Path
 
@@ -21,13 +22,17 @@ OUTPUT = Path(__file__).with_name("quote_band_matrix_results.csv")
 NEAR_U64_OUTPUT = Path(__file__).with_name("near_u64_quote_band_matrix_results.csv")
 
 
-def normalized_usd(amount: int, decimals: int, raw_price: int, exponent_magnitude: int) -> int:
+def normalized_usd(
+    amount: int, decimals: int, raw_price: int, exponent_magnitude: int
+) -> Fraction:
     if min(amount, decimals, raw_price, exponent_magnitude) < 0 or raw_price == 0:
         raise ValueError("amount and scales must be nonnegative; price must be positive")
-    return amount * raw_price * 10**12 // 10 ** (decimals + exponent_magnitude)
+    return Fraction(amount * raw_price, 10 ** (decimals + exponent_magnitude))
 
 
-def quote_within_oracle_band(input_value: int, output_value: int, band_bps: int) -> bool:
+def quote_within_oracle_band(
+    input_value: Fraction | int, output_value: Fraction | int, band_bps: int
+) -> bool:
     if type(band_bps) is not int or not 0 <= band_bps <= BPS:
         raise ValueError("candidate price band must be an integer in [0, 10000] bps")
     if input_value <= 0 or output_value < 0:
@@ -37,6 +42,13 @@ def quote_within_oracle_band(input_value: int, output_value: int, band_bps: int)
 
 def _ceil_bps(numerator: int, denominator: int) -> int:
     return (numerator * BPS + denominator - 1) // denominator
+
+
+def _ceil_ratio_bps(numerator: Fraction, denominator: Fraction) -> int:
+    if denominator <= 0 or numerator < 0:
+        raise ValueError("ratio must have a nonnegative numerator and positive denominator")
+    ratio = numerator / denominator
+    return _ceil_bps(ratio.numerator, ratio.denominator)
 
 
 def _load_pinned_scenarios(path: Path, expected_hash: str, expected_rows: int, label: str):
@@ -93,7 +105,7 @@ def evaluate(rows: list[dict[str, int]], bands: tuple[int, ...] = PRICE_BANDS_BP
                 (_ceil_bps(s[2] - s[3], s[2]) for s in losses), default=0
             ),
             "max_accepted_quote_deviation_bps": max(
-                (_ceil_bps(abs(s[1] - s[0]), s[0]) for s in accepted), default=0
+                (_ceil_ratio_bps(abs(s[1] - s[0]), s[0]) for s in accepted), default=0
             ),
         })
     return results

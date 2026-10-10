@@ -1,5 +1,6 @@
 import sys
 import unittest
+from fractions import Fraction
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -7,6 +8,7 @@ from quote_band_matrix import (
     evaluate,
     load_near_u64_scenarios,
     load_scenarios,
+    normalized_usd,
     quote_within_oracle_band,
 )
 
@@ -24,6 +26,27 @@ class QuoteBandMatrixTests(unittest.TestCase):
                 quote_within_oracle_band(100, 100, band)
         with self.assertRaises(ValueError):
             quote_within_oracle_band(0, 1, 100)
+
+    def test_sub_picodollar_difference_is_not_rounded_into_zero_band_parity(self):
+        input_value = normalized_usd(11, 13, 1, 0)
+        output_value = normalized_usd(19, 13, 1, 0)
+        self.assertEqual(input_value, Fraction(11, 10**13))
+        self.assertEqual(output_value, Fraction(19, 10**13))
+        self.assertFalse(quote_within_oracle_band(input_value, output_value, 0))
+        self.assertFalse(quote_within_oracle_band(input_value, output_value, 5_000))
+        self.assertTrue(quote_within_oracle_band(input_value, output_value, 10_000))
+
+    def test_exact_usd_parity_and_common_scale_are_preserved(self):
+        input_value = normalized_usd(123, 18, 10**8, 0)
+        self.assertEqual(input_value, Fraction(123, 10**10))
+        self.assertTrue(quote_within_oracle_band(input_value, input_value, 0))
+        scale = 10**50
+        self.assertEqual(
+            quote_within_oracle_band(input_value, Fraction(99, 100) * input_value, 100),
+            quote_within_oracle_band(
+                scale * input_value, scale * Fraction(99, 100) * input_value, 100
+            ),
+        )
 
     def test_blocked_losses_are_derived_from_the_passed_scenarios(self):
         rows = []
