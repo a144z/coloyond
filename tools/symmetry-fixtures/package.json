@@ -1,0 +1,9 @@
+{
+  "name": "symmetry-fixtures",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only: runs the pinned Symmetry SDK off-device to produce decoder fixtures. Never bundled in the app.",
+  "dependencies": {
+    "@symmetry-hq/sdk": "1.0.23"
+  }
+}
