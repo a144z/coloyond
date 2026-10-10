@@ -55,6 +55,13 @@ class EtfConfigIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mint: expected exactly 32 bytes"):
             validate_document(document)
 
+    def test_fixed_width_hex_rejects_whitespace_aliases(self):
+        document = copy.deepcopy(self.document)
+        mint = document["inputs"]["assets"][0]["mintBytesHex"]
+        document["inputs"]["assets"][0]["mintBytesHex"] = f" {mint}"
+        with self.assertRaisesRegex(ValueError, "mint: expected hex bytes"):
+            validate_document(document)
+
     def test_boolean_is_not_accepted_as_an_integer_and_no_weight_floor_is_frozen(self):
         document = copy.deepcopy(self.document)
         document["inputs"]["protocolVersion"] = True

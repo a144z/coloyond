@@ -39,10 +39,11 @@ def _u64(value):
 
 
 def _fixed_hex(value, length, label):
-    try:
-        decoded = bytes.fromhex(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label}: expected hex bytes") from exc
+    if not isinstance(value, str) or len(value) % 2 or any(
+        character not in "0123456789abcdefABCDEF" for character in value
+    ):
+        raise ValueError(f"{label}: expected hex bytes")
+    decoded = bytes.fromhex(value)
     if len(decoded) != length:
         raise ValueError(f"{label}: expected exactly {length} bytes")
     return decoded
