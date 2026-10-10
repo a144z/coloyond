@@ -1,7 +1,9 @@
 import base64
+import json
 import unittest
+from unittest.mock import patch
 
-from probe import ProbeError, parse_transaction, redact_url, shortvec, verify_cluster_genesis
+from probe import ProbeError, Rpc, parse_transaction, redact_url, shortvec, verify_cluster_genesis
 
 
 def b58decode(text: str) -> bytes:
@@ -87,6 +89,42 @@ class TransactionParsingTests(unittest.TestCase):
     def test_mainnet_endpoint_labeled_devnet_is_rejected(self):
         with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
             verify_cluster_genesis("devnet", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
+
+    def test_rpc_requires_a_matching_json_rpc_result_or_error_envelope(self):
+        class Response:
+            def __init__(self, body):
+                self.body = json.dumps(body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return self.body
+
+        malformed = (
+            None,
+            [],
+            {"jsonrpc": "2.0", "id": 1},
+            {"jsonrpc": "2.0", "id": 2, "result": 42},
+            {"jsonrpc": "1.0", "id": 1, "result": 42},
+            {"jsonrpc": "2.0", "id": 1, "result": 42, "error": {}},
+        )
+        for payload in malformed:
+            with self.subTest(payload=payload):
+                client = Rpc("https://rpc.invalid", 1)
+                with patch("probe.urllib.request.urlopen", return_value=Response(payload)):
+                    with self.assertRaises(ProbeError):
+                        client.call("getSlot", [])
+
+        client = Rpc("https://rpc.invalid", 1)
+        with patch(
+            "probe.urllib.request.urlopen",
+            return_value=Response({"jsonrpc": "2.0", "id": 1, "result": 42}),
+        ):
+            self.assertEqual(client.call("getSlot", []), 42)
 
 
 if __name__ == "__main__":

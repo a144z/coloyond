@@ -191,8 +191,25 @@ class Rpc:
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
             raise ProbeError(f"RPC {method} unavailable: {reason}") from None
-        if "error" in payload:
-            raise ProbeError(f"RPC {method} error: {payload['error']}")
+        if not isinstance(payload, dict):
+            raise ProbeError(f"RPC {method} malformed response: expected JSON-RPC object")
+        if payload.get("jsonrpc") != "2.0":
+            raise ProbeError(f"RPC {method} malformed response: expected JSON-RPC 2.0")
+        response_id = payload.get("id")
+        if type(response_id) is not int or response_id != self.id:
+            raise ProbeError(f"RPC {method} malformed response: request ID mismatch")
+        has_result = "result" in payload
+        has_error = "error" in payload
+        if has_result == has_error:
+            raise ProbeError(f"RPC {method} malformed response: expected exactly one of result or error")
+        if has_error:
+            error = payload["error"]
+            if not isinstance(error, dict):
+                raise ProbeError(f"RPC {method} malformed error object")
+            code, message = error.get("code"), error.get("message")
+            if isinstance(code, bool) or not isinstance(code, int) or not isinstance(message, str):
+                raise ProbeError(f"RPC {method} malformed error object")
+            raise ProbeError(f"RPC {method} error {code}: {message}")
         return payload["result"]
 
 
