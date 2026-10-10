@@ -1,14 +1,12 @@
 /**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/coloyond_vault.json`.
+ * Program IDL in camelCase format for use in JavaScript and TypeScript.
+ * The authoritative JSON IDL is `idl/coloyond_vault.json`.
  */
 export type ColoyondVault = {
   "address": "",
   "metadata": {
     "name": "coloyondVault",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "spec": "0.1.0",
     "description": "Coloyond pooled two-asset vault program"
   },
@@ -337,7 +335,7 @@ export type ColoyondVault = {
               },
               {
                 "kind": "arg",
-                "path": "expectedIntentSequence"
+                "path": "expected_intent_sequence"
               }
             ]
           }
@@ -1066,11 +1064,577 @@ export type ColoyondVault = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "proposeConditionRule",
+      "discriminator": [
+        13,
+        142,
+        236,
+        248,
+        39,
+        221,
+        91,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conditionState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  100,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governanceAuthority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "config",
+          "type": {
+            "defined": {
+              "name": "ConditionRuleConfig"
+            }
+          }
+        },
+        {
+          "name": "bounds",
+          "type": {
+            "defined": {
+              "name": "ConditionBounds"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "executeConditionRule",
+      "discriminator": [
+        124,
+        64,
+        222,
+        89,
+        235,
+        142,
+        235,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conditionState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  100,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "observeCondition",
+      "discriminator": [
+        143,
+        40,
+        41,
+        56,
+        32,
+        29,
+        60,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conditionState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  100,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "solUsd",
+          "address": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
+        },
+        {
+          "name": "usdcUsd",
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "activateCondition",
+      "discriminator": [
+        80,
+        90,
+        43,
+        159,
+        104,
+        36,
+        106,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "auctionPolicy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conditionState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  100,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rebalanceIntent",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "solUsd",
+          "address": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
+        },
+        {
+          "name": "usdcUsd",
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+        }
+      ],
+      "args": [
+        {
+          "name": "expectedNonce",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
     {
-      "name": "auctionPolicy",
+      "name": "AuctionPolicy",
       "discriminator": [
         2,
         104,
@@ -1083,7 +1647,7 @@ export type ColoyondVault = {
       ]
     },
     {
-      "name": "bountyClaim",
+      "name": "BountyClaim",
       "discriminator": [
         130,
         113,
@@ -1096,7 +1660,7 @@ export type ColoyondVault = {
       ]
     },
     {
-      "name": "governanceAccount",
+      "name": "GovernanceAccount",
       "discriminator": [
         145,
         56,
@@ -1109,7 +1673,7 @@ export type ColoyondVault = {
       ]
     },
     {
-      "name": "priceUpdateV2",
+      "name": "PriceUpdateV2",
       "discriminator": [
         34,
         241,
@@ -1122,7 +1686,7 @@ export type ColoyondVault = {
       ]
     },
     {
-      "name": "rebalanceIntent",
+      "name": "RebalanceIntent",
       "discriminator": [
         38,
         161,
@@ -1135,7 +1699,7 @@ export type ColoyondVault = {
       ]
     },
     {
-      "name": "vault",
+      "name": "Vault",
       "discriminator": [
         211,
         8,
@@ -1146,73 +1710,201 @@ export type ColoyondVault = {
         117,
         119
       ]
+    },
+    {
+      "name": "ConditionState",
+      "discriminator": [
+        27,
+        241,
+        242,
+        99,
+        254,
+        50,
+        207,
+        153
+      ]
     }
   ],
   "errors": [
     {
       "code": 6000,
-      "name": "wrongFeedAccount",
+      "name": "WrongFeedAccount",
       "msg": "Oracle account is not the pinned feed account"
     },
     {
       "code": 6001,
-      "name": "wrongOracleOwner",
+      "name": "WrongOracleOwner",
       "msg": "Oracle account owner is not the pinned Pyth Receiver program"
     },
     {
       "code": 6002,
-      "name": "invalidOraclePolicy",
+      "name": "InvalidOraclePolicy",
       "msg": "Oracle policy is unset or outside representable bounds"
     },
     {
       "code": 6003,
-      "name": "invalidConfiguredFeedId",
+      "name": "InvalidConfiguredFeedId",
       "msg": "Configured Pyth feed ID is invalid"
     },
     {
       "code": 6004,
-      "name": "invalidPythPrice",
+      "name": "InvalidPythPrice",
       "msg": "Pyth update has the wrong feed, stale data, or is not fully verified"
     },
     {
       "code": 6005,
-      "name": "nonPositivePrice",
+      "name": "NonPositivePrice",
       "msg": "Price must be positive"
     },
     {
       "code": 6006,
-      "name": "futurePublishTime",
+      "name": "FuturePublishTime",
       "msg": "Pyth publish time is in the future"
     },
     {
       "code": 6007,
-      "name": "confidenceTooWide",
+      "name": "ConfidenceTooWide",
       "msg": "Pyth confidence interval exceeds the configured policy"
     },
     {
       "code": 6008,
-      "name": "usdcOutsidePolicy",
+      "name": "UsdcOutsidePolicy",
       "msg": "USDC/USD is outside the configured depeg policy"
     },
     {
       "code": 6009,
-      "name": "precisionLoss",
+      "name": "PrecisionLoss",
       "msg": "Price conversion would discard source precision"
     },
     {
       "code": 6010,
-      "name": "arithmeticOverflow",
+      "name": "ArithmeticOverflow",
       "msg": "Price conversion overflowed"
     },
     {
       "code": 6011,
-      "name": "unsupportedExponent",
+      "name": "UnsupportedExponent",
       "msg": "Pyth exponent cannot be represented safely"
+    },
+    {
+      "code": 7000,
+      "name": "InvalidBounds",
+      "msg": "Condition bounds are unset or invalid"
+    },
+    {
+      "code": 7001,
+      "name": "InvalidRule",
+      "msg": "Conditional rule is malformed"
+    },
+    {
+      "code": 7002,
+      "name": "RuleDisabled",
+      "msg": "Conditional rule is disabled"
+    },
+    {
+      "code": 7003,
+      "name": "RuleExpired",
+      "msg": "Conditional rule has expired"
+    },
+    {
+      "code": 7004,
+      "name": "StaleTargetRevision",
+      "msg": "Conditional rule target revision is stale"
+    },
+    {
+      "code": 7005,
+      "name": "StaleConfigurationRevision",
+      "msg": "Conditional rule configuration revision is stale"
+    },
+    {
+      "code": 7006,
+      "name": "InvalidObservation",
+      "msg": "Condition observation is invalid"
+    },
+    {
+      "code": 7007,
+      "name": "ConditionFuturePublishTime",
+      "msg": "Condition observation publish time is future or before rule creation"
+    },
+    {
+      "code": 7008,
+      "name": "StaleObservation",
+      "msg": "Condition observation is stale"
+    },
+    {
+      "code": 7009,
+      "name": "OracleReplay",
+      "msg": "Condition observation replays an earlier Pyth publish time"
+    },
+    {
+      "code": 7010,
+      "name": "ObservationTooClose",
+      "msg": "Condition observations do not satisfy the configured separation"
+    },
+    {
+      "code": 7011,
+      "name": "WrongObservationAsset",
+      "msg": "Condition observation is for the wrong asset"
+    },
+    {
+      "code": 7012,
+      "name": "InvalidPredicate",
+      "msg": "Conditional predicate is invalid"
+    },
+    {
+      "code": 7013,
+      "name": "NotTriggered",
+      "msg": "Conditional predicate is not currently triggered"
+    },
+    {
+      "code": 7014,
+      "name": "NonceMismatch",
+      "msg": "Conditional rule nonce is stale or already consumed"
+    },
+    {
+      "code": 7015,
+      "name": "ConditionArithmeticOverflow",
+      "msg": "Condition arithmetic overflowed"
+    },
+    {
+      "code": 7016,
+      "name": "InvalidState",
+      "msg": "Condition state account version or vault binding is invalid"
+    },
+    {
+      "code": 7017,
+      "name": "PolicyUnavailable",
+      "msg": "No active condition policy exists"
+    },
+    {
+      "code": 7018,
+      "name": "ProposalPending",
+      "msg": "A non-stale condition proposal is already pending"
+    },
+    {
+      "code": 7019,
+      "name": "ActiveRule",
+      "msg": "A live condition rule is already active"
+    },
+    {
+      "code": 7020,
+      "name": "TimelockActive",
+      "msg": "Condition proposal has not reached its timelock slot"
+    },
+    {
+      "code": 7021,
+      "name": "ActiveAuction",
+      "msg": "An active rebalance intent prevents condition activation"
+    },
+    {
+      "code": 7022,
+      "name": "OracleAgePolicyMismatch",
+      "msg": "Condition observation age exceeds the approved oracle policy"
     }
   ],
   "types": [
     {
-      "name": "assetConfig",
+      "name": "AssetConfig",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1240,7 +1932,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "auctionFillRecorded",
+      "name": "AuctionFillRecorded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1313,7 +2005,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "auctionFinished",
+      "name": "AuctionFinished",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1358,7 +2050,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "auctionPolicy",
+      "name": "AuctionPolicy",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1449,7 +2141,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "bountyClaim",
+      "name": "BountyClaim",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1481,7 +2173,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "depositRecorded",
+      "name": "DepositRecorded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1514,7 +2206,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "governanceAccount",
+      "name": "GovernanceAccount",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1573,7 +2265,7 @@ export type ColoyondVault = {
             "type": {
               "option": {
                 "defined": {
-                  "name": "policyProposal"
+                  "name": "PolicyProposal"
                 }
               }
             }
@@ -1586,7 +2278,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "policyProposal",
+      "name": "PolicyProposal",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1619,7 +2311,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "priceFeedMessage",
+      "name": "PriceFeedMessage",
       "repr": {
         "kind": "c"
       },
@@ -1667,7 +2359,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "priceUpdateV2",
+      "name": "PriceUpdateV2",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1679,7 +2371,7 @@ export type ColoyondVault = {
             "name": "verificationLevel",
             "type": {
               "defined": {
-                "name": "verificationLevel"
+                "name": "VerificationLevel"
               }
             }
           },
@@ -1687,7 +2379,7 @@ export type ColoyondVault = {
             "name": "priceMessage",
             "type": {
               "defined": {
-                "name": "priceFeedMessage"
+                "name": "PriceFeedMessage"
               }
             }
           },
@@ -1699,7 +2391,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "rebalanceIntent",
+      "name": "RebalanceIntent",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1810,7 +2502,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "rebalanceStarted",
+      "name": "RebalanceStarted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1864,7 +2556,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "redemptionRecorded",
+      "name": "RedemptionRecorded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1897,7 +2589,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "riskPauseChanged",
+      "name": "RiskPauseChanged",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1917,7 +2609,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "targetsActivated",
+      "name": "TargetsActivated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1942,7 +2634,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "targetsProposed",
+      "name": "TargetsProposed",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1971,7 +2663,7 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "vault",
+      "name": "Vault",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2001,7 +2693,7 @@ export type ColoyondVault = {
               "array": [
                 {
                   "defined": {
-                    "name": "assetConfig"
+                    "name": "AssetConfig"
                   }
                 },
                 2
@@ -2055,12 +2747,12 @@ export type ColoyondVault = {
       }
     },
     {
-      "name": "verificationLevel",
+      "name": "VerificationLevel",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "partial",
+            "name": "Partial",
             "fields": [
               {
                 "name": "numSignatures",
@@ -2069,10 +2761,655 @@ export type ColoyondVault = {
             ]
           },
           {
-            "name": "full"
+            "name": "Full"
           }
         ]
       }
+    },
+    {
+      "name": "ConditionBounds",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maximumObservationAgeSeconds",
+            "type": "u64"
+          },
+          {
+            "name": "minimumObservationSeparationSeconds",
+            "type": "u64"
+          },
+          {
+            "name": "minimumObservationSeparationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "maximumRuleLifetimeSeconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximumRuleLifetimeSlots",
+            "type": "u64"
+          },
+          {
+            "name": "maximumScheduleDelaySeconds",
+            "type": "u64"
+          },
+          {
+            "name": "maximumScheduleDelaySlots",
+            "type": "u64"
+          },
+          {
+            "name": "maximumHysteresisBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionObservation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "assetIndex",
+            "type": "u8"
+          },
+          {
+            "name": "priceQ18",
+            "type": "u128"
+          },
+          {
+            "name": "publishTime",
+            "type": "i64"
+          },
+          {
+            "name": "observedAt",
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionRevisions",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "target",
+            "type": "u64"
+          },
+          {
+            "name": "configuration",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CrossingDirection",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Above"
+          },
+          {
+            "name": "Below"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionPredicate",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Schedule",
+            "fields": [
+              {
+                "name": "assetIndex",
+                "type": "u8"
+              },
+              {
+                "name": "notBeforeUnixTimestamp",
+                "type": "i64"
+              },
+              {
+                "name": "notBeforeSlot",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "PriceCross",
+            "fields": [
+              {
+                "name": "assetIndex",
+                "type": "u8"
+              },
+              {
+                "name": "direction",
+                "type": {
+                  "defined": {
+                    "name": "CrossingDirection"
+                  }
+                }
+              },
+              {
+                "name": "thresholdQ18",
+                "type": "u128"
+              },
+              {
+                "name": "hysteresisBps",
+                "type": "u16"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionalRule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "expectedRevisions",
+            "type": {
+              "defined": {
+                "name": "ConditionRevisions"
+              }
+            }
+          },
+          {
+            "name": "authorizedTargetRevision",
+            "type": "u64"
+          },
+          {
+            "name": "targetBps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "expiresSlot",
+            "type": "u64"
+          },
+          {
+            "name": "predicate",
+            "type": {
+              "defined": {
+                "name": "ConditionPredicate"
+              }
+            }
+          },
+          {
+            "name": "lastObservation",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ConditionObservation"
+                }
+              }
+            }
+          },
+          {
+            "name": "pendingActivation",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionRuleConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "targetBps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "expiresSlot",
+            "type": "u64"
+          },
+          {
+            "name": "predicate",
+            "type": {
+              "defined": {
+                "name": "ConditionPredicate"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingConditionRule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rule",
+            "type": {
+              "defined": {
+                "name": "ConditionalRule"
+              }
+            }
+          },
+          {
+            "name": "bounds",
+            "type": {
+              "defined": {
+                "name": "ConditionBounds"
+              }
+            }
+          },
+          {
+            "name": "activateAfterSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "nextNonce",
+            "type": "u64"
+          },
+          {
+            "name": "activeRule",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ConditionalRule"
+                }
+              }
+            }
+          },
+          {
+            "name": "activeBounds",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ConditionBounds"
+                }
+              }
+            }
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PendingConditionRule"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionRuleProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "rule",
+            "type": {
+              "defined": {
+                "name": "ConditionalRule"
+              }
+            }
+          },
+          {
+            "name": "bounds",
+            "type": {
+              "defined": {
+                "name": "ConditionBounds"
+              }
+            }
+          },
+          {
+            "name": "activateAfterSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionRuleActivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "ruleNonce",
+            "type": "u64"
+          },
+          {
+            "name": "expectedTargetRevision",
+            "type": "u64"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "activateAfterSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionObserved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "ruleNonce",
+            "type": "u64"
+          },
+          {
+            "name": "assetIndex",
+            "type": "u8"
+          },
+          {
+            "name": "priceQ18",
+            "type": "u128"
+          },
+          {
+            "name": "publishTime",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConditionActivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "consumedNonce",
+            "type": "u64"
+          },
+          {
+            "name": "targetRevision",
+            "type": "u64"
+          },
+          {
+            "name": "configurationRevision",
+            "type": "u64"
+          },
+          {
+            "name": "targetBps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "AuctionFillRecorded",
+      "discriminator": [
+        203,
+        102,
+        150,
+        119,
+        175,
+        40,
+        111,
+        133
+      ]
+    },
+    {
+      "name": "AuctionFinished",
+      "discriminator": [
+        65,
+        27,
+        187,
+        231,
+        76,
+        80,
+        59,
+        60
+      ]
+    },
+    {
+      "name": "ConditionActivated",
+      "discriminator": [
+        201,
+        214,
+        37,
+        15,
+        186,
+        68,
+        30,
+        58
+      ]
+    },
+    {
+      "name": "ConditionObserved",
+      "discriminator": [
+        115,
+        91,
+        200,
+        169,
+        170,
+        25,
+        59,
+        238
+      ]
+    },
+    {
+      "name": "ConditionRuleActivated",
+      "discriminator": [
+        234,
+        236,
+        199,
+        169,
+        188,
+        77,
+        55,
+        246
+      ]
+    },
+    {
+      "name": "ConditionRuleProposed",
+      "discriminator": [
+        224,
+        0,
+        174,
+        150,
+        193,
+        229,
+        179,
+        101
+      ]
+    },
+    {
+      "name": "DepositRecorded",
+      "discriminator": [
+        0,
+        223,
+        90,
+        235,
+        183,
+        248,
+        79,
+        67
+      ]
+    },
+    {
+      "name": "RebalanceStarted",
+      "discriminator": [
+        187,
+        27,
+        107,
+        253,
+        228,
+        48,
+        27,
+        157
+      ]
+    },
+    {
+      "name": "RedemptionRecorded",
+      "discriminator": [
+        249,
+        2,
+        221,
+        44,
+        24,
+        250,
+        99,
+        43
+      ]
+    },
+    {
+      "name": "RiskPauseChanged",
+      "discriminator": [
+        187,
+        81,
+        218,
+        209,
+        143,
+        122,
+        187,
+        36
+      ]
+    },
+    {
+      "name": "TargetsActivated",
+      "discriminator": [
+        60,
+        214,
+        221,
+        19,
+        123,
+        190,
+        202,
+        77
+      ]
+    },
+    {
+      "name": "TargetsProposed",
+      "discriminator": [
+        156,
+        177,
+        52,
+        11,
+        233,
+        173,
+        58,
+        116
+      ]
     }
   ]
 };
