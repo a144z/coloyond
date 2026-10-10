@@ -1,6 +1,6 @@
 # Handoff: finishing the hackathon build
 
-Written 10 October 2026 by Augustin Chan, who is stepping away from the project. Start here.
+Written 10 October 2026. Start here.
 
 ## The product in one paragraph
 
