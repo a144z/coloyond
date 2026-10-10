@@ -1,6 +1,6 @@
 # S5 Pyth account-mode research
 
-**Status:** primary-source inventory and repeated direct Devnet fixed-feed/parser observations complete; S5C acceptance and S0B admission remain open. The observed accounts were live at their recorded slots, but feed freshness is transient and no ETF consumer transaction has run.
+**Status:** primary-source inventory and historical fixed-feed/parser observations complete; S5C acceptance and S0B admission remain open. Solana's current Devnet genesis (`GH7ome...`) differs from the reset-era genesis (`EtWTRAB...`) recorded in the account captures below, so those captures do not establish current-cluster feed availability. The observed accounts were live at their recorded slots, but feed freshness is transient and no ETF consumer transaction has run.
 
 ## Account model decision
 
@@ -33,7 +33,11 @@ The isolated adapter depends on the repository-pinned `anchor-lang = 0.32.1` and
 - If using Receiver updates, prove `Full` verification and the exact client posting flow. If using fixed Push Feed accounts, document the trusted Pyth program's verification/update semantics and do not report a Receiver verification field.
 - S5C does not require an ETF-program transaction because S5E has not deployed that program yet. The real Devnet consumer transaction, on-chain rejection without token movement, and stale-feed recovery are S5H/CP5 proof obligations after S5E.
 
-## Direct Devnet observation — 10 October 2026
+## Historical observations and current cluster identity
+
+The probe captures below identify genesis `EtWTRAB...`, the reset-era Devnet cluster. Solana's current `getGenesisHash` reference and the S2C probe record identify Devnet as `GH7ome...`; the oracle probe, offline test, and ETF deployment manifest now pin that current value and reject the historical hash. Preserve the old captures as historical evidence only: they do not establish that these feed accounts exist or have the same contents on the current cluster. Refresh all feed and mint observations against the selected current-cluster RPC before S5C acceptance or deployment.
+
+## Historical direct Devnet observation — 10 October 2026
 
 The read-only tool at [`tools/rebalancing/etf-oracle-probe`](../../tools/rebalancing/etf-oracle-probe/README.md) queried `https://api.devnet.solana.com` at confirmed commitment. At slot `509627905`, block time `1791656201` (2026-10-10 18:16:41 UTC), Devnet genesis was `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. All three fixed feed accounts had owner `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, 134 bytes of data, and decoded through the pinned SDK with the expected embedded feed ID and `Full` verification. The adapter accepted each at this observation using a 60-second age ceiling and a deliberately permissive `u16::MAX` confidence ceiling (not an approved policy).
 
@@ -57,7 +61,7 @@ The same probe was rerun at confirmed slot `509631945`, block time `1791657172` 
 
 The confidence ceiling was `u16::MAX` and is not an approved risk policy. No transaction was sent. The basket still requires every configured feed to meet policy in the same transaction; this observation would fail that multi-asset prerequisite.
 
-## Latest read-only Devnet observation — 10 October 2026
+## Historical latest read-only Devnet observation — 10 October 2026
 
 The probe ran again at confirmed slot `509637269`, block time `1791658448` (2026-10-10 18:54:08 UTC), against Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. All three accounts still had the expected Receiver owner, 134-byte layout, pinned embedded feed ID and `Full` verification. All three failed the diagnostic 60-second freshness requirement: SOL/USD and BTC/USD were 183 seconds old; USDC/USD was 204 seconds old. The SDK-backed adapter rejected all three. Observed confidence ratios were 4, 8 and 10 bps respectively, but the confidence ceiling remains deliberately permissive and unapproved.
 
@@ -101,9 +105,9 @@ No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain 
 
 ## Probe response integrity — offline checks
 
-The read-only RPC probe validates JSON-RPC 2.0 response version, matching request ID, and an exclusive `result` or `error` field before using a result. It rejects malformed context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. It now also checks `getGenesisHash` against the currently pinned Devnet genesis (`GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC`) before querying feed accounts or printing a Devnet label; the reset-era Devnet hash and Mainnet genesis are rejected. Thirteen standard-library tests cover valid and rejected genesis values, valid envelopes, JSON-RPC error-object code/message validation, signed 64-bit `getBlockTime` values, batch decoding and malformed response failure cases. This prevents a valid JSON-RPC response from another cluster being recorded as Devnet; it is offline validation only and records no new Devnet observation. A follow-up live refresh attempt in this session failed during DNS resolution of `api.devnet.solana.com` before receiving an RPC response; no new account snapshot was recorded, and the earlier dated snapshots remain the only live observations.
+The read-only RPC probe validates JSON-RPC 2.0 response version, matching request ID, and an exclusive `result` or `error` field before using a result. It rejects malformed context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. It checks `getGenesisHash` against the currently pinned Devnet genesis (`GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC`) before querying feed accounts or printing a Devnet label; the reset-era Devnet hash and Mainnet genesis are rejected. Fourteen standard-library tests cover pinned-manifest parity, valid and rejected genesis values, valid envelopes, JSON-RPC error-object code/message validation, signed 64-bit `getBlockTime` values, batch decoding and malformed response failure cases. This prevents a valid JSON-RPC response from another cluster being recorded as Devnet; it is offline validation only and records no new Devnet observation. A follow-up live refresh attempt in this session failed during DNS resolution of `api.devnet.solana.com` before receiving an RPC response; no new current-cluster account snapshot was recorded, and the earlier dated snapshots remain historical.
 
-## Refreshed read-only Devnet observation — 11 October 2026
+## Historical refreshed read-only Devnet observation — 11 October 2026
 
 The probe fetched the three manifest-pinned accounts at confirmed slot `509680211`, block time `1791668727` (2026-10-10 21:45:27 UTC), on the expected Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. Each account retained the expected Receiver owner, 134-byte allocation, embedded feed ID and `Full` verification. Under the diagnostic 60-second freshness ceiling, SOL/USD passed at 11 seconds old; BTC/USD and USDC/USD were 309 seconds old and rejected as stale. This is another partial snapshot, not a usable three-feed basket or freshness guarantee.
 

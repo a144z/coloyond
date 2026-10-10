@@ -7,14 +7,14 @@
 | Field | Value | Evidence state |
 |---|---|---|
 | Cluster | Solana Devnet | Planned test network only. |
-| Genesis hash | `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` | Directly observed from the read-only public Devnet probe; verify the exact wallet/app endpoint against this before deployment. |
+| Genesis hash | `GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC` | Current Devnet value documented by Solana's `getGenesisHash` reference and the S2C probe record; re-read from the selected endpoint immediately before deployment. Historical S5C observations under reset-era `EtWTRAB...` do not establish current-cluster feed availability. |
 | RPC endpoint | `https://api.devnet.solana.com` | Used for current read-only probes only; the app's approved endpoint remains TBD. Endpoint is not chain identity. |
 | Program name | `coloyond-etf` | New program, separate from `coloyond-vault` v0.3.0. |
 | Program ID | _TBD after program IDL/source freeze_ | No ETF program exists in this manifest. |
 | Program executable / loader owner | _TBD from direct Devnet read_ | Require an executable-account and ProgramData/upgrade-authority record. |
 | Program source/build hash | _TBD_ | Must match the reviewed source and reproducible build evidence. |
 | Pool identity / PDA | Derived from canonical `EtfPoolConfigV1` bytes as specified in [the contract](contracts/etf-v1.md#canonical-pool-and-strategy-identity) and [typed wire schema](contracts/etf-config-v1-wire.md) | A synthetic fixture now proves ordered bytes/hash/strategy ID and pool seed inputs. Program ID and deployed PDA addresses remain TBD; production fee/risk payload formats must be frozen before S5E. |
-| Initializer | _TBD; must be pinned before S5E deployment_ | Only this manifest-pinned signer may create the first reviewed pool PDA, once. It has no post-init admin or custody power. |
+| Initializer | _TBD; S5A must select an enforceable on-chain model before S5E_ | An off-chain manifest cannot authorize an on-chain signer. Choose permissionless deterministic initialization with pinned authority fields, or an on-chain factory/registry that binds the approved config hash and initializer. The chosen rule must prevent unauthorized configuration and define front-run behavior. |
 | Governance authority | _TBD; exact key or program PDA must be pinned before S5E deployment_ | May propose only delayed resume or authority handoff; cannot change pool economics/configuration or transfer custody. |
 | Emergency guardian | _TBD; exact key must be pinned before S5E deployment_ | May pause risk-increasing actions immediately; cannot resume, alter policy or block in-kind exit. |
 | Governance delay | 24 hours | Fixed before S5E; execution is permissionless after delay and new authority handoff requires new-key acceptance. |
@@ -61,7 +61,7 @@ S5A freezes the interface schema and provisional candidate baseline. Do not free
 ## Post-deployment admission evidence (S5H / CP5)
 
 - Read back ETF program executable/loader, source/build identity and upgrade-authority policy; compare them to the frozen deployment manifest.
-- Initialize the exact pool and read back the immutable config hash, ordered assets, all PDAs, share mint and custody token accounts. Prove only the pinned initializer can create the pool and cannot initialize it twice.
+- Initialize the exact pool and read back the immutable config hash, ordered assets, all PDAs, share mint and custody token accounts. Prove the selected on-chain initialization rule, including its front-run behavior and one-time PDA consumption; an off-chain manifest alone is not an authorization check.
 - Prove guardian pause-only behavior and delayed governance resume/handoff with actual transactions, including early-execution rejection and new-authority acceptance.
 - Submit a real ETF instruction with each selected feed account. For Receiver mode, show a valid `Full` fresh update succeeds while wrong account/feed, stale update, `Partial`, nonpositive price, unsupported exponent and excessive confidence fail on-chain with no SPL movement. For fixed Push Feed mode, test only applicable owner/layout/feed/status/freshness checks; never invent a `Full` or `Partial` state. Prove stale-feed recovery through the admitted update mechanism.
 - Read back every created mint/custody/share authority and reconcile actual wallet, pool, token and share balances from confirmed transactions.

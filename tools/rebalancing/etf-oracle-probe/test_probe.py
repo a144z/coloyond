@@ -1,7 +1,9 @@
 """Offline integrity tests for the Devnet multi-account response parser."""
 
 import base64
+import re
 import unittest
+from pathlib import Path
 
 from probe import (
     DEVNET_GENESIS_HASH,
@@ -30,6 +32,12 @@ def result(values, *, slot=42):
 
 
 class OracleProbeResponseTests(unittest.TestCase):
+    def test_pinned_genesis_matches_deployment_manifest(self):
+        manifest = Path(__file__).resolve().parents[3] / "docs/rebalancing/deployment-manifest-etf-v1.md"
+        match = re.search(r"\| Genesis hash \| `([^`]+)` \|", manifest.read_text())
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), DEVNET_GENESIS_HASH)
+
     def test_accepts_pinned_devnet_genesis(self):
         self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
 

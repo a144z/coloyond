@@ -10,7 +10,7 @@ The retained colleague blueprint remains the proposal record at [the full bluepr
 
 ## 2. Trust and authority model
 
-- The manifest names the one-time initializer for the first reviewed pool. Only that signer may initialize its deterministic pool PDA; initialization consumes the PDA and cannot be repeated. The initializer cannot withdraw or redirect custody and has no post-initialization admin power.
+- Initialization authorization is an S5A freeze gate. A manifest is off-chain and cannot restrict an on-chain signer. Before S5E, choose either permissionless deterministic creation with immutable manifest-pinned governance/guardian fields, or an on-chain factory/registry that binds the approved config hash to an authorized initializer. Specify front-run behavior and prove the one-time PDA cannot be initialized with different authority or economic fields. No initializer guarantee is currently enforceable from this draft.
 - The pool stores separate governance and emergency-guardian authorities. The guardian can immediately pause risk-increasing instructions; it cannot transfer assets, change pool configuration, resume risk, or block `redeem_in_kind`.
 - Governance may submit a delayed resume or authority-handoff proposal. Execution is permissionless after the pool's immutable 24-hour delay; a new authority must also sign acceptance. Governance cannot alter the asset set, target weights, oracle bindings, fee/risk policy, math version, delay or share rules. S5A must pin the initial authority identities and exact delay in the manifest before S5E; an unassigned key is a deployment blocker. The loader upgrade authority is a separate deployment control and cannot be inferred from pool governance.
 - No arbitrary CPI, Token-2022 extension, lending position, leverage, cross-chain route, or external-program custody is in v1.
@@ -63,7 +63,7 @@ Every client, manifest and program must derive the same values from the same ord
 
 | Instruction | Caller and effect | Oracle dependency |
 |---|---|---|
-| `initialize_pool` | Approved initializer creates the one-time immutable pool configuration, share mint and per-asset custody. | Validate manifest-pinned feed identities and policy; no token transfer. |
+| `initialize_pool` | Caller follows the S5A-selected on-chain authorization model to create the one-time immutable pool configuration, share mint and per-asset custody. | Validate manifest-pinned feed identities and policy; no token transfer. |
 | `seed_pool` | Seed signer transfers the first proportional basket; program verifies target composition and mints the initial shares with `min_shares_out`. | Yes. |
 | `deposit_proportional` | Signer supplies maxima for every asset; program mints against the limiting reserve ratio and returns unused inputs atomically. | No; proportional token math only. |
 | `redeem_in_kind` | Share owner burns shares and receives each reserve pro rata in the same transaction. Works while risk is paused. | No. |
@@ -87,7 +87,7 @@ The deviation metric is the total-variation distance in basis points:
 D_bps = 5,000 × Σ_i |V_i / V − target_weight_bps_i / 10,000|
 ```
 
-S5B freezes the fixed-point scale and conservative rounding implementation. `swap_exact_in` computes pre- and post-swap values with the same accepted oracle observations and includes the retained input fee in post-swap custody. It rejects a trade unless `D_post < D_pre`, the quote is inside the configured oracle-relative band, output is nonzero, inventory and size bounds hold, and `min_amount_out` is met. A result that rounds to equal deviation is rejected. This constrains direction but does not eliminate MEV, latency risk, or adverse selection.
+S5B freezes the fixed-point scale and conservative rounding implementation. `swap_exact_in` computes pre- and post-swap values with the same accepted oracle observations and includes the retained input fee in post-swap custody. It rejects a trade unless `D_post < D_pre`, the quote is inside the configured quote-parity/slippage band, output is nonzero, inventory and size bounds hold, and `min_amount_out` is met. The quote band compares fee-adjusted output value with gross input value, so it bounds curve impact plus fee relative to the accepted point mark; it is not the oracle confidence interval, a manipulation bound, or a guarantee of executable market parity. Its exact definition and value remain an S5A/S5D2 decision. A result that rounds to equal deviation is rejected. This constrains direction but does not eliminate MEV, latency risk, or adverse selection.
 
 `poke` records eligibility when deviation reaches the configured start band; clearing eligibility uses the configured lower stop band and cooldown. S5B/S5D2 freeze numeric precision, dust, bounds and bands before program implementation. A scheduled task is an optional liveness signal, not a prerequisite for a trade.
 
