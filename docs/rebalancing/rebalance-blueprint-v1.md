@@ -224,11 +224,24 @@ What runs today, honestly labelled:
   coloyond's own Anchor program: the pinned Pyth adapter, the bounded auction
   math, the conditional rule core and the fail-closed keeper client in
   `programs/coloyond-vault` compile and pass their native cargo tests on this
-  machine (48 tests, 10 October 2026). No deployment address is claimed.
+  machine (51 tests, 10 October 2026). The `initialize_vault` entry point is no
+  longer a stub: its handler, `VaultInit` argument and `VaultInitialized` event
+  are implemented and covered by three seeding tests; the IDL
+  (`idl/coloyond_vault.json` and the client's TS mirror) now carry its 16
+  accounts, its argument and the new types, and
+  `packages/coloyond-client/src/instructions.ts` encodes the instruction
+  byte for byte. No deployment address is claimed.
 - Phase 2 (deployment) and Phase 3 (seeding) wait on the anchor/solana CLIs
   (absent on this machine; `cargo`/`rustc` are present) and on the deploy
   account being topped up — the owner tops up the devnet account later, which
-  covers the gas. The feed account quoted in the matrix is source-listed only:
+  covers the gas. `Anchor.toml` carries the devnet program id and wallet slots,
+  so `anchor build && anchor deploy --provider devnet` is ready to run. For
+  Phase 1 the program's own pinned feed accounts were verified on-cluster by
+  `tools/rebalancing/verify-devnet-feeds.mjs` (10 October 2026): both exist at
+  the same addresses on Devnet and Mainnet-beta, owned by receiver program
+  `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, as 134-byte Full-variant accounts
+  embedding the pinned feed ID at byte offset 41. The feed account quoted in the
+  matrix (`H6AR...`) is source-listed only:
   [the manifest](deployment-manifest-v1.md) has not verified it on-cluster, so
   it must be read finalized before being copied anywhere.
 - Phase 4 (stress testing) is the loop script of section III. Its working
@@ -240,3 +253,9 @@ What runs today, honestly labelled:
   coloyond acting as its own arbitrageur, because devnet has no organic keeper
   traffic. Verified read-only against four automation-enabled devnet vaults on
   10 October 2026; sending its first transaction waits on the topped-up signer.
+- The program-side companion is `tools/rebalancing/coloyond-drift-loop.mjs`: a
+  read-only loop that reports whether the program is deployed, scans every
+  Vault account it owns, decodes the 353-byte layout shared with the client
+  decoder, reads both custody balances and both pinned Pyth prices, and prints
+  each asset's drift in basis points against its baked target. It was run on
+  10 October 2026 and correctly reported the program as not deployed yet.
