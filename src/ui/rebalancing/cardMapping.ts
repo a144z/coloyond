@@ -48,8 +48,7 @@ export type CardMappingReason =
   | "configuration-revision-mismatch"
   | "target-mints-or-weights-mismatch"
   | "policy-mismatch"
-  | "manifest-revision-mismatch"
-  | "read-model-unavailable";
+  | "manifest-revision-mismatch";
 
 export type CardMappingResult =
   | { state: "matched-published-revision"; reason: "exact-match"; vaultPhase: ReadModelV1["vault"]["phase"] }
@@ -173,15 +172,22 @@ async function validateColoyondStrategy(input: StrategyRecord): Promise<CheckedS
 }
 
 function readModelMatchesStrategy(model: ReadModelV1, strategy: ManagedStrategyV1): boolean {
-  if (model.schema !== "coloyond/ReadModel/v1" || model.source.kind !== "rpc") return false;
-  if (model.source.slot === null || !/^(0|[1-9][0-9]*)$/.test(model.source.slot) || model.source.observedAt === null) return false;
-  if (!Number.isFinite(Date.parse(model.source.observedAt))) return false;
-  if (model.network.cluster !== strategy.cluster || model.network.genesisHash !== strategy.genesisHash) return false;
-  if (model.program.verified !== true || !isHex32(model.program.binaryHash) || model.program.programId !== strategy.programId) return false;
-  if (model.vault.address !== strategy.vaultAddress || model.vault.shareMint !== strategy.shareMint) return false;
-  if (model.vault.configRevision !== strategy.configurationRevision) return false;
-  if (model.vault.target.length !== strategy.tokens.length) return false;
-  return strategy.tokens.every((token) => model.vault.target.some((target) =>
+  if (!isObject(model) || model.schema !== "coloyond/ReadModel/v1") return false;
+  const network = model.network;
+  const source = model.source;
+  const program = model.program;
+  const vault = model.vault;
+  if (!isObject(network) || !isObject(source) || !isObject(program) || !isObject(vault)) return false;
+  if (source.kind !== "rpc" || !isCanonicalU64(source.slot) || source.observedAt === null) return false;
+  if (typeof source.observedAt !== "string" || !Number.isFinite(Date.parse(source.observedAt))) return false;
+  if (network.cluster !== strategy.cluster || network.genesisHash !== strategy.genesisHash) return false;
+  if (program.verified !== true || !isHex32(program.binaryHash) || program.programId !== strategy.programId) return false;
+  if (vault.address !== strategy.vaultAddress || vault.shareMint !== strategy.shareMint) return false;
+  if (vault.configRevision !== strategy.configurationRevision || !Array.isArray(vault.target)) return false;
+  if (vault.target.length !== strategy.tokens.length || !vault.target.every((target) =>
+    isObject(target) && typeof target.mint === "string" && Number.isSafeInteger(target.weightBps),
+  )) return false;
+  return strategy.tokens.every((token) => (vault.target as Array<Record<string, unknown>>).some((target) =>
     target.mint === token.mint && target.weightBps === token.targetBps,
   ));
 }

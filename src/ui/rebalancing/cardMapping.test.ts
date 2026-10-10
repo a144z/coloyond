@@ -122,6 +122,10 @@ test("fixtures and incomplete read models cannot be presented as live matches", 
   assert.equal((await mapCardToPublishedVault(candidate, "local", snapshot({ readModel: fixture }))).reason, "unverified-on-chain");
   const missingSlot = readModel({ source: { ...readModel().source, slot: null } });
   assert.equal((await mapCardToPublishedVault(candidate, "local", snapshot({ readModel: missingSlot }))).reason, "unverified-on-chain");
+  const oversizedSlot = readModel({ source: { ...readModel().source, slot: "18446744073709551616" } });
+  assert.equal((await mapCardToPublishedVault(candidate, "local", snapshot({ readModel: oversizedSlot }))).reason, "unverified-on-chain");
+  const malformed = null as unknown as ReadModelV1;
+  assert.equal((await mapCardToPublishedVault(candidate, "local", snapshot({ readModel: malformed }))).reason, "unverified-on-chain");
 });
 
 test("read model must match the strategy's network, program, vault and target", async () => {
