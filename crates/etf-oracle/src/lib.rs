@@ -530,6 +530,9 @@ mod tests {
         let zero = update(PinnedFeed::SolUsd, VerificationLevel::Full, 0, 0, NOW);
         assert!(check(&zero, 100).is_err());
 
+        let negative = update(PinnedFeed::SolUsd, VerificationLevel::Full, -1, 0, NOW);
+        assert!(check(&negative, 100).is_err());
+
         let future = update(
             PinnedFeed::SolUsd,
             VerificationLevel::Full,
