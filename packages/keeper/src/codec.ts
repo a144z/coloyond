@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import type { AuctionPolicyState, GovernanceState, IntentState, VaultState } from "./types.js";
 
-// Discriminators and field order are pinned to idl/coloyond_vault.json at the S2D base.
+// Discriminators and v2 field order are pinned to idl/coloyond_vault.json.
 const DISCRIMINATORS = {
   vault: [211, 8, 232, 43, 2, 152, 117, 119],
   governance: [145, 56, 248, 48, 121, 81, 15, 22],
@@ -90,7 +90,9 @@ export function decodeAuctionPolicy(data: Uint8Array): AuctionPolicyState {
   const r = new Reader(data);
   r.discriminator(DISCRIMINATORS.policy);
   const version = r.u8();
-  if (version !== 1) throw new Error(`Unsupported AuctionPolicy version ${version}`);
+  if (version !== 1 && version !== 2) throw new Error(`Unsupported AuctionPolicy version ${version}`);
+  const lengths: readonly number[] = version === 1 ? [110, 118] : [176];
+  if (!lengths.includes(data.length)) throw new Error(`AuctionPolicy version ${version} has unsupported account size ${data.length}`);
   const vault = r.pubkey();
   const configurationRevision = r.u64();
   const maximumAgeSeconds = r.u64();
@@ -106,17 +108,25 @@ export function decodeAuctionPolicy(data: Uint8Array): AuctionPolicyState {
   const durationSlots = r.u64();
   const feeBps = r.u16();
   const maximumFeeBps = r.u16();
+  let feeReserveShareBps = 0;
+  if (version === 2) {
+    feeReserveShareBps = r.u16();
+    for (let i = 0; i < 4; i++) r.u64(); // reserve floor and epoch bounty budgets
+    r.u64(); // bounty epoch
+    for (let i = 0; i < 2; i++) r.u64(); // bounty spent per asset in the epoch
+  }
   const maximumBountyPerFill = r.u64();
   const maximumCumulativeNavLossBps = r.u16();
   const maximumNavLossBps = r.u16();
   const feedIndices: [number, number] = [r.u8(), r.u8()];
-  r.finish([110, 118]);
+  r.finish(lengths);
   const valid = maximumAgeSeconds > 0n
     && maximumConfidenceBps <= 10_000 && maximumUsdcDeviationBps <= 10_000
     && minimumDriftBps > 0 && minimumDriftBps <= 10_000
     && maximumTradeValueQ9 > 0n && cooldownSlots > 0n
     && curveStartRateBps >= curveEndRateBps && curveEndRateBps > 0
     && durationSlots > 0n && feeBps <= maximumFeeBps && maximumFeeBps <= 10_000
+    && feeReserveShareBps <= 10_000
     && maximumCumulativeNavLossBps <= 10_000 && maximumNavLossBps <= 10_000
     && ((feedIndices[0] === 0 && feedIndices[1] === 1) || (feedIndices[0] === 1 && feedIndices[1] === 0));
   return { version, vault, configurationRevision, maximumAgeSeconds, minimumDriftBps, maximumTradeValueQ9, cooldownSlots, lastCompletedSlot, durationSlots, maximumBountyPerFill, valid };
@@ -126,7 +136,9 @@ export function decodeIntent(data: Uint8Array): IntentState {
   const r = new Reader(data);
   r.discriminator(DISCRIMINATORS.intent);
   const version = r.u8();
-  if (version !== 1) throw new Error(`Unsupported RebalanceIntent version ${version}`);
+  if (version !== 1 && version !== 2) throw new Error(`Unsupported RebalanceIntent version ${version}`);
+  const lengths: readonly number[] = version === 1 ? [198] : [232];
+  if (!lengths.includes(data.length)) throw new Error(`RebalanceIntent version ${version} has unsupported account size ${data.length}`);
   const vault = r.pubkey();
   const sequence = r.u64();
   const targetRevision = r.u64();
@@ -142,8 +154,12 @@ export function decodeIntent(data: Uint8Array): IntentState {
   r.u64(); r.u64(); // start prices
   r.u128(); r.u128(); // NAV and cumulative loss
   r.u16(); r.u16(); r.u16(); r.u16();
+  if (version === 2) {
+    r.u16(); // fee reserve share
+    for (let i = 0; i < 4; i++) r.u64(); // reserve floor and epoch bounty budgets
+  }
   r.u64(); // max bounty
   r.u16(); r.u16();
-  r.finish([198]);
+  r.finish(lengths);
   return { version, vault, sequence, targetRevision, policyRevision, sellAsset, initialSellAmount, remainingSellAmount, endSlot };
 }
