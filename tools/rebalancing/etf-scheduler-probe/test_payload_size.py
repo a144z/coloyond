@@ -46,6 +46,26 @@ class TukTukPayloadSizeTests(unittest.TestCase):
                 instructions=[InstructionShape(2, (), 0)],
             )
 
+    def test_signer_seed_count_and_length_match_compiled_task_decoder_limits(self):
+        maximum = compiled_task_account_size(
+            account_key_count=0,
+            instructions=[],
+            signer_seeds=((b"x" * 32,) * 16,),
+        )
+        self.assertGreater(maximum, 0)
+        with self.assertRaisesRegex(ValueError, "more than 16 PDA seeds"):
+            compiled_task_account_size(
+                account_key_count=0,
+                instructions=[],
+                signer_seeds=((b"x",) * 17,),
+            )
+        with self.assertRaisesRegex(ValueError, "PDA seed exceeds 32 bytes"):
+            compiled_task_account_size(
+                account_key_count=0,
+                instructions=[],
+                signer_seeds=((b"x" * 33,),),
+            )
+
     def test_unknown_trigger_timestamp_range_and_description_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "one-shot"):
             compiled_task_account_size(

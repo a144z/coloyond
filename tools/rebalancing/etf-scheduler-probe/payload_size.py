@@ -97,9 +97,13 @@ def compiled_task_account_size(
     signer_seed_bytes = 0
     _u32(len(signer_seeds), "signer count")
     for signer in signer_seeds:
+        if len(signer) > 16:
+            raise ValueError("CompiledV0 signer has more than 16 PDA seeds")
         seed_bytes = 0
         _u32(len(signer), "signer seed count")
         for seed in signer:
+            if len(seed) > 32:
+                raise ValueError("CompiledV0 PDA seed exceeds 32 bytes")
             seed_bytes += _vec_size(len(seed), "signer seed byte count")
         signer_seed_bytes += _vec_size(seed_bytes, "signer seed count")
     transaction_bytes = (
