@@ -4,6 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "skipLibCheck": true,
     "jsx": "react-jsx",
     "declaration": true,
     "outDir": "dist",

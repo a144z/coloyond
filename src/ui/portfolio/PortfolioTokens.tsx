@@ -8,7 +8,7 @@ import { usePortfolioTokens } from "./usePortfolioTokens.js";
 const TAG_DOTS: Record<TokenTag, string> = { core: "#1249ed", stable: "#ffd523", staking: "#8d25d9", utility: "#ff513b", custom: "#8c897f" };
 const TAG_WORDS: Record<TokenTag, string> = { core: "core", stable: "stable", staking: "staking", utility: "utility", custom: "pasted mint" };
 
-export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => void } = {}) {
+export function PortfolioTokens({ onRouteToShield, sectionIndex = "C /" }: { onRouteToShield?: () => void; sectionIndex?: string } = {}) {
   const { tokens, add, remove, reset, totalDemoUsd } = usePortfolioTokens();
   const [query, setQuery] = useState("");
   const [checking, setChecking] = useState(false);
@@ -53,7 +53,7 @@ export function PortfolioTokens({ onRouteToShield }: { onRouteToShield?: () => v
     <>
       <div className="cr-section-grid cr-section-spaced">
         <div className="cr-section-title">
-          <span className="cr-index">C /</span>
+          <span className="cr-index">{sectionIndex}</span>
           <div><h2>The tokens you watch</h2><p>A curated set of tokens the product supports, with instant search. Values are sample data for the demo profile.</p></div>
         </div>
         <div className="cr-side-note">A pasted mint is checked against the public node. The watchlist stays on this device.</div>

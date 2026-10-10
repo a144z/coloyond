@@ -31,7 +31,9 @@ cd apps/android
 
 APK: `apps/android/app/build/outputs/apk/debug/app-debug.apk`. Open `apps/android` directly in Android Studio.
 
-The current browser application is the earlier **coloyond** React/Vite routing prototype. LI.FI and deBridge provide quotes; the execution view uses simulated steps. It does not establish real signing, on-chain settlement, or atomic cross-chain rollback. Its sample balances and signatures are presentation data.
+The current browser application is the earlier **coloyond** React/Vite routing prototype. LI.FI and deBridge provide quotes; the execution view uses simulated steps. It does not establish real signing, on-chain settlement, or atomic cross-chain rollback. Its sample balances and signatures are presentation data. The Portfolio tab also runs the rebalance desk: drift is live arithmetic over sample values, targets can be edited and normalized to a 100% total, and a simulated run reweighs the basket onto target with a fee share kept in a sample reserve (the YieldBasis reflow idea from [the Solana vault SDK survey](docs/integrations/2026-10-10-solana-vault-sdk-survey.md)). The desk stores only the demo profile in local storage; its values have no authority over the Anchor program.
+
+The Portfolio tab also includes a **sample-only rebalance desk**; its simulated values and actions are not chain state. The Coloyond Anchor auction workbench is available at `/rebalancing-lab`. Its Localnet path uses the actual SBF program and SPL transfers with a dedicated throwaway Localnet wallet; oracle bytes, prices and token mints are synthetic fixtures and do not establish Devnet liquidity or oracle authenticity. See [the Localnet harness guide](tools/rebalancing/localnet/README.md). The separate `/symmetry-devnet` route reads public Symmetry V3 vault state through `@symmetry-hq/sdk`; it is read-only and cannot submit transactions. The app has no Mainnet action path. These are implementation and test surfaces, not audited financial products.
 
 ## Prototype commands
 
