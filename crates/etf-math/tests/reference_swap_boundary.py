@@ -29,7 +29,7 @@ def vectors():
         for asset_in, asset_out in product(range(3), repeat=2):
             if asset_in == asset_out:
                 continue
-            for ratio_bps in (100, 1_000, 3_000):
+            for ratio_bps in (1, 5, 10, 25, 50, 100, 1_000, 3_000):
                 amount_in = balances[asset_in] * ratio_bps // BPS
                 for fee_bps in (0, 1, 30, 100):
                     net_input = amount_in * (BPS - fee_bps) // BPS
@@ -51,7 +51,7 @@ def main():
     output = Path(__file__).with_name("swap_boundary_vectors.csv")
     rows = vectors()
     with output.open("w", newline="") as stream:
-        writer = csv.writer(stream)
+        writer = csv.writer(stream, lineterminator="\n")
         writer.writerow((
             "reserve0", "reserve1", "reserve2", "weight0", "weight1", "weight2",
             "asset_in", "asset_out", "amount_in", "fee_bps", "reference_floor",

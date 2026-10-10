@@ -335,7 +335,7 @@ fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
         );
         tested += 1;
     }
-    assert_eq!(tested, 864, "regenerate and inspect the boundary vectors");
+    assert_eq!(tested, 2_976, "regenerate and inspect the boundary vectors");
     eprintln!("checked {tested} three-asset minimum-weight boundary vectors; max relative shortfall {maximum_relative_error_pptr} pptr");
 }
 
