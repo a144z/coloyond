@@ -10,9 +10,9 @@ class PendingActionRecordTest {
     private val expectedEffect = ExpectedAccountEffect(
         account = "token-account",
         mint = "mint",
-        baselineAmountBaseUnits = BigInteger("1000000000000000000000"),
-        minimumDeltaBaseUnits = BigInteger("-100000000000000000000"),
-        maximumDeltaBaseUnits = BigInteger("-90000000000000000000"),
+        baselineAmountBaseUnits = BigInteger("1000000000000000000"),
+        minimumDeltaBaseUnits = BigInteger("-100000000000000000"),
+        maximumDeltaBaseUnits = BigInteger("-90000000000000000"),
     )
     private val prepared = PendingActionRecord(
         id = "action-1",
@@ -35,7 +35,7 @@ class PendingActionRecordTest {
                 signatureStatus = ObservedSignatureStatus.CONFIRMED,
                 signature = "sig",
                 accountEffects = listOf(ObservedAccountEffect(
-                    "token-account", "mint", BigInteger("905000000000000000000"), BigInteger("18446744073709551615"),
+                    "token-account", "mint", BigInteger("905000000000000000"), BigInteger("18446744073709551615"),
                 )),
             ))
 
@@ -61,7 +61,7 @@ class PendingActionRecordTest {
             ReconciliationObservation(
                 ObservedSignatureStatus.CONFIRMED,
                 accountEffects = listOf(ObservedAccountEffect(
-                    "token-account", "mint", BigInteger("905000000000000000000"), BigInteger("88"),
+                    "token-account", "mint", BigInteger("905000000000000000"), BigInteger("88"),
                 )),
             ),
         )
@@ -77,7 +77,7 @@ class PendingActionRecordTest {
                 ObservedSignatureStatus.FINALIZED,
                 "sig",
                 listOf(ObservedAccountEffect(
-                    "token-account", "mint", BigInteger("999999999999999999999"), BigInteger("88"),
+                    "token-account", "mint", BigInteger("999999999999999999"), BigInteger("88"),
                 )),
             ),
         )
