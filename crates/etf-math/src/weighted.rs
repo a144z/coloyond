@@ -56,6 +56,12 @@ pub fn quote_exact_in(
     {
         return Err(MathError::InputTooLarge);
     }
+    // The quote is only useful if the complete gross SPL transfer can be
+    // represented by the post-swap token-account balance. Check custody, not
+    // merely the smaller fee-adjusted curve input.
+    balance_in
+        .checked_add(amount_in)
+        .ok_or(MathError::ArithmeticOverflow)?;
 
     let amount_in_after_fee = u64::try_from(
         u128::from(amount_in) * u128::from(BASIS_POINTS - fee_bps) / u128::from(BASIS_POINTS),

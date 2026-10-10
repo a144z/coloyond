@@ -158,6 +158,66 @@ fn generated_decimal_envelope_never_overpays_reference_quote() {
 }
 
 #[test]
+fn generated_full_width_quotes_obey_decimal_and_exact_custody_bounds() {
+    let mut tested = 0usize;
+    let mut maximum_relative_error_pptr = 0_u128;
+    let mut maximum_absolute_error = 0_u64;
+    let mut maximum_error_case = "";
+    for line in include_str!("weighted_domain_vectors.csv").lines().skip(1) {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        assert_eq!(fields.len(), 8);
+        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, reference_floor, exact_max_out] =
+            <[u64; 8]>::try_from(fields).expect("eight vector fields");
+        let quote = quote_exact_in(
+            &[balance_in, balance_out],
+            &[weight_in as u16, weight_out as u16],
+            0,
+            1,
+            amount_in,
+            fee_bps as u16,
+        )
+        .unwrap_or_else(|error| panic!("valid full-width vector rejected ({error:?}): {line}"));
+        assert!(
+            quote.amount_out <= reference_floor,
+            "Decimal overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_max_out,
+            "exact custody invariant violated: {line}"
+        );
+        let error = reference_floor - quote.amount_out;
+        maximum_absolute_error = maximum_absolute_error.max(error);
+        let reference = u128::from(reference_floor.max(1));
+        let scaled_error = u128::from(error) * 1_000_000_000_000;
+        let relative_error_pptr = (scaled_error + reference - 1) / reference;
+        if relative_error_pptr > maximum_relative_error_pptr {
+            maximum_relative_error_pptr = relative_error_pptr;
+            maximum_error_case = line;
+        }
+        if reference_floor <= 1_000_000_000 {
+            assert!(
+                error <= 1,
+                "small-output error exceeds one base unit: {line}"
+            );
+        } else {
+            assert!(
+                u128::from(error) * 1_000_000_000 <= reference,
+                "large-output error exceeds one ppb: {line}"
+            );
+        }
+        tested += 1;
+    }
+    assert_eq!(
+        tested, 4_096,
+        "regenerate and inspect the full-width vectors"
+    );
+    eprintln!("checked {tested} full-width vectors; max absolute error {maximum_absolute_error} base units, max relative error {maximum_relative_error_pptr} pptr at {maximum_error_case}");
+}
+
+#[test]
 fn retained_fee_quote_preserves_invariant_and_improves_value_weights() {
     let balances = [60_000_u64, 40_000_u64];
     let weights = [5_000_u16, 5_000_u16];
@@ -482,6 +542,44 @@ fn rejects_large_input_or_output_ratios() {
         quote_exact_in(&[1_000, 1_000, 1_000], &[9_800, 100, 100], 0, 1, 10, 0),
         Err(MathError::OutputTooLarge)
     );
+}
+
+#[test]
+fn rejects_gross_input_that_overflows_post_swap_custody() {
+    let reserve_in = u64::MAX - 100;
+    let amount_in = u64::try_from(u128::from(reserve_in) * 3_000 / 10_000).unwrap();
+    assert_eq!(
+        quote_exact_in(
+            &[reserve_in, u64::MAX / 2],
+            &[5_000, 5_000],
+            0,
+            1,
+            amount_in,
+            9_999,
+        ),
+        Err(MathError::ArithmeticOverflow)
+    );
+}
+
+#[test]
+fn accepts_gross_input_that_fills_custody_to_u64_max() {
+    let reserve_in = u64::try_from((u128::from(u64::MAX) * 10 + 12) / 13).unwrap();
+    let amount_in = u64::MAX - reserve_in;
+    assert!(
+        u128::from(amount_in) * 10_000 <= u128::from(reserve_in) * 3_000,
+        "boundary input must stay within the configured 30% ratio"
+    );
+    let quote = quote_exact_in(
+        &[reserve_in, u64::MAX / 2],
+        &[5_000, 5_000],
+        0,
+        1,
+        amount_in,
+        30,
+    )
+    .expect("exactly representable post-swap custody must quote");
+    assert!(quote.amount_out > 0);
+    assert_eq!(reserve_in.checked_add(quote.amount_in), Some(u64::MAX));
 }
 
 #[test]
