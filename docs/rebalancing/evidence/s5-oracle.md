@@ -101,7 +101,7 @@ No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain 
 
 ## Probe response integrity — offline checks
 
-The read-only RPC probe now rejects a malformed result/context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. Six standard-library tests cover valid batch decoding and these failure cases. This prevents incomplete account batches from being silently accepted by iteration; it is offline parser evidence only and records no new Devnet observation.
+The read-only RPC probe now validates JSON-RPC 2.0 response version, matching request ID, and an exclusive `result` or `error` field before using a result. It also rejects malformed context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. Nine standard-library tests cover valid envelopes/batch decoding and these failure cases. This prevents malformed envelopes and incomplete account batches from being silently accepted; it is offline parser evidence only and records no new Devnet observation.
 
 ## Primary sources
 

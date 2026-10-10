@@ -75,17 +75,34 @@ def validate_account_batch_result(result, expected_feeds):
     return slot, tuple(decoded)
 
 
+def validate_rpc_response(body, *, expected_id, method):
+    """Validate a JSON-RPC 2.0 response and return its result value."""
+    if not isinstance(body, dict):
+        raise RuntimeError(f"{method}: expected JSON-RPC response object")
+    if body.get("jsonrpc") != "2.0":
+        raise RuntimeError(f"{method}: expected JSON-RPC version 2.0")
+    response_id = body.get("id")
+    if isinstance(response_id, bool) or not isinstance(response_id, int) or response_id != expected_id:
+        raise RuntimeError(f"{method}: response ID does not match request")
+    has_result = "result" in body
+    has_error = "error" in body
+    if has_result == has_error:
+        raise RuntimeError(f"{method}: expected exactly one of result or error")
+    if has_error:
+        raise RuntimeError(f"{method}: JSON-RPC error response: {body['error']}")
+    return body["result"]
+
+
 def rpc(method, params=None):
+    request_id = 1
     request = urllib.request.Request(
         RPC,
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}).encode(),
+        data=json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or []}).encode(),
         headers={"content-type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         body = json.load(response)
-    if "error" in body:
-        raise RuntimeError(f"{method}: {body['error']}")
-    return body["result"]
+    return validate_rpc_response(body, expected_id=request_id, method=method)
 
 
 def main():

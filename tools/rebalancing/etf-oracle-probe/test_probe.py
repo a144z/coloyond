@@ -3,7 +3,7 @@
 import base64
 import unittest
 
-from probe import RECEIVER, validate_account_batch_result
+from probe import RECEIVER, validate_account_batch_result, validate_rpc_response
 
 
 EXPECTED = (("sol", "Sol111"), ("btc", "Btc111"))
@@ -23,6 +23,37 @@ def result(values, *, slot=42):
 
 
 class OracleProbeResponseTests(unittest.TestCase):
+    def test_accepts_matching_json_rpc_result_envelope(self):
+        self.assertEqual(
+            validate_rpc_response(
+                {"jsonrpc": "2.0", "id": 7, "result": {"slot": 1}},
+                expected_id=7,
+                method="getSlot",
+            ),
+            {"slot": 1},
+        )
+
+    def test_rejects_malformed_or_mismatched_json_rpc_envelopes(self):
+        malformed = (
+            (None, "response object"),
+            ({"jsonrpc": "1.0", "id": 7, "result": 1}, "version 2.0"),
+            ({"jsonrpc": "2.0", "id": 8, "result": 1}, "response ID"),
+            ({"jsonrpc": "2.0", "id": True, "result": 1}, "response ID"),
+            ({"jsonrpc": "2.0", "id": 7}, "exactly one"),
+            ({"jsonrpc": "2.0", "id": 7, "result": 1, "error": {}}, "exactly one"),
+        )
+        for body, message in malformed:
+            with self.subTest(body=body), self.assertRaisesRegex(RuntimeError, message):
+                validate_rpc_response(body, expected_id=7, method="getSlot")
+
+    def test_reports_json_rpc_error_instead_of_returning_a_result(self):
+        with self.assertRaisesRegex(RuntimeError, "JSON-RPC error response"):
+            validate_rpc_response(
+                {"jsonrpc": "2.0", "id": 7, "error": {"code": -32000}},
+                expected_id=7,
+                method="getSlot",
+            )
+
     def test_accepts_complete_batch_and_returns_decoded_bytes(self):
         slot, decoded = validate_account_batch_result(result([account(b"sol"), account(b"btc")]), EXPECTED)
         self.assertEqual(slot, 42)
