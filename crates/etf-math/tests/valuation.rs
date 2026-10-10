@@ -90,6 +90,7 @@ fn deviation_is_half_the_absolute_weight_error_sum() {
 #[test]
 fn fractional_bps_deviation_rounds_up() {
     assert_eq!(deviation_bps(&[1, 1], &[9_900, 100]), Ok(4_900));
+    assert_eq!(deviation_bps(&[1, 2], &[5_000, 5_000]), Ok(1_667));
 }
 
 #[test]
