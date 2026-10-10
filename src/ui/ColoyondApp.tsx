@@ -188,7 +188,7 @@ export function ColoyondApp() {
       <div className="cr-shell">
         <header className="cr-topbar">
           <a className="cr-brand" href="/" aria-label="coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
-          <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample portfolio</span><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a></div>
+          <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample portfolio</span><a className="cr-reference-link cr-lab-link" href="/rebalancing-lab">Rebalance lab <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a></div>
         </header>
 
         <section className="cr-intro" aria-labelledby="page-title">
