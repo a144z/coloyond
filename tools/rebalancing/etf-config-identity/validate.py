@@ -83,6 +83,17 @@ def encode_config(inputs):
     if sum(asset["targetWeightBps"] for asset in assets) != 10_000:
         raise ValueError("assets: target weights must sum to 10000 bps")
 
+    governance_authority = _fixed_hex(
+        inputs["initialGovernanceAuthorityBytesHex"], 32, "initial_governance_authority"
+    )
+    emergency_guardian = _fixed_hex(
+        inputs["initialEmergencyGuardianBytesHex"], 32, "initial_emergency_guardian"
+    )
+    if governance_authority == bytes(32) or emergency_guardian == bytes(32):
+        raise ValueError("initial authorities: default pubkey is not allowed")
+    if governance_authority == emergency_guardian:
+        raise ValueError("initial authorities: governance and guardian must be distinct")
+
     fee_params = _fixed_hex(inputs["feePolicyParamsHex"], len(inputs["feePolicyParamsHex"]) // 2, "fee_policy_params")
     risk_params = _fixed_hex(inputs["riskPolicyParamsHex"], len(inputs["riskPolicyParamsHex"]) // 2, "risk_policy_params")
     encoded_assets = b"".join(encode_asset(asset) for asset in assets)
@@ -98,6 +109,8 @@ def encode_config(inputs):
             _fixed_hex(inputs["riskPolicyIdBytesHex"], 32, "risk_policy_id"),
             _u32(len(risk_params)),
             risk_params,
+            governance_authority,
+            emergency_guardian,
             _u64(inputs["governanceDelaySeconds"]),
         )
     )

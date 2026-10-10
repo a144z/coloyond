@@ -20,6 +20,10 @@ pub struct EtfPoolConfigV1 {
     pub fee_policy_params: Vec<u8>,
     pub risk_policy_id: [u8; 32],
     pub risk_policy_params: Vec<u8>,
+    /// Initial authorities are immutable pool-identity inputs. Current pool
+    /// authorities may later change only through the delayed handoff flow.
+    pub initial_governance_authority: [u8; 32],
+    pub initial_emergency_guardian: [u8; 32],
     pub governance_delay_seconds: u64,
 }
 
@@ -49,6 +53,7 @@ pub enum IdentityError {
     InvalidAssetCount,
     DuplicateMint,
     InvalidWeights,
+    InvalidAuthorities,
     Serialization,
 }
 
@@ -77,6 +82,12 @@ impl EtfPoolConfigV1 {
             .ok_or(IdentityError::InvalidWeights)?;
         if weight_sum != 10_000 {
             return Err(IdentityError::InvalidWeights);
+        }
+        if self.initial_governance_authority == [0; 32]
+            || self.initial_emergency_guardian == [0; 32]
+            || self.initial_governance_authority == self.initial_emergency_guardian
+        {
+            return Err(IdentityError::InvalidAuthorities);
         }
         Ok(())
     }
@@ -144,7 +155,7 @@ fn preflight_vector_lengths(bytes: &[u8]) -> Result<(), IdentityError> {
     advance(bytes, &mut offset, 32)?;
     let risk_length = read_u32(bytes, &mut offset)? as usize;
     let risk_section_length = risk_length
-        .checked_add(8)
+        .checked_add(32 + 32 + 8)
         .ok_or(IdentityError::Serialization)?;
     advance(bytes, &mut offset, risk_section_length)?;
     if offset != bytes.len() {
@@ -204,6 +215,8 @@ mod tests {
             fee_policy_params: vec![0xaa, 0xbb, 0xcc],
             risk_policy_id: [31; 32],
             risk_policy_params: vec![0x10, 0x20, 0x30, 0x40],
+            initial_governance_authority: [41; 32],
+            initial_emergency_guardian: [42; 32],
             governance_delay_seconds: 86_400,
         }
     }
@@ -212,7 +225,7 @@ mod tests {
     fn canonical_borsh_bytes_and_domain_hash_match_golden_vector() {
         let config = sample_config();
         let bytes = config.canonical_bytes().unwrap();
-        assert_eq!(bytes.len(), 422);
+        assert_eq!(bytes.len(), 486);
         assert_eq!(hex(&bytes), GOLDEN_CONFIG_BYTES_HEX);
         assert_eq!(hex(&config.config_hash().unwrap()), GOLDEN_CONFIG_HASH_HEX);
         assert_eq!(
@@ -245,6 +258,13 @@ mod tests {
         invalid = sample_config();
         invalid.assets[1].mint = invalid.assets[0].mint;
         assert_eq!(invalid.validate(), Err(IdentityError::DuplicateMint));
+
+        invalid = sample_config();
+        invalid.initial_governance_authority = [0; 32];
+        assert_eq!(invalid.validate(), Err(IdentityError::InvalidAuthorities));
+        invalid = sample_config();
+        invalid.initial_emergency_guardian = invalid.initial_governance_authority;
+        assert_eq!(invalid.validate(), Err(IdentityError::InvalidAuthorities));
     }
 
     #[test]
@@ -285,11 +305,38 @@ mod tests {
         assert_eq!(hex(&seeds[1]), GOLDEN_CONFIG_HASH_HEX);
     }
 
+    #[test]
+    fn changing_either_initial_authority_changes_all_content_identities() {
+        let baseline = sample_config();
+        let baseline_hash = baseline.config_hash().unwrap();
+        let baseline_strategy = baseline.strategy_id().unwrap();
+        let baseline_pool_seeds = baseline.pool_pda_seeds().unwrap();
+
+        let mutations: [fn(&mut EtfPoolConfigV1); 2] = [
+            |config: &mut EtfPoolConfigV1| config.initial_governance_authority = [43; 32],
+            |config: &mut EtfPoolConfigV1| config.initial_emergency_guardian = [44; 32],
+        ];
+        for mutate_authority in mutations {
+            let mut changed = baseline.clone();
+            mutate_authority(&mut changed);
+
+            assert_ne!(
+                changed.canonical_bytes().unwrap(),
+                baseline.canonical_bytes().unwrap()
+            );
+            assert_ne!(changed.config_hash().unwrap(), baseline_hash);
+            assert_ne!(changed.strategy_id().unwrap(), baseline_strategy);
+            let changed_pool_seeds = changed.pool_pda_seeds().unwrap();
+            assert_eq!(changed_pool_seeds[0], baseline_pool_seeds[0]);
+            assert_ne!(changed_pool_seeds[1], baseline_pool_seeds[1]);
+        }
+    }
+
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
-    const GOLDEN_CONFIG_BYTES_HEX: &str = "0102000000010101010101010101010101010101010101010101010101010101010101010102020202020202020202020202020202020202020202020202020202020202020600030303030303030303030303030303030303030303030303030303030303030304040404040404040404040404040404040404040404040404040404040404040505050505050505050505050505050505050505050505050505050505050505a00f0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c06010d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f70170700151515151515151515151515151515151515151515151515151515151515151503000000aabbcc1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f04000000102030408051010000000000";
+    const GOLDEN_CONFIG_BYTES_HEX: &str = "0102000000010101010101010101010101010101010101010101010101010101010101010102020202020202020202020202020202020202020202020202020202020202020600030303030303030303030303030303030303030303030303030303030303030304040404040404040404040404040404040404040404040404040404040404040505050505050505050505050505050505050505050505050505050505050505a00f0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c06010d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f70170700151515151515151515151515151515151515151515151515151515151515151503000000aabbcc1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f040000001020304029292929292929292929292929292929292929292929292929292929292929292a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a8051010000000000";
     const GOLDEN_CONFIG_HASH_HEX: &str =
-        "0852ddf87df71fb53c07f235c4afbf11c4593ced710807ac208427b0c10ecf72";
+        "f652f2378df696a731c4124ea4b33f439aae0c3b6fb3624dd21885a3e9edea67";
 }

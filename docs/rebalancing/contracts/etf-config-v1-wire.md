@@ -1,6 +1,6 @@
 # ETF v1 canonical config wire schema
 
-**Status:** S5A schema baseline; synthetic vector only. This specifies the outer config encoding and identity domain. It does not freeze asset admissions, authority keys, feed selection, fee/risk values, or the inner fee/risk policy formats. Do not use the fixture as a deployment manifest.
+**Status:** S5A draft; synthetic vector only. The outer field order commits the shape of the initial governance and guardian authorities, but their literal values, asset admissions, feed selection, fee/risk values, and inner fee/risk policy formats are not approved. Do not use the fixture as a deployment manifest.
 
 ## Encoding rules
 
@@ -15,6 +15,8 @@
 | `fee_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. Inner schema and bounds must be frozen by the reviewed S5D2 amendment before S5E. |
 | `risk_policy_id` | `[u8; 32]` | Raw bytes, not base58 or hex text. |
 | `risk_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. Inner schema and bounds must be frozen by the reviewed S5C/S5A amendment before S5E. |
+| `initial_governance_authority` | `[u8; 32]` | Initial governance pubkey bytes. Must be nonzero and distinct from the guardian. |
+| `initial_emergency_guardian` | `[u8; 32]` | Initial guardian pubkey bytes. Must be nonzero and distinct from governance. |
 | `governance_delay_seconds` | `u64` | Little-endian. |
 
 Each `EtfAssetConfigV1` is encoded in the following order:
@@ -30,7 +32,7 @@ Each `EtfAssetConfigV1` is encoded in the following order:
 | `feed_id` | `[u8; 32]` | Raw Pyth feed ID bytes, not hexadecimal text. |
 | `target_weight_bps` | `u16` | Little-endian basis points. |
 
-Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. The identity baseline enforces v1, two or three assets, unique mints, and a 10,000-bps weight sum. It deliberately imposes no per-asset minimum weight; the separate S5B math candidate's 100-bps floor remains subject to review. Decoders must reject unsupported versions, invalid asset count/weight constraints, malformed enum tags, truncation, and trailing bytes. The Rust decoder requires each caller to supply an explicit input-size ceiling; S5A has not selected the production account/config size limit. Authority keys are pool-state governance fields and are intentionally outside the economic config hash.
+Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. The identity baseline enforces v1, two or three assets, unique mints, a 10,000-bps weight sum, and two nonzero, distinct initial authority keys. It deliberately imposes no per-asset minimum weight; the separate S5B math candidate's 100-bps floor remains subject to review. Decoders must reject unsupported versions, invalid asset count/weight/authority constraints, malformed enum tags, truncation, and trailing bytes. The Rust decoder requires each caller to supply an explicit input-size ceiling; S5A has not selected the production account/config size limit.
 
 ## Content identity
 
@@ -44,10 +46,14 @@ share mint  = [UTF8("etf_share_v1"), pool_pda_bytes]
 custody     = [UTF8("etf_custody_v1"), pool_pda_bytes, [asset_index_u8]]
 ```
 
-The domain prefix is raw UTF-8 bytes with no Borsh string length, separator, or NUL terminator. A Solana PDA address also depends on the program ID and bump, so no PDA address is asserted until the ETF program ID is pinned. The fixture records only seed inputs.
+The domain prefix is raw UTF-8 bytes with no Borsh string length, separator, or NUL terminator. Because the initial governance and guardian keys are fields in `EtfPoolConfigV1`, they are committed by the config hash, strategy ID, and pool PDA seed. Different authority tuples therefore produce different pool identities. Current authorities can later rotate only through the delayed handoff instruction; the original config hash remains an immutable record of the initial tuple. A Solana PDA address also depends on the program ID and bump, so no PDA address is asserted until the ETF program ID is pinned. The fixture records only seed inputs.
+
+Pool creation is permissionless and the signer is only the rent payer. The on-chain initializer must accept one typed canonical config, recompute its full hash, validate both authorities, and derive every account from that config; it must not trust a supplied digest or a parallel authority tuple. Any caller may create the exact config-derived pool; a caller cannot initialize that same PDA with substituted authorities or economics. A client must recompute the manifest identity, compare the fetched immutable config and initial-authority commitment, and validate current governance/guardian keys against the accepted authority state before offering seed/deposit actions. It must allow a valid delayed handoff to change current role keys without changing the original config hash or pool PDA. If another caller creates the exact approved pool first, the client reads and verifies that state and continues; a different tuple has a different PDA.
+
+The program implementation must also handle deterministic PDA pre-funding safely: a third party may transfer lamports to a known PDA before initialization. S5E must prove such an account can still be initialized or returns a safe, recoverable result; it must reject non-system-owned or nonempty conflicting accounts without accepting substituted state. Exact initialized-pool retries must return verified existing state or a clean `already initialized` error. This is an implementation gate, not proven by the encoder fixture.
 
 ## Fixture and implementation boundary
 
-[`etf-config-v1-identity-fixture.json`](etf-config-v1-identity-fixture.json) is a deterministic synthetic two-asset vector with deliberately patterned keys/feed IDs and opaque policy bytes. Rust and Python independently encode it and compare the complete bytes, hash, strategy ID, and pool seed inputs. It proves wire agreement only. Production fee/risk payloads require strict typed schemas and validation before a program can consume them.
+[`etf-config-v1-identity-fixture.json`](etf-config-v1-identity-fixture.json) is a deterministic synthetic two-asset vector with deliberately patterned keys/feed IDs and opaque policy bytes. Rust and Python independently encode it and compare the complete bytes, hash, strategy ID, and pool seed inputs. The earlier provisional vector hash `0852ddf87df71fb53c07f235c4afbf11c4593ced710807ac208427b0c10ecf72` omitted authority keys and is superseded; its `etf1:` ID is not canonical or deployable. No ETF program has been deployed, so there is no on-chain migration. The current vector also proves wire agreement only. Production fee/risk payloads require strict typed schemas and validation before a program can consume them.
 
 The modular encoder lives in [`crates/etf-identity`](../../../crates/etf-identity/). It owns only config identity; math, oracle parsing, custody, Anchor instructions, wallet clients, and scheduler logic remain separate packages.

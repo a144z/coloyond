@@ -11,7 +11,7 @@ class EtfConfigIdentityTests(unittest.TestCase):
 
     def test_independent_encoding_matches_the_complete_golden_vector(self):
         encoded = validate_document(self.document)
-        self.assertEqual(len(encoded), 422)
+        self.assertEqual(len(encoded), 486)
 
     def test_vector_is_never_treated_as_deployment_identity(self):
         document = copy.deepcopy(self.document)
@@ -49,6 +49,22 @@ class EtfConfigIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "oracleMode"):
             validate_document(document)
 
+    def test_initial_authorities_are_bound_and_distinct_nonzero_keys(self):
+        baseline = encode_config(self.document["inputs"])
+        document = copy.deepcopy(self.document)
+        document["inputs"]["initialGovernanceAuthorityBytesHex"] = "2b" * 32
+        self.assertNotEqual(encode_config(document["inputs"]), baseline)
+
+        document = copy.deepcopy(self.document)
+        document["inputs"]["initialGovernanceAuthorityBytesHex"] = "00" * 32
+        with self.assertRaisesRegex(ValueError, "default pubkey"):
+            encode_config(document["inputs"])
+
+        document = copy.deepcopy(self.document)
+        document["inputs"]["initialEmergencyGuardianBytesHex"] = document["inputs"]["initialGovernanceAuthorityBytesHex"]
+        with self.assertRaisesRegex(ValueError, "must be distinct"):
+            encode_config(document["inputs"])
+
     def test_malformed_fixed_width_key_is_rejected(self):
         document = copy.deepcopy(self.document)
         document["inputs"]["assets"][0]["mintBytesHex"] = "00"
@@ -76,7 +92,7 @@ class EtfConfigIdentityTests(unittest.TestCase):
         document = copy.deepcopy(self.document)
         document["inputs"]["assets"][0]["targetWeightBps"] = 1
         document["inputs"]["assets"][1]["targetWeightBps"] = 9_999
-        self.assertEqual(len(encode_config(document["inputs"])), 422)
+        self.assertEqual(len(encode_config(document["inputs"])), 486)
 
 
 if __name__ == "__main__":
