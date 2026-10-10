@@ -2,7 +2,7 @@
 
 This probe captures admission facts and unsigned transaction simulation without using a wallet. It never signs, submits, reads keypair files, or loads `.env` files. Its network calls are limited to Solana JSON-RPC reads, `getFeeForMessage`, and `simulateTransaction` with `sigVerify: false`.
 
-Every RPC response is checked as a JSON-RPC 2.0 envelope with the matching request ID and exactly one result or structured error before the result is used. Malformed envelopes fail as `BLOCKED` probe evidence instead of being mistaken for a successful read.
+Every RPC response is checked as a JSON-RPC 2.0 envelope with the matching request ID and exactly one result or structured error before the result is used. Malformed envelopes fail as `BLOCKED` probe evidence instead of being mistaken for a successful read. Simulation output is complete only when the RPC returns a `value` object containing the required `err` field.
 
 Run the package tests with:
 

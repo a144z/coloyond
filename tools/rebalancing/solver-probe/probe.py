@@ -298,6 +298,8 @@ def simulate(args: argparse.Namespace) -> dict[str, Any]:
             base64.b64encode(raw).decode("ascii"),
             {"encoding": "base64", "sigVerify": False, "replaceRecentBlockhash": True, "commitment": "processed", "innerInstructions": True},
         ])["value"]
+        if not isinstance(simulation, dict) or "err" not in simulation:
+            raise ProbeError("RPC simulateTransaction malformed response: expected value object with err field")
         result["simulation"] = {
             "err": simulation.get("err"),
             "unitsConsumed": simulation.get("unitsConsumed"),

@@ -1,9 +1,12 @@
 import base64
 import json
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from probe import ProbeError, Rpc, parse_transaction, redact_url, shortvec, verify_cluster_genesis
+from probe import ProbeError, Rpc, parse_transaction, redact_url, shortvec, simulate, verify_cluster_genesis
 
 
 def b58decode(text: str) -> bytes:
@@ -145,6 +148,32 @@ class TransactionParsingTests(unittest.TestCase):
             return_value=Response({"jsonrpc": "2.0", "id": 1, "result": 42}),
         ):
             self.assertEqual(client.call("getSlot", []), 42)
+
+    def test_simulation_requires_the_rpc_err_field_before_reporting_success(self):
+        class FakeRpc:
+            def __init__(self, simulation_value):
+                self.simulation_value = simulation_value
+
+            def call(self, method, params):
+                if method == "getFeeForMessage":
+                    return {"value": 5_000}
+                return {"value": self.simulation_value}
+
+        with tempfile.TemporaryDirectory() as directory:
+            transaction_path = Path(directory) / "unsigned.txt"
+            transaction_path.write_text(base64.b64encode(fixture()).decode())
+            args = SimpleNamespace(
+                transaction=str(transaction_path),
+                rpc_url="https://rpc.invalid",
+                timeout=1,
+            )
+            for simulation_value, expected_status in (
+                ({"unitsConsumed": 123}, "BLOCKED"),
+                ({"err": None, "unitsConsumed": 123, "logs": []}, "SIMULATION_COMPLETE"),
+            ):
+                with self.subTest(simulation_value=simulation_value):
+                    with patch("probe.Rpc", return_value=FakeRpc(simulation_value)):
+                        self.assertEqual(simulate(args)["status"], expected_status)
 
 
 if __name__ == "__main__":
