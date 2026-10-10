@@ -6,7 +6,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from probe import ProbeError, Rpc, parse_transaction, redact_url, shortvec, simulate, verify_cluster_genesis
+from probe import (
+    ProbeError,
+    Rpc,
+    parse_transaction,
+    redact_url,
+    shortvec,
+    simulate,
+    status,
+    verify_cluster_genesis,
+)
 
 
 def b58decode(text: str) -> bytes:
@@ -197,6 +206,23 @@ class TransactionParsingTests(unittest.TestCase):
                 result = simulate(args)
             self.assertEqual(result["status"], "BLOCKED")
             self.assertIn("unitsConsumed", result["blocker"])
+
+    def test_status_blocks_on_malformed_mint_account_data(self):
+        class FakeRpc:
+            def call(self, method, params):
+                if method == "getGenesisHash":
+                    return "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
+                if method == "getSlot":
+                    return 42
+                if method == "getHealth":
+                    return "ok"
+                return {"value": {"owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"}}
+
+        args = SimpleNamespace(cluster="devnet", rpc_url="https://rpc.invalid", timeout=1)
+        with patch("probe.Rpc", return_value=FakeRpc()):
+            result = status(args)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("malformed mint account data", result["blocker"])
 
 
 if __name__ == "__main__":

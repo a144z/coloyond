@@ -247,8 +247,37 @@ def status(args: argparse.Namespace) -> dict[str, Any]:
         result["finalizedSlot"] = rpc.call("getSlot", [{"commitment": "finalized"}])
         result["rpcHealth"] = rpc.call("getHealth", [])
         for symbol, mint in MINTS[args.cluster].items():
-            account = rpc.call("getAccountInfo", [mint, {"commitment": "finalized", "encoding": "base64"}])["value"]
-            supply = rpc.call("getTokenSupply", [mint, {"commitment": "finalized"}])["value"]
+            account_response = rpc.call("getAccountInfo", [mint, {"commitment": "finalized", "encoding": "base64"}])
+            if not isinstance(account_response, dict) or "value" not in account_response:
+                raise ProbeError(f"{symbol}: malformed getAccountInfo result")
+            account = account_response["value"]
+            account_data_length = None
+            if account is not None:
+                if not isinstance(account, dict) or not isinstance(account.get("owner"), str):
+                    raise ProbeError(f"{symbol}: malformed mint account value")
+                account_data = account.get("data")
+                if (
+                    not isinstance(account_data, (list, tuple))
+                    or len(account_data) != 2
+                    or not isinstance(account_data[0], str)
+                    or account_data[1] != "base64"
+                ):
+                    raise ProbeError(f"{symbol}: malformed mint account data")
+                try:
+                    account_data_length = len(base64.b64decode(account_data[0], validate=True))
+                except ValueError as exc:
+                    raise ProbeError(f"{symbol}: malformed mint account base64") from exc
+
+            supply_response = rpc.call("getTokenSupply", [mint, {"commitment": "finalized"}])
+            if not isinstance(supply_response, dict) or "value" not in supply_response:
+                raise ProbeError(f"{symbol}: malformed getTokenSupply result")
+            supply = supply_response["value"]
+            if supply is not None and (
+                not isinstance(supply, dict)
+                or type(supply.get("decimals")) is not int
+                or not isinstance(supply.get("amount"), str)
+            ):
+                raise ProbeError(f"{symbol}: malformed token supply value")
             result["assets"][symbol] = {
                 "mint": mint,
                 "exists": account is not None,
@@ -256,7 +285,7 @@ def status(args: argparse.Namespace) -> dict[str, Any]:
                 "ownerIsClassicSplToken": bool(account and account.get("owner") == TOKEN_PROGRAM),
                 "decimals": supply.get("decimals") if supply else None,
                 "supplyRaw": supply.get("amount") if supply else None,
-                "accountDataLength": len(base64.b64decode(account["data"][0])) if account else None,
+                "accountDataLength": account_data_length,
             }
         result["status"] = "READS_COMPLETE"
     except ProbeError as exc:
