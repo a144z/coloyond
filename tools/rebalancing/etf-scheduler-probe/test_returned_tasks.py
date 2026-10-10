@@ -51,6 +51,13 @@ def compiled_transaction_with_indexes(program_index, account_indexes):
     )
 
 
+def compiled_transaction_with_signer_groups(groups):
+    signers = items(
+        [items([vector(seed) for seed in signer]) for signer in groups]
+    )
+    return b"\0\0\0" + items([]) + items([]) + signers
+
+
 def task(
     *,
     trigger=b"\0",
@@ -201,6 +208,26 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     self.validate(returned(task(source=child_source)))
+
+    def test_accepts_maximum_returned_signer_seed_bounds_for_multiple_groups(self):
+        groups = ((b"a" * 32,) * 16, (b"b",))
+        source = b"\0" + compiled_transaction_with_signer_groups(groups)
+        self.assertTrue(self.validate(returned(task(source=source))))
+
+    def test_rejects_returned_signer_with_more_than_sixteen_seeds(self):
+        source = b"\0" + compiled_transaction_with_signer_groups(((b"seed",) * 17,))
+        with self.assertRaisesRegex(ValueError, "more than 16 PDA seeds"):
+            self.validate(returned(task(source=source)))
+
+    def test_rejects_oversized_seed_in_each_returned_signer_group(self):
+        for groups in (
+            ((b"a" * 33,),),
+            ((b"ok",), (b"b" * 33,)),
+        ):
+            with self.subTest(group_lengths=tuple(len(seed) for signer in groups for seed in signer)):
+                source = b"\0" + compiled_transaction_with_signer_groups(groups)
+                with self.assertRaisesRegex(ValueError, "PDA seed exceeds 32 bytes"):
+                    self.validate(returned(task(source=source)))
 
     def test_supplied_empty_task_pda_matches_the_single_child_id(self):
         self.assertTrue(

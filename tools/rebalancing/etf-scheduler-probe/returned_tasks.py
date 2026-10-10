@@ -8,7 +8,7 @@ available. The alternate tasks_accounts storage path is intentionally excluded.
 from dataclasses import dataclass
 from typing import Optional
 
-from task_pda import derive_tuktuk_task_address
+from task_pda import MAX_SEED_LENGTH, MAX_SEEDS, derive_tuktuk_task_address
 
 
 MAX_DIRECT_RETURN_BYTES = 1_000
@@ -254,6 +254,11 @@ def validate_compiled_requeue(
     for task in returned.tasks:
         if len(task.description.encode("utf-8")) > MAX_DESCRIPTION_BYTES:
             raise ValueError("returned task description exceeds 40 UTF-8 bytes")
+        for signer in task.signer_seeds:
+            if len(signer) > MAX_SEEDS:
+                raise ValueError("returned CompiledV0 signer has more than 16 PDA seeds")
+            if any(len(seed) > MAX_SEED_LENGTH for seed in signer):
+                raise ValueError("returned CompiledV0 PDA seed exceeds 32 bytes")
         if task.crank_reward is not None and task.crank_reward != min_crank_reward:
             raise ValueError("returned task crank reward must be None or queue minimum")
         if task.free_tasks + 1 > queue_capacity:
