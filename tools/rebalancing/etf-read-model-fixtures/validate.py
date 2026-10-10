@@ -21,6 +21,9 @@ RECEIPT_STATUSES = {"draft", "awaiting_signature", "submitted", "confirmed", "re
 REASON_CODE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 UNSIGNED_DECIMAL = re.compile(r"^(?:0|[1-9][0-9]*)$")
 SIGNED_DECIMAL = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
+UNICODE_WHITESPACE_ONLY = re.compile(
+    r"^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]*$"
+)
 
 
 def _object(value, path, errors):
@@ -31,7 +34,7 @@ def _object(value, path, errors):
 
 
 def _text(value, path, errors):
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or UNICODE_WHITESPACE_ONLY.fullmatch(value):
         errors.append(f"{path}: expected non-empty string")
         return False
     return True

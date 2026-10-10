@@ -11,6 +11,21 @@ test("shared read-model fixtures pass the TypeScript validator", () => {
   assert.equal(parseReadModelDocument(document).fixtureOnly, true);
 });
 
+test("required text uses shared Unicode whitespace rules", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  const network = snapshot.network as Record<string, unknown>;
+
+  network.rpcLabel = "\u0085";
+  assert.ok(validateReadModelDocument(candidate).some((error) => error.includes("network.rpcLabel: expected non-empty string")));
+
+  network.rpcLabel = " \t\n";
+  assert.ok(validateReadModelDocument(candidate).some((error) => error.includes("network.rpcLabel: expected non-empty string")));
+
+  network.rpcLabel = "devnet probe";
+  assert.deepEqual(validateReadModelDocument(candidate), []);
+});
+
 test("large slots and token amounts remain decimal strings", () => {
   const parsed = parseReadModelDocument(document);
   const snapshot = parsed.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full");

@@ -31,6 +31,20 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         self.assertTrue(any("network.contextSlot" in error for error in errors))
         self.assertTrue(any("protocolRevision" in error for error in errors))
 
+    def test_required_text_uses_shared_unicode_whitespace_rules(self):
+        document = load_fixture()
+        rpc_label = document["fixtures"][0]["network"]
+        rpc_label["rpcLabel"] = "\u0085"
+        errors = validate_document(document)
+        self.assertTrue(any("network.rpcLabel: expected non-empty string" in error for error in errors))
+
+        rpc_label["rpcLabel"] = " \t\n"
+        errors = validate_document(document)
+        self.assertTrue(any("network.rpcLabel: expected non-empty string" in error for error in errors))
+
+        rpc_label["rpcLabel"] = "devnet probe"
+        self.assertEqual(validate_document(document), [])
+
     def test_u64_values_must_be_base_ten_strings_not_json_numbers(self):
         document = load_fixture()
         document["fixtures"][0]["balances"][0]["rawAmount"] = 2**64 - 1

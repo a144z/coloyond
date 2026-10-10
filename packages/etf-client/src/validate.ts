@@ -7,6 +7,7 @@ const I32_MIN = -2_147_483_648;
 const I32_MAX = 2_147_483_647;
 const UNSIGNED = /^(?:0|[1-9][0-9]*)$/;
 const SIGNED = /^(?:0|-?[1-9][0-9]*)$/;
+const UNICODE_WHITESPACE_ONLY = /^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]*$/u;
 const REASON = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const observationStatuses = new Set(["available", "stale", "unavailable", "invalid", "not_configured"]);
 const receiptStatuses = new Set(["draft", "awaiting_signature", "submitted", "confirmed", "rejected", "unknown"]);
@@ -16,7 +17,7 @@ const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 function text(value: unknown, path: string, errors: string[]): value is string {
-  if (typeof value !== "string" || value.trim() === "") {
+  if (typeof value !== "string" || UNICODE_WHITESPACE_ONLY.test(value)) {
     errors.push(`${path}: expected non-empty string`);
     return false;
   }
