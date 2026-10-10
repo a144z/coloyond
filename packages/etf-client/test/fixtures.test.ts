@@ -5,6 +5,60 @@ import { parseReadModelDocument, validateReadModelDocument } from "../src/index.
 
 const fixturePath = new URL("../../../docs/rebalancing/contracts/etf-read-model-v1-fixtures.json", import.meta.url);
 const document = JSON.parse(readFileSync(fixturePath, "utf8")) as unknown;
+const mutationPath = new URL("../../../tools/rebalancing/etf-read-model-fixtures/mutation_cases.json", import.meta.url);
+const mutationCorpus = JSON.parse(readFileSync(mutationPath, "utf8")) as {
+  fixtureOnly: boolean;
+  cases: Array<{
+    id: string;
+    expectedValid: boolean;
+    operation: "none" | "set" | "delete" | "append-copy-first";
+    fixtureId?: string;
+    path?: string[];
+    value?: unknown;
+  }>;
+};
+
+function applySharedMutation(candidate: unknown, mutation: (typeof mutationCorpus.cases)[number]): void {
+  if (mutation.operation === "none") return;
+  assert.ok(candidate && typeof candidate === "object" && "fixtures" in candidate);
+  const fixtures = (candidate as { fixtures: Array<Record<string, unknown>> }).fixtures;
+  const fixture = fixtures.find((entry) => entry.id === mutation.fixtureId);
+  assert.ok(fixture, `missing mutation target ${mutation.fixtureId}`);
+  const path = mutation.path ?? [];
+  assert.ok(path.length > 0, "mutation path must be non-empty");
+  let parent: Record<string, unknown> = fixture;
+  for (const component of path.slice(0, -1)) {
+    const child = parent[component];
+    assert.ok(child && typeof child === "object" && !Array.isArray(child));
+    parent = child as Record<string, unknown>;
+  }
+  const key = path.at(-1)!;
+  if (mutation.operation === "set") {
+    parent[key] = mutation.value;
+  } else if (mutation.operation === "delete") {
+    delete parent[key];
+  } else {
+    const values = parent[key];
+    assert.ok(Array.isArray(values) && values.length > 0);
+    values.push(structuredClone(values[0]));
+  }
+}
+
+test("Python and TypeScript share the same fixture-mutation acceptance corpus", () => {
+  assert.equal(mutationCorpus.fixtureOnly, true);
+  assert.ok(mutationCorpus.cases.length > 0);
+  assert.equal(new Set(mutationCorpus.cases.map((mutation) => mutation.id)).size, mutationCorpus.cases.length);
+
+  for (const mutation of mutationCorpus.cases) {
+    const candidate = structuredClone(document);
+    applySharedMutation(candidate, mutation);
+    assert.equal(
+      validateReadModelDocument(candidate).length === 0,
+      mutation.expectedValid,
+      `fixture mutation ${mutation.id} disagrees with the shared expected acceptance`,
+    );
+  }
+});
 
 test("shared read-model fixtures pass the TypeScript validator", () => {
   assert.deepEqual(validateReadModelDocument(document), []);

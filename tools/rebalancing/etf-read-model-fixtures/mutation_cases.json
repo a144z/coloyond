@@ -1,0 +1,71 @@
+{
+  "fixtureOnly": true,
+  "cases": [
+    {
+      "id": "valid-baseline",
+      "expectedValid": true,
+      "operation": "none"
+    },
+    {
+      "id": "snapshot-missing-genesis-hash",
+      "expectedValid": false,
+      "operation": "delete",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["network", "genesisHash"]
+    },
+    {
+      "id": "snapshot-number-instead-of-context-slot-string",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["network", "contextSlot"],
+      "value": 9007199254740992
+    },
+    {
+      "id": "snapshot-duplicate-mint",
+      "expectedValid": false,
+      "operation": "append-copy-first",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["balances"]
+    },
+    {
+      "id": "receiver-verification-not-full",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "verification"],
+      "value": "partial"
+    },
+    {
+      "id": "push-feed-invents-receiver-verification",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "oracle-available-push-feed",
+      "path": ["verification"],
+      "value": "full"
+    },
+    {
+      "id": "failed-snapshot-carries-balances",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-unavailable",
+      "path": ["balances"],
+      "value": [{"mint": "fixture-mint", "rawAmount": "1"}]
+    },
+    {
+      "id": "confirmed-receipt-missing-rpc-deltas",
+      "expectedValid": false,
+      "operation": "delete",
+      "fixtureId": "receipt-confirmed-with-token-deltas",
+      "path": ["tokenDeltas"]
+    },
+    {
+      "id": "unknown-receipt-allows-automatic-resend",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "receipt-unknown-must-not-resend",
+      "path": ["automaticResendAllowed"],
+      "value": true
+    }
+  ]
+}

@@ -10,6 +10,7 @@ FIXTURE_PATH = (
     Path(__file__).resolve().parents[3]
     / "docs/rebalancing/contracts/etf-read-model-v1-fixtures.json"
 )
+MUTATION_PATH = Path(__file__).with_name("mutation_cases.json")
 
 
 def load_fixture():
@@ -17,6 +18,39 @@ def load_fixture():
 
 
 class ReadModelFixtureValidatorTests(unittest.TestCase):
+    def test_shared_mutation_corpus_matches_expected_acceptance(self):
+        document = load_fixture()
+        corpus = json.loads(MUTATION_PATH.read_text(encoding="utf-8"))
+        self.assertIs(corpus["fixtureOnly"], True)
+        cases = corpus["cases"]
+        self.assertEqual(len({case["id"] for case in cases}), len(cases))
+
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                candidate = copy.deepcopy(document)
+                operation = case["operation"]
+                if operation != "none":
+                    fixture = next(
+                        item for item in candidate["fixtures"]
+                        if item["id"] == case["fixtureId"]
+                    )
+                    path = case["path"]
+                    parent = fixture
+                    for component in path[:-1]:
+                        parent = parent[component]
+                    key = path[-1]
+                    if operation == "set":
+                        parent[key] = case["value"]
+                    elif operation == "delete":
+                        parent.pop(key, None)
+                    elif operation == "append-copy-first":
+                        parent[key].append(copy.deepcopy(parent[key][0]))
+                    else:
+                        self.fail(f"unknown mutation operation: {operation}")
+
+                is_valid = not validate_document(candidate)
+                self.assertEqual(is_valid, case["expectedValid"])
+
     def test_checked_in_language_neutral_fixture_document_is_valid(self):
         self.assertEqual(validate_document(load_fixture()), [])
 
