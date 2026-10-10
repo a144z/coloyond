@@ -16,7 +16,7 @@ Provide an RPC URL explicitly; the tool does not guess endpoints. Use a separate
 SOLANA_RPC_URL='https://your-rpc.example' python3 tools/rebalancing/solver-probe/probe.py status --cluster devnet --output /tmp/solver-devnet-status.json
 ```
 
-The report records finalized slot, genesis hash, health, canonical manifest mints, mint account owner, token decimals, and supply. `BLOCKED` is a valid result and is returned with exit code 2. It means there is no usable measurement from that run.
+The report records finalized slot, genesis hash, health, canonical manifest mints, mint account owner, token decimals, and supply. It verifies `getGenesisHash` against Solana's published mainnet-beta/devnet genesis hashes before reading assets; a mismatch stops the run as `BLOCKED`. `BLOCKED` is a valid result and is returned with exit code 2. It means there is no usable measurement from that run. The expected hashes come from the upstream Solana SDK's `ClusterType::get_genesis_hash`: [genesis_config.rs](https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs).
 
 ## Simulate a complete unsigned candidate
 

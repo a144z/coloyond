@@ -1,7 +1,7 @@
 import base64
 import unittest
 
-from probe import ProbeError, parse_transaction, redact_url, shortvec
+from probe import ProbeError, parse_transaction, redact_url, shortvec, verify_cluster_genesis
 
 
 def b58decode(text: str) -> bytes:
@@ -76,6 +76,13 @@ class TransactionParsingTests(unittest.TestCase):
 
     def test_url_redaction_hides_credentials_and_path_tokens(self):
         self.assertEqual(redact_url("https://user:secret@example.invalid/token/abc?key=xyz"), "https://example.invalid/<redacted>?<redacted>")
+
+    def test_expected_devnet_genesis_is_accepted(self):
+        verify_cluster_genesis("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG")
+
+    def test_mainnet_endpoint_labeled_devnet_is_rejected(self):
+        with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
+            verify_cluster_genesis("devnet", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
 
 
 if __name__ == "__main__":

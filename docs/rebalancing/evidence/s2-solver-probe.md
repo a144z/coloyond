@@ -6,7 +6,7 @@
 
 `tools/rebalancing/solver-probe/probe.py` has two explicit operations:
 
-- `status` reads finalized genesis hash/slot/health and canonical WSOL/USDC mint account owner, decimals and supply from an explicitly supplied RPC endpoint.
+- `status` reads the genesis hash first and requires it to match the selected mainnet/devnet cluster before reading finalized slot/health and canonical WSOL/USDC mint account owner, decimals and supply. The expected hashes are from the upstream Solana SDK's [`ClusterType::get_genesis_hash`](https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs); an endpoint with the wrong hash fails closed.
 - `simulate` accepts an unsigned base64 transaction, refuses any non-zero signature byte, reads the base fee, and calls `simulateTransaction` with signature verification off and recent blockhash replacement on. It reports bytes, transaction version, static/lookup key slots, compute-budget settings, simulated CU, logs, and RPC error.
 
 This is transaction-shape tooling, not a route finder or an auction executor. The simulator does not resolve address lookup table pubkeys, and RPC simulation is not a landed transaction or proof of token deltas/depth. The generic probe makes no Jupiter dependency. Any future venue adapter must produce both-direction, size-ladder quotes directly from verified pool state; a Router quote alone is not independent venue evidence.
@@ -21,7 +21,7 @@ Run package tests:
 python3 -m unittest discover -s tools/rebalancing/solver-probe -p 'test_*.py' -v
 ```
 
-Result on 10 Oct 2026: **5 tests passed** for legacy/v0 message parsing, lookup-index accounting, compute-budget parsing, signature detection, and malformed shortvec rejection.
+Result on 10 Oct 2026: **8 tests passed** for legacy/v0 message parsing, lookup-index accounting, compute-budget parsing, signature detection, malformed shortvec rejection, URL credential redaction, and acceptance/rejection of expected cluster genesis hashes.
 
 Attempted read-only Devnet admission check:
 
@@ -30,7 +30,7 @@ SOLANA_RPC_URL=https://api.devnet.solana.com \
   python3 tools/rebalancing/solver-probe/probe.py status --cluster devnet
 ```
 
-Result: `BLOCKED`, `getGenesisHash` could not resolve the public RPC hostname (`nodename nor servname provided, or not known`). No slot, mint account, owner, decimals, or supply was returned. Mainnet RPC, direct Orca/Meteora/Raydium pool state, route quotes, pool depth, an unsigned route-plus-fill simulation, a fill landing, realized fees, and solver net returns were not measured in this run. A failure to reach RPC does not indicate that the assets or pools are absent.
+Result: `BLOCKED`, `getGenesisHash` could not resolve the public RPC hostname (`nodename nor servname provided, or not known`). The cluster could not be verified; no slot, mint account, owner, decimals, or supply was returned. Mainnet RPC, direct Orca/Meteora/Raydium pool state, route quotes, pool depth, an unsigned route-plus-fill simulation, a fill landing, realized fees, and solver net returns were not measured in this run. A failure to reach RPC does not indicate that the assets or pools are absent.
 
 ## What the result does and does not prove
 

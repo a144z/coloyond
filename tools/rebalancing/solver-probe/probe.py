@@ -33,6 +33,10 @@ MINTS = {
     },
 }
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+EXPECTED_GENESIS = {
+    "mainnet": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+    "devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+}
 
 
 class ProbeError(Exception):
@@ -196,6 +200,14 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def verify_cluster_genesis(cluster: str, genesis_hash: str) -> None:
+    expected = EXPECTED_GENESIS[cluster]
+    if genesis_hash != expected:
+        raise ProbeError(
+            f"cluster mismatch: requested {cluster}, expected genesis {expected}, got {genesis_hash}"
+        )
+
+
 def status(args: argparse.Namespace) -> dict[str, Any]:
     rpc = Rpc(args.rpc_url, args.timeout)
     result: dict[str, Any] = {
@@ -208,6 +220,8 @@ def status(args: argparse.Namespace) -> dict[str, Any]:
     }
     try:
         result["genesisHash"] = rpc.call("getGenesisHash", [])
+        verify_cluster_genesis(args.cluster, result["genesisHash"])
+        result["clusterVerified"] = True
         result["finalizedSlot"] = rpc.call("getSlot", [{"commitment": "finalized"}])
         result["rpcHealth"] = rpc.call("getHealth", [])
         for symbol, mint in MINTS[args.cluster].items():
