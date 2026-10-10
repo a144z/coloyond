@@ -17,6 +17,9 @@ const USDC_FEED_ID = "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9
 const RPC_URL = "http://127.0.0.1:8899";
 const LOCALHOSTS = new Set(["127.0.0.1", "localhost"]);
 const CONFIRMED: Commitment = "confirmed";
+// SDK LEN reserves space for Partial's signature-count byte; Full's Borsh variant serializes one byte shorter.
+const PYTH_PRICE_UPDATE_V2_ACCOUNT_LEN = 8 + 32 + 2 + 32 + 8 + 8 + 4 + 8 + 8 + 8 + 8 + 8;
+const PYTH_PRICE_UPDATE_V2_FULL_SERIALIZED_LEN = PYTH_PRICE_UPDATE_V2_ACCOUNT_LEN - 1;
 
 const DISCRIMINATORS = {
   start: [61, 251, 146, 164, 48, 29, 208, 170],
@@ -117,12 +120,12 @@ export interface TokenDelta {
 
 export interface TransactionOutcome {
   signature: string;
-  slot: number;
+  slot: number | null;
   accepted: boolean;
   error: string | null;
   logs: string[];
   deltas: TokenDelta;
-  programStateUnchanged: boolean;
+  monitoredValuesUnchanged: boolean;
   vaultSequenceBefore: bigint;
   vaultSequenceAfter: bigint;
   remainingBefore: bigint | null;
@@ -248,7 +251,9 @@ function tokenAmount(data: Buffer | Uint8Array, label: string, expectedMint: Pub
 
 function priceUpdate(data: Buffer | Uint8Array, expectedFeed: string, label: string): FeedSnapshot {
   const bytes = Buffer.from(data);
-  if (bytes.length < 133) fail(`${label} Pyth account is truncated.`);
+  if (bytes.length !== PYTH_PRICE_UPDATE_V2_FULL_SERIALIZED_LEN && bytes.length !== PYTH_PRICE_UPDATE_V2_ACCOUNT_LEN) {
+    fail(`${label} Pyth account has an unsupported PriceUpdateV2 length.`);
+  }
   const feedId = bytes.subarray(41, 73).toString("hex");
   if (feedId !== expectedFeed) fail(`${label} Pyth account contains the wrong feed ID.`);
   const verifiedFull = bytes[40] === 1;
@@ -502,25 +507,30 @@ async function sendAndConfirm(
     commitment: "confirmed",
     maxSupportedTransactionVersion: 0,
   });
-  const error = confirmation.value.err ?? transactionInfo?.meta?.err ?? null;
+  const signatureStatus = transactionInfo ? null : await client.connection.getSignatureStatuses(
+    [signature],
+    { searchTransactionHistory: true },
+  );
+  const status = signatureStatus?.value[0] ?? null;
+  const error = confirmation.value.err ?? transactionInfo?.meta?.err ?? status?.err ?? null;
   const deltas = {
     custodyWsol: after.balances.custodyWsol - before.balances.custodyWsol,
     custodyUsdc: after.balances.custodyUsdc - before.balances.custodyUsdc,
     takerWsol: after.balances.takerWsol - before.balances.takerWsol,
     takerUsdc: after.balances.takerUsdc - before.balances.takerUsdc,
   };
-  const programStateUnchanged = Object.values(deltas).every((delta) => delta === 0n)
+  const monitoredValuesUnchanged = Object.values(deltas).every((delta) => delta === 0n)
     && before.vaultSequence === after.vaultSequence
     && before.intent?.sequence === after.intent?.sequence
     && before.intent?.remainingSellAmount === after.intent?.remainingSellAmount;
   return {
     signature,
-    slot: transactionInfo?.slot ?? confirmation.context.slot,
+    slot: transactionInfo?.slot ?? status?.slot ?? null,
     accepted: error === null,
     error: error === null ? null : JSON.stringify(error),
     logs: transactionInfo?.meta?.logMessages ?? [],
     deltas,
-    programStateUnchanged,
+    monitoredValuesUnchanged,
     vaultSequenceBefore: before.vaultSequence,
     vaultSequenceAfter: after.vaultSequence,
     remainingBefore: before.intent?.remainingSellAmount ?? null,
