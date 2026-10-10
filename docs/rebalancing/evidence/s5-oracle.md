@@ -45,6 +45,18 @@ The read-only tool at [`tools/rebalancing/etf-oracle-probe`](../../tools/rebalan
 
 Both Pyth program IDs in the table above were executable under `BPFLoaderUpgradeab1e11111111111111111111111` at confirmed slot `509627995`. A prior probe minutes earlier observed BTC/USD and USDC/USD at 326 seconds old and correctly rejected them under the 60-second check; a later snapshot had all three feeds at 32 seconds old. This confirms fail-closed staleness behavior and changing availability, not a guaranteed update cadence. The raw price for a Pyth feed does not prove that any corresponding Devnet SPL test mint is backed by the labeled asset.
 
+## Refreshed read-only Devnet observation — 10 October 2026
+
+The same probe was rerun at confirmed slot `509631945`, block time `1791657172` (2026-10-10 18:32:52 UTC), with the same Devnet genesis. All three accounts retained the expected Receiver owner, 134-byte layout, embedded feed IDs and `Full` verification. Under the explicitly diagnostic 60-second age ceiling, SOL/USD and BTC/USD were **stale** at 327 seconds and rejected by the SDK-backed adapter; USDC/USD was fresh at 11 seconds and passed with 10 bps confidence. This later result supersedes the earlier snapshot as the latest observation and demonstrates why a single successful sample cannot establish the runtime availability needed for a multi-asset basket.
+
+| Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Adapter at 60 seconds | Data SHA-256 |
+|---|---:|---:|---:|---|---|
+| SOL/USD | `10987310976 ± 3992922`, exponent `-8` | 327 seconds | 4 bps | rejected: stale | `dad515455759d58ab032469330fd994c59bb6e1f455ea9a29fbf48f52006aa98` |
+| BTC/USD | `8291976399801 ± 7267606752`, exponent `-8` | 327 seconds | 9 bps | rejected: stale | `2442e5c00507670f04996e14830f9030b5bb1516ea34f9fd10792c8665726c14` |
+| USDC/USD | `99988241 ± 96759`, exponent `-8` | 11 seconds | 10 bps | accepted under diagnostic ceilings | `a169c21b17c03fc80e96d87aac1d7a1e3ff5789d88405fbd0628d4fee574c3ac` |
+
+The confidence ceiling was `u16::MAX` and is not an approved risk policy. No transaction was sent. The basket still requires every configured feed to meet policy in the same transaction; this observation would fail that multi-asset prerequisite.
+
 ## 11 October 2026 compatibility finding
 
 The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `PriceUpdateV2` parser and `get_price_no_older_than` method enforce the Receiver account discriminator, feed ID, maximum age and Full verification when used through Anchor `Account<PriceUpdateV2>`. A fixed sponsored feed is a different lifecycle (long-lived shard/feed PDA) from a user-posted ephemeral update, but Pyth's current official Push Oracle program source shows `update_price_feed` CPI-calls the Receiver's `post_update` using that PDA as the `price_update_account`, then deserializes it with `PriceUpdateV2::try_deserialize` and verifies the embedded feed ID. The direct observation above confirms all three candidate accounts use the Receiver owner and decode with the pinned SDK as Full-verified `PriceUpdateV2` data. Thus the current Rust parser is a viable account-mode match for this sample; no custom raw-byte parser is justified from the evidence found so far.
