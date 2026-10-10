@@ -21,9 +21,9 @@ object StrategyRecords {
     fun validateStrategy(value: JsonValue): ValidatedRecord {
         val initialFields = value.asObject("strategy")
         val normalizedValue = when {
+            initialFields["schema"]?.asString("schema") == "coloyond/ColoyondManagedStrategy/v1" -> value
             initialFields["allocations"] != null -> sortedArray(value, "allocations", "outputMint")
             initialFields["targetWeights"] != null -> sortedArray(value, "targetWeights", "mint")
-            initialFields["tokens"] != null -> sortedArrayByPubkey(value, "tokens", "mint")
             else -> value
         }
         val fields = normalizedValue.asObject("strategy")
@@ -121,7 +121,8 @@ object StrategyRecords {
             require(bps in 1L..10_000L); sum += bps
         }
         require(sum == 10_000L)
-        return record(value, COLOYOND3, "cb3:", false)
+        // Identity integrity alone never proves a live, published on-chain vault.
+        return record(value, COLOYOND3, "cb3:", true)
     }
 
     fun validateScene(value: JsonValue): ValidatedRecord {
@@ -288,7 +289,7 @@ object StrategyRecords {
                 require(exprResult.value.asObject("expression").getValue("strategyId").asString("strategyId") == strategy.id)
             }
             val snapshot = f.getValue("configurationSnapshot")
-            require(snapshot == JsonValue.Null || snapshot is JsonValue.Obj)
+            require(snapshot == JsonValue.Null) { "Export v2 configuration snapshot requires a supported projection mapping" }
             return ValidatedRecord(value, StrictJson.canonical(value), strategy.id, true)
         }
         require(version == 3L) { "Unsupported export version" }
@@ -302,7 +303,7 @@ object StrategyRecords {
             require(e.value.asObject("expression").getValue("strategyId").asString("strategyId") == strategy.id)
         }
         val snapshot = f.getValue("configurationSnapshot")
-        require(snapshot == JsonValue.Null || snapshot is JsonValue.Obj)
+        require(snapshot == JsonValue.Null) { "Export v3 configuration snapshot requires a supported projection mapping" }
         return ValidatedRecord(value, StrictJson.canonical(value), strategy.id, strategy.viewOnly)
     }
 
@@ -331,18 +332,6 @@ object StrategyRecords {
         val fields = value.asObject("strategy")
         val array = fields.getValue(fieldName).asArray(fieldName)
         val sorted = array.sortedBy { it.asObject(fieldName).getValue(keyName).asString(keyName) }
-        return JsonValue.Obj(fields + (fieldName to JsonValue.Arr(sorted)))
-    }
-
-    private fun sortedArrayByPubkey(value: JsonValue, fieldName: String, keyName: String): JsonValue {
-        val fields = value.asObject("strategy")
-        val array = fields.getValue(fieldName).asArray(fieldName)
-        val sorted = array.sortedWith { left, right ->
-            compareBytes(
-                decodeCanonicalPubkey(left.asObject(fieldName).getValue(keyName).asString(keyName)),
-                decodeCanonicalPubkey(right.asObject(fieldName).getValue(keyName).asString(keyName)),
-            )
-        }
         return JsonValue.Obj(fields + (fieldName to JsonValue.Arr(sorted)))
     }
 

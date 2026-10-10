@@ -1,7 +1,6 @@
 package com.coloyond.strategy
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -65,7 +64,7 @@ class StrategyRecordsTest {
         val record = """{"schema":"coloyond/ColoyondManagedStrategy/v1","cluster":"mainnet-beta","genesisHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","programId":"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate","vaultAddress":"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW","shareMint":"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv","configurationRevision":"18446744073709551615","tokens":[{"mint":"So11111111111111111111111111111111111111112","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":9,"targetBps":6000},{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":6,"targetBps":4000}],"policyDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceManifestRevision":"1"}"""
         val validated = StrategyRecords.validateStrategy(StrategyRecords.parse(record))
         assertTrue(validated.id.startsWith("cb3:"))
-        assertFalse(validated.viewOnly)
+        assertTrue(validated.viewOnly)
         val fields = validated.value.asObject("validated cb3")
         assertEquals("18446744073709551615", fields.getValue("configurationRevision").asString("configurationRevision"))
         assertTrue(runCatching {
@@ -79,7 +78,7 @@ class StrategyRecordsTest {
             "\"tokens\":[{\"mint\":\"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\",\"tokenProgram\":\"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA\",\"decimals\":6,\"targetBps\":4000},{\"mint\":\"So11111111111111111111111111111111111111112\",\"tokenProgram\":\"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA\",\"decimals\":9,\"targetBps\":6000}]",
         )
         assertTrue(reordered != record)
-        assertEquals(validated.id, StrategyRecords.validateStrategy(StrategyRecords.parse(reordered)).id)
+        assertTrue(runCatching { StrategyRecords.validateStrategy(StrategyRecords.parse(reordered)) }.isFailure)
         assertTrue(runCatching { StrategyRecords.validateStrategy(StrategyRecords.parse(record.dropLast(1) + ",\"extra\":true}")) }.isFailure)
 
         val scene = StrategyRecords.validateScene(vectors().fields.getValue("sceneVectors").asArray("sceneVectors").single().asObject("scene vector").getValue("scene"))
@@ -106,5 +105,22 @@ class StrategyRecordsTest {
         assertEquals(validated.id, StrategyRecords.validateExport(export).id)
         assertTrue(expressionId.id.startsWith("cbe2:"))
         assertTrue(runCatching { StrategyRecords.validateExpression(expression, coloyond = false) }.isFailure)
+        val invalidV3Snapshot = JsonValue.Obj(export.fields + ("configurationSnapshot" to JsonValue.Obj(emptyMap())))
+        assertTrue(runCatching { StrategyRecords.validateExport(invalidV3Snapshot) }.isFailure)
+
+        val draftVector = vectors().fields.getValue("vectors").asArray("strategy vectors")
+            .map { it.asObject("strategy vector") }
+            .first { it.getValue("name").asString("name") == "draft-70-30" }
+        val draft = StrategyRecords.validateStrategy(draftVector.getValue("input"))
+        val exportV2 = JsonValue.Obj(mapOf(
+            "exportVersion" to JsonValue.Num("2"),
+            "configurationSnapshot" to JsonValue.Null,
+            "strategy" to draft.value,
+            "strategyId" to JsonValue.Str(draft.id),
+            "expression" to JsonValue.Null,
+        ))
+        assertEquals(draft.id, StrategyRecords.validateExport(exportV2).id)
+        val invalidV2Snapshot = JsonValue.Obj(exportV2.fields + ("configurationSnapshot" to JsonValue.Obj(emptyMap())))
+        assertTrue(runCatching { StrategyRecords.validateExport(invalidV2Snapshot) }.isFailure)
     }
 }
