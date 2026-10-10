@@ -10,6 +10,8 @@ RPC = "https://api.devnet.solana.com"
 PROGRAM_ID = "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
 UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+MAX_TASK_QUEUE_SAMPLES = 5
+MAX_TASKS_PER_QUEUE = 3
 
 
 def rpc(method, params=None):
@@ -127,6 +129,16 @@ def decode_task_queue(data):
     task_count = sum(bin(value).count("1") for value in bitmap)
     if task_count > capacity:
         raise ValueError("TaskQueueV0 bitmap is inconsistent with capacity")
+    sample_task_ids = []
+    for byte_index, byte in enumerate(bitmap):
+        for bit in range(8):
+            task_id = byte_index * 8 + bit
+            if task_id < capacity and byte & (1 << bit):
+                sample_task_ids.append(task_id)
+                if len(sample_task_ids) == MAX_TASKS_PER_QUEUE:
+                    break
+        if len(sample_task_ids) == MAX_TASKS_PER_QUEUE:
+            break
     return {
         "config": config,
         "id": queue_id,
@@ -136,12 +148,178 @@ def decode_task_queue(data):
         "uncollected_protocol_fees_lamports": uncollected_protocol_fees,
         "capacity": capacity,
         "tasks_in_bitmap": task_count,
+        "sample_task_ids": sample_task_ids,
         "created_at": created_at,
         "updated_at": updated_at,
         "queue_authorities": authority_count,
         "stale_task_age_seconds": stale_task_age_seconds,
         "zero_allocation_padding_bytes": len(allocation_padding),
     }
+
+
+class BorshReader:
+    def __init__(self, data, offset=0):
+        self.data = data
+        self.offset = offset
+
+    def take(self, size):
+        if size < 0 or size > len(self.data) - self.offset:
+            raise ValueError("truncated TaskV0 data")
+        value = self.data[self.offset:self.offset + size]
+        self.offset += size
+        return value
+
+    def uint(self, size):
+        return int.from_bytes(self.take(size), "little")
+
+    def signed(self, size):
+        return int.from_bytes(self.take(size), "little", signed=True)
+
+    def byte_vec(self, maximum=None):
+        size = self.uint(4)
+        if maximum is not None and size > maximum:
+            raise ValueError("compiled task byte vector exceeds Solana seed limit")
+        return self.take(size)
+
+    def string(self):
+        try:
+            return self.byte_vec().decode("utf-8", errors="strict")
+        except UnicodeDecodeError as error:
+            raise ValueError("TaskV0 contains invalid UTF-8") from error
+
+    def finish_zero_padding(self):
+        padding = self.take(len(self.data) - self.offset)
+        if any(padding):
+            raise ValueError("unexpected nonzero trailing TaskV0 allocation bytes")
+        return len(padding)
+
+
+def decode_task(data):
+    """Decode bounded TaskV0 fields and validate compiled account indexes."""
+    if data[:8] != discriminator("TaskV0") or len(data) < 8 + 32 + 8 + 8 + 2:
+        raise ValueError("invalid TaskV0 discriminator or data length")
+    reader = BorshReader(data, 8)
+    queue = base58_encode(reader.take(32))
+    rent_amount = reader.uint(8)
+    crank_reward = reader.uint(8)
+    task_id = reader.uint(2)
+
+    trigger_tag = reader.uint(1)
+    if trigger_tag == 0:
+        trigger = {"kind": "Now"}
+    elif trigger_tag == 1:
+        trigger = {"kind": "Timestamp", "unix_timestamp": reader.signed(8)}
+    else:
+        raise ValueError("unknown TaskV0 trigger variant")
+
+    rent_refund = base58_encode(reader.take(32))
+    transaction_start = reader.offset
+    transaction_tag = reader.uint(1)
+    transaction = {"serialized_bytes": 0}
+    if transaction_tag == 0:
+        rw_signers = reader.uint(1)
+        ro_signers = reader.uint(1)
+        rw_accounts = reader.uint(1)
+        account_count = reader.uint(4)
+        if account_count > 256 or account_count * 32 > len(data) - reader.offset:
+            raise ValueError("invalid CompiledV0 account-key vector")
+        account_keys = [reader.take(32) for _ in range(account_count)]
+        instruction_count = reader.uint(4)
+        if instruction_count > len(data) - reader.offset:
+            raise ValueError("invalid CompiledV0 instruction vector")
+        instructions = []
+        instruction_data_bytes = 0
+        for _ in range(instruction_count):
+            program_index = reader.uint(1)
+            account_indexes = list(reader.byte_vec())
+            instruction_data = reader.byte_vec()
+            if program_index >= account_count or any(index >= account_count for index in account_indexes):
+                raise ValueError("CompiledV0 instruction account index is out of range")
+            instruction_data_bytes += len(instruction_data)
+            instructions.append({"program_id_index": program_index, "account_count": len(account_indexes)})
+        if rw_signers + ro_signers + rw_accounts > account_count:
+            raise ValueError("CompiledV0 signer/writable counts exceed its account keys")
+
+        signer_group_count = reader.uint(4)
+        if signer_group_count > len(data) - reader.offset:
+            raise ValueError("invalid CompiledV0 signer-seed vector")
+        seed_count = 0
+        for _ in range(signer_group_count):
+            signer_seed_count = reader.uint(4)
+            if signer_seed_count > 16:
+                raise ValueError("CompiledV0 signer has more than 16 PDA seeds")
+            seed_count += signer_seed_count
+            for _ in range(signer_seed_count):
+                reader.byte_vec(maximum=32)
+
+        transaction = {
+            "kind": "CompiledV0",
+            "account_count": account_count,
+            "instruction_count": instruction_count,
+            "instruction_data_bytes": instruction_data_bytes,
+            "signer_group_count": signer_group_count,
+            "signer_seed_count": seed_count,
+        }
+    elif transaction_tag == 1:
+        # Keep remote endpoints and signers out of the diagnostic output; their
+        # presence alone is enough to disqualify a task from no-backend fit.
+        reader.string()
+        reader.take(32)
+        transaction = {"kind": "RemoteV0"}
+    else:
+        raise ValueError("unknown TaskV0 transaction variant")
+    transaction["serialized_bytes"] = reader.offset - transaction_start
+
+    queued_at = reader.signed(8)
+    bump_seed = reader.uint(1)
+    free_tasks = reader.uint(1)
+    description = reader.string()
+    if len(description.encode("utf-8")) > 40:
+        raise ValueError("TaskV0 description exceeds TukTuk's 40-byte limit")
+    padding_bytes = reader.finish_zero_padding()
+    return {
+        "task_queue": queue,
+        "rent_amount_lamports": rent_amount,
+        "crank_reward_lamports": crank_reward,
+        "id": task_id,
+        "trigger": trigger,
+        "rent_refund": rent_refund,
+        "transaction": transaction,
+        "queued_at": queued_at,
+        "bump_seed": bump_seed,
+        "free_tasks": free_tasks,
+        "description_bytes": len(description.encode("utf-8")),
+        "zero_allocation_padding_bytes": padding_bytes,
+    }
+
+
+def sampled_task_account(queue_address, task_id, minimum_context_slot):
+    result = rpc(
+        "getProgramAccounts",
+        [
+            PROGRAM_ID,
+            {
+                "encoding": "base64",
+                "commitment": "confirmed",
+                "withContext": True,
+                "minContextSlot": minimum_context_slot,
+                "filters": [
+                    {"memcmp": {"offset": 0, "bytes": base58_encode(discriminator("TaskV0"))}},
+                    {"memcmp": {"offset": 8, "bytes": queue_address}},
+                    {"memcmp": {"offset": 56, "bytes": base58_encode(task_id.to_bytes(2, "little"))}},
+                ],
+            },
+        ],
+    )
+    if result["context"]["slot"] < minimum_context_slot:
+        raise RuntimeError(f"TaskV0 context regressed behind slot {minimum_context_slot}")
+    if len(result["value"]) != 1:
+        return result["context"]["slot"], None
+    row = result["value"][0]
+    if row["account"]["owner"] != PROGRAM_ID:
+        raise RuntimeError(f"TaskV0 owner mismatch at {row['pubkey']}")
+    raw = base64.b64decode(row["account"]["data"][0], validate=True)
+    return result["context"]["slot"], (row, decode_task(raw))
 
 
 def main():
@@ -193,13 +371,30 @@ def main():
     print(f"queue_snapshot_block_time={queue_block_time}")
     active_samples = [
         (row, queue) for row, queue in decoded_queues if queue["tasks_in_bitmap"]
-    ][:5]
+    ][:MAX_TASK_QUEUE_SAMPLES]
     for row, queue in active_samples:
         print(
             f"queue_with_tasks_sample_address={row['pubkey']} "
             f"raw_account_lamports={row['account']['lamports']} queue={queue}"
         )
+        for task_id in queue["sample_task_ids"]:
+            task_slot, task_sample = sampled_task_account(row["pubkey"], task_id, queue_slot)
+            if task_sample is None:
+                print(f"task_sample queue={row['pubkey']} id={task_id} status=changed-during-snapshot task_slot={task_slot}")
+                continue
+            task_row, task = task_sample
+            if task["task_queue"] != row["pubkey"] or task["id"] != task_id:
+                raise RuntimeError(f"TaskV0 PDA filter returned mismatched task {task_row['pubkey']}")
+            if task_id >= queue["capacity"] or task_id not in queue["sample_task_ids"]:
+                raise RuntimeError(f"TaskV0 {task_row['pubkey']} is not occupied within queue capacity")
+            if task["free_tasks"] + 1 > queue["capacity"]:
+                raise RuntimeError(f"TaskV0 {task_row['pubkey']} free task count exceeds queue capacity")
+            print(
+                f"task_sample_slot={task_slot} task_address={task_row['pubkey']} "
+                f"task_account_lamports={task_row['account']['lamports']} task={task}"
+            )
     print("Raw queue lamports include rent-exempt allocation and are not reported as spendable funds.")
+    print("Task samples are bounded examples from unrelated public queues; they do not prove ETF payload compatibility or execution.")
     print("Read-only snapshot: task bitmap entries do not prove a crank-turner is online or that tasks execute.")
 
 

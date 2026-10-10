@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from probe import base58_encode, decode_config, decode_task_queue, discriminator
+from probe import base58_encode, decode_config, decode_task, decode_task_queue, discriminator
 
 
 def queue_account(bitmap=b"\x05", capacity=8, padding=b""):
@@ -20,6 +20,51 @@ def queue_account(bitmap=b"\x05", capacity=8, padding=b""):
             struct.pack("<I", 1),
             bytes([99]) * 32,
             struct.pack("<HI", 2, 300),
+            padding,
+        )
+    )
+
+
+def borsh_bytes(value):
+    return struct.pack("<I", len(value)) + value
+
+
+def compiled_transaction(program_index=1, account_index=0, signer_seed=b"seed"):
+    return b"".join(
+        (
+            b"\x00",  # TransactionSourceV0::CompiledV0
+            bytes((1, 0, 1)),  # writable signers, readonly signers, writable accounts
+            struct.pack("<I", 2),
+            bytes(range(64)),  # two account pubkeys
+            struct.pack("<I", 1),  # one instruction
+            bytes((program_index,)),
+            borsh_bytes(bytes((account_index,))),
+            borsh_bytes(b"ix"),
+            struct.pack("<I", 1),  # signer groups
+            struct.pack("<I", 1),  # seeds in group
+            borsh_bytes(signer_seed),
+        )
+    )
+
+
+def remote_transaction(url="https://example.invalid/tx"):
+    return b"\x01" + borsh_bytes(url.encode()) + bytes(range(32))
+
+
+def task_account(transaction, trigger_tag=0, trigger_time=0, padding=b"", description="probe"):
+    trigger = bytes((trigger_tag,))
+    if trigger_tag == 1:
+        trigger += struct.pack("<q", trigger_time)
+    return b"".join(
+        (
+            discriminator("TaskV0"),
+            bytes(range(32)),  # queue pubkey
+            struct.pack("<QQH", 123_456, 7_000, 0),
+            trigger,
+            bytes(range(32, 64)),  # rent refund
+            transaction,
+            struct.pack("<qBB", 500, 1, 0),
+            borsh_bytes(description.encode()),
             padding,
         )
     )
@@ -68,6 +113,67 @@ class TukTukProbeTests(unittest.TestCase):
             decode_task_queue(discriminator("TaskQueueV0") + bytes(20))
         with self.assertRaises(ValueError):
             decode_task_queue(queue_account(padding=b"\x01"))
+
+    def test_task_decoder_covers_both_sources_and_triggers(self):
+        for transaction, expected_source in (
+            (compiled_transaction(), "CompiledV0"),
+            (remote_transaction(), "RemoteV0"),
+        ):
+            for trigger_tag, trigger_time in ((0, 0), (1, 1_700_000_123)):
+                with self.subTest(source=expected_source, trigger=trigger_tag):
+                    decoded = decode_task(
+                        task_account(transaction, trigger_tag, trigger_time)
+                    )
+                    self.assertEqual(decoded["id"], 0)
+                    self.assertEqual(decoded["rent_amount_lamports"], 123_456)
+                    self.assertEqual(decoded["crank_reward_lamports"], 7_000)
+                    self.assertEqual(decoded["transaction"]["kind"], expected_source)
+                    self.assertEqual(decoded["description_bytes"], len("probe"))
+                    if expected_source == "CompiledV0":
+                        self.assertEqual(decoded["transaction"]["account_count"], 2)
+                        self.assertEqual(decoded["transaction"]["instruction_count"], 1)
+                        self.assertEqual(decoded["transaction"]["signer_seed_count"], 1)
+                    self.assertEqual(
+                        decoded["trigger"],
+                        {"kind": "Now"}
+                        if trigger_tag == 0
+                        else {"kind": "Timestamp", "unix_timestamp": trigger_time},
+                    )
+
+    def test_task_decoder_validates_compiled_indexes_and_signer_seeds(self):
+        with self.assertRaisesRegex(ValueError, "index is out of range"):
+            decode_task(task_account(compiled_transaction(program_index=2)))
+        with self.assertRaisesRegex(ValueError, "index is out of range"):
+            decode_task(task_account(compiled_transaction(account_index=2)))
+        with self.assertRaisesRegex(ValueError, "16 PDA seeds"):
+            malformed = compiled_transaction()[:-12] + struct.pack("<I", 17)
+            decode_task(task_account(malformed))
+        with self.assertRaisesRegex(ValueError, "seed limit"):
+            decode_task(task_account(compiled_transaction(signer_seed=bytes(33))))
+
+    def test_task_decoder_fails_closed_on_unknown_truncated_and_bad_padding(self):
+        valid = task_account(compiled_transaction())
+        with self.assertRaisesRegex(ValueError, "trigger variant"):
+            decode_task(task_account(compiled_transaction(), trigger_tag=2))
+        with self.assertRaisesRegex(ValueError, "transaction variant"):
+            decode_task(task_account(b"\x02"))
+        with self.assertRaises(ValueError):
+            decode_task(valid[:-3])
+        self.assertEqual(
+            decode_task(task_account(compiled_transaction(), padding=bytes(8)))[
+                "zero_allocation_padding_bytes"
+            ],
+            8,
+        )
+        with self.assertRaisesRegex(ValueError, "nonzero trailing"):
+            decode_task(task_account(compiled_transaction(), padding=b"\x01"))
+        with self.assertRaisesRegex(ValueError, "40-byte limit"):
+            decode_task(task_account(remote_transaction(), description="x" * 41))
+
+    def test_queue_decoder_samples_only_a_bounded_set_of_occupied_ids(self):
+        decoded = decode_task_queue(queue_account(bitmap=b"\xff\xff", capacity=16))
+        self.assertEqual(decoded["tasks_in_bitmap"], 16)
+        self.assertEqual(decoded["sample_task_ids"], [0, 1, 2])
 
 
 if __name__ == "__main__":
