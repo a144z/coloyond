@@ -48,6 +48,7 @@ impl PartialOrd for U256 {
 #[cfg(test)]
 mod tests {
     use super::U256;
+    use std::vec::Vec;
 
     #[test]
     fn multiplies_full_width_values() {
@@ -94,5 +95,21 @@ mod tests {
         for (left, right, high, low) in vectors {
             assert_eq!(U256::mul_u128(left, right), U256 { high, low });
         }
+    }
+
+    #[test]
+    fn matches_python_big_integer_vectors_across_full_width_domain() {
+        let mut tested = 0;
+        for line in include_str!("../tests/u256_vectors.csv").lines().skip(1) {
+            let fields: Vec<u128> = line
+                .split(',')
+                .map(|field| field.parse().expect("valid generated u128 field"))
+                .collect();
+            let [left, right, high, low] =
+                <[u128; 4]>::try_from(fields).expect("four vector fields");
+            assert_eq!(U256::mul_u128(left, right), U256 { high, low });
+            tested += 1;
+        }
+        assert_eq!(tested, 320, "regenerate and review the full-width vectors");
     }
 }

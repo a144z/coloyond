@@ -2,6 +2,9 @@
 
 //! Pure, checked weighted-portfolio math for ETF v1.
 
+#[cfg(test)]
+extern crate std;
+
 mod value;
 mod weighted;
 mod wide;

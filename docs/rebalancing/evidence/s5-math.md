@@ -15,12 +15,11 @@
 ## Evidence added in this package
 
 - High-precision reference outputs generated independently with Python `Decimal` at 90-digit precision for equal and unequal weights, 100/9,800 bps boundary weights, multiple fees, and larger reserve/input values.
-- A reproducible deterministic envelope generator now produces 1,036 two-asset vectors spanning reserve scales through `10^18`, weight extremes, balanced/skewed reserves, five input ratios and five fee levels. Tests require no overpayment and cap relative quote shortfall at one part per billion; the current run's worst relative shortfall was 10 parts per trillion. The largest absolute shortfall was 114 base units at the largest reserve scale, so a one-base-unit global bound is not claimed.
+- A reproducible deterministic envelope generator now produces exactly 1,036 two-asset vectors spanning reserve scales through `10^18`, weight extremes, balanced/skewed reserves, five input ratios and five fee levels. Tests require no overpayment and cap the algorithmic shortfall below the ideal integer-floor output at one part per billion using ceiling division; the current run's worst relative shortfall is at most 11 parts per trillion. The largest absolute shortfall was 114 base units at the largest reserve scale, so a one-base-unit global bound is not claimed. This comparison excludes the fractional remainder between continuous output and its integer floor.
 - The original small-point golden tests remain within one token base unit of the independent integer-floor references.
 - A combined equal-weight case proves a nontrivial retained-fee quote can preserve the exact reserve product and strictly improve value-weight deviation under equal oracle prices.
 - Existing valuation tests cover decimal/exponent normalization, scale underflow, unsupported values, total-variation rounding and exact strict-improvement comparison.
-- `U256` edge tests cover zero, max-by-one and max-by-max products.
-- Cross-limb `U256` products are checked against independent fixed-width reference values.
+- `U256` multiplication is checked against exactly 320 deterministic exact vectors generated independently with Python's arbitrary-precision integers, including edge, single-limb and cross-limb values.
 
 ## Quote conservatism argument and independent review
 

@@ -139,11 +139,16 @@ fn generated_decimal_envelope_never_overpays_reference_quote() {
         assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
         let error = reference_floor - quote.amount_out;
         maximum_absolute_error = maximum_absolute_error.max(error);
-        maximum_relative_error_pptr = maximum_relative_error_pptr
-            .max(u128::from(error) * 1_000_000_000_000 / u128::from(reference_floor.max(1)));
+        let reference = u128::from(reference_floor.max(1));
+        let scaled_error = u128::from(error) * 1_000_000_000_000;
+        let relative_error_pptr = (scaled_error + reference - 1) / reference;
+        maximum_relative_error_pptr = maximum_relative_error_pptr.max(relative_error_pptr);
         tested += 1;
     }
-    assert!(tested >= 1_000, "regenerate the expected envelope vectors");
+    assert_eq!(
+        tested, 1_036,
+        "regenerate and review the full envelope vector set"
+    );
     assert!(
         maximum_relative_error_pptr <= 1_000,
         "quote error exceeds one part per billion: {maximum_relative_error_pptr} pptr"
