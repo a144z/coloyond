@@ -40,7 +40,7 @@ fun PortfolioStatusScreen(
             Fact("Provider label", PortfolioReadModelPresentation.optional(model.source.providerLabel))
             Fact("Cluster", "Solana ${model.network.cluster.wireValue}")
             Fact("Genesis hash", PortfolioReadModelPresentation.optional(model.network.genesisHash), code = true)
-            Fact("Observed at", PortfolioReadModelPresentation.optional(model.source.observedAt))
+            Fact("Snapshot slot block time", PortfolioReadModelPresentation.optional(model.source.observedAt))
             Fact("Observation slot", PortfolioReadModelPresentation.optional(model.source.slot), code = true)
         }
 
@@ -67,6 +67,22 @@ fun PortfolioStatusScreen(
             }
         }
 
+        FactSection("Wallet token accounts") {
+            val wallet = model.wallet
+            if (wallet == null) {
+                Fact("Wallet lookup", "No real wallet address was included in this RPC snapshot")
+            } else {
+                Fact("Wallet address", wallet.address, code = true)
+                wallet.balances.forEach { balance ->
+                    Text(balance.symbol, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
+                    Fact("Mint", balance.mint, code = true)
+                    Fact("Associated token account", balance.tokenAccount, code = true)
+                    Fact("Account exists", PortfolioReadModelPresentation.yesNoUnknown(balance.accountExists))
+                    Fact("Balance · base units", PortfolioReadModelPresentation.optional(balance.amountBaseUnits), code = true)
+                }
+            }
+        }
+
         FactSection("Oracle observations") {
             if (model.oracle.isEmpty()) Fact("Feeds", "No oracle rows in this snapshot")
             model.oracle.forEachIndexed { index, feed ->
@@ -80,6 +96,14 @@ fun PortfolioStatusScreen(
             }
         }
 
+        FactSection("Risk and admission blockers") {
+            if (model.riskBlockers.isEmpty()) {
+                Fact("Snapshot blockers", "None reported by the reader")
+            } else {
+                model.riskBlockers.forEach { blocker -> Fact("Blocked", blocker, code = true) }
+            }
+        }
+
         FactSection("Rebalance lifecycle") {
             Fact("Vault phase", PortfolioReadModelPresentation.phaseLabel(model.vault.phase))
             val auction = model.auction
@@ -88,7 +112,7 @@ fun PortfolioStatusScreen(
             } else {
                 Fact("Auction sequence", PortfolioReadModelPresentation.optional(auction.sequence), code = true)
                 Fact("Remaining", PortfolioReadModelPresentation.optional(auction.remaining), code = true)
-                Fact("Expiry", PortfolioReadModelPresentation.optional(auction.expiresAt))
+                Fact("End slot", PortfolioReadModelPresentation.optional(auction.endSlot), code = true)
                 Fact("Auction fee", PortfolioReadModelPresentation.bps(auction.feeBps))
             }
             val transition = model.lastConfirmedTransition
