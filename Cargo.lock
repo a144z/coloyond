@@ -528,6 +528,10 @@ version = "0.1.0"
 [[package]]
 name = "coloyond-etf-oracle"
 version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "pyth-solana-receiver-sdk",
+]
 
 [[package]]
 name = "coloyond-vault"
