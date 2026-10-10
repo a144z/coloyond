@@ -1,6 +1,6 @@
 # S3F condition scheduler and liveness evidence
 
-**Gate: OPEN.** The deterministic harness and focused scheduler checks are in place. A Localnet run is still required before marking S3F complete. This evidence must not be treated as a developer checkpoint acceptance.
+**Gate: OPEN.** The deterministic harness and focused scheduler checks are in place, and a partial Localnet run has confirmed the proposal and keeper execute instructions on the Coloyond SBF program. Post-send reconciliation currently fails on the condition-account tail, so the complete two-keeper liveness scenario remains unverified. This evidence must not be treated as a developer checkpoint acceptance.
 
 ## Audit against the S3F contract
 
@@ -13,7 +13,7 @@
 
 Run the harness against the S3E disposable validator and the deployed `coloyond_vault` SBF program. It uses four distinct signers: the Localnet governance authority, Keeper A, Keeper B, and an unrelated caller. Keeper A and Keeper B each own a separate `SolanaConditionRuntime` and RPC `Connection`; they default to the same Localnet endpoint unless separate endpoint variables are set.
 
-The runner performs this sequence using confirmed transactions and RPC account reads:
+On a complete run, the runner performs this sequence using confirmed transactions and RPC account reads:
 
 1. Verify the Localnet genesis hash, executable Coloyond program, vault owner and empty condition PDA.
 2. Have the governance wallet propose a scheduled target rule and verify its program-owned `ConditionState` account.
@@ -80,5 +80,17 @@ The harness reports one latency sample per invocation. Do not report p50/p95 fro
 
 - `npm --prefix packages/keeper run typecheck` — passed.
 - `npm --prefix packages/keeper test` — passed, 37 tests.
-- Attempted the documented fresh-ledger startup with the pinned local Solana CLI, validator and SBF toolchain. Startup stopped during fixture generation, before validator launch: `tools/rebalancing/localnet/generator/src/main.rs` initializes the S4C `AuctionPolicy` without `fee_reserve_share_bps`, `reserve_floor`, `epoch_bounty_budget`, `bounty_epoch` and `bounty_epoch_spent`. The compiler reports E0063 for those missing fields. This S3F package does not own or change the generator; S3E fixture compatibility must be repaired separately, then this harness rerun.
-- No Localnet genesis, transaction signature or S3F liveness result was produced by this attempt. Keep the S3F checklist item and two-keeper liveness gate unchecked until the repaired harness is run and reviewed.
+
+## Observed Localnet attempt (2026-10-10)
+
+The validation used a disposable checkout with root feature commit `789586ac07ea9d691175bdb25a52267356884cb1` plus S3F package commit `66e6fe3e5f36d65f4789a21eb7bbc15f62831a1c`; neither the root checkout nor `main` was modified. The updated v2 fixture generator completed successfully, and the `coloyond_vault` SBF build completed successfully. Solana CLI and `solana-test-validator` were version 2.3.0. The run used genesis `HCtdPGkxPuKaLR7kYVSne7FmyGsPY5n2CYsdZMtj1uUE`, program `FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6`, and RPC `http://127.0.0.1:54899`.
+
+- Governance proposal `5mpXb4pBPyCYP219gvAggh1c9NK4R7RUdgttBah8NfJp48chonN9witNudgdEdgWxmsJRY1VKgRWE6ppWHS9RUDa` finalized at slot 34.
+- Keeper A's injected pre-send failure occurred at eligible slot 51 and correctly produced no chain submission.
+- Keeper B reached the signed send path with injected response loss. Its execute transaction, `5wBHjyhEF6YBwU3b2ojCDQepZ65EALDrniYd1VWwGBFnmvFwEWoKZPEtAzjGmT3tfRqht2LUPcRxSiUUVQMFv9Lw`, finalized at slot 53 with `err: null`; transaction logs show `ExecuteConditionRule`, invocation of the pinned Coloyond program, and program success.
+- Keeper B could not reconcile the applied action. The condition PDA `HqczQzABWWn1gQBoKtkfeiMGvQbHcnpUCjMrVKmC4SXm` is allocated 453 bytes. After the pending rule becomes active, its serialized active schedule ends at offset 209, but byte 209 remains nonzero (`1`) from the former pending rule. The current strict `ConditionState` decoder rejects this stale account tail with `ConditionState contains nonzero bytes outside the pinned layout`.
+- The harness therefore stopped before a confirmed Keeper B reconciliation, unrelated-caller observation/activation, or restart reconciliation. It emitted no eligible-to-submitted latency metric. The Localnet execute transaction succeeded, but this is not a complete S3F liveness result.
+
+The required follow-up is an S3E writer-side account-tail fix that clears bytes beyond the newly serialized state while keeping the client decoder strict. Rerun the complete harness after that fix. Until then, keep the S3F checklist item and two-keeper liveness gate unchecked.
+
+Keeper A and Keeper B used separate connection clients pointed at the same Localnet RPC endpoint; this does not prove RPC-provider or operator independence. The Pyth-shaped accounts carried synthetic fixture values, not authenticated Pyth updates. No Devnet or independent-operator evidence was produced. The full JSON-lines transcript is preserved in [s3-liveness-localnet-attempt-20261010.jsonl](s3-liveness-localnet-attempt-20261010.jsonl); it contains public signatures and scheduler events only, no wallet secrets.
