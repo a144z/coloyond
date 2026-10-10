@@ -151,6 +151,18 @@ The read-only SDK-backed probe fetched all three manifest accounts at confirmed 
 
 This is an all-stale observation, not evidence to relax the age limit. Fixed-feed publisher recovery, a fresh account observation and approved risk limits remain open; no S5C/S0B admission or S5E consumer proof follows from account decoding alone.
 
+## Fourth current-cluster feed read — 11 October 2026
+
+The read-only SDK-backed probe fetched the same manifest accounts at confirmed slot `509703572`, block time `1791674304` (2026-10-10 23:18:24 UTC / 2026-10-11 07:18:24 +0800), on the pinned Devnet genesis. All accounts still have the expected Receiver owner, 134-byte allocation, embedded feed IDs and `Full` verification. SOL and BTC share publish time `1791674136` and are 168 seconds old; USDC retains publish time `1791673783` and is 521 seconds old. All fail the diagnostic 60-second freshness check. The probe sent no transaction.
+
+| Feed | Price × 10^exponent | Confidence × 10^exponent | Publish age | Confidence | Account-data SHA-256 | Adapter |
+|---|---:|---:|---:|---:|---|---|
+| SOL/USD | 110.20920186 | 0.03381392 | 168 s | 4 bps | `c0eb2c2ec820222e5b2f7b5632415d5fe31dd585816e927664bd9e0ad9340033` | fail: stale |
+| BTC/USD | 82,980.14225850 | 0.05620474150 | 168 s | 7 bps | `d625e7ed55fcc85b39a747f4b53c748439d6fb72a5435d9fff0a30bdf3e8a078` | fail: stale |
+| USDC/USD | 0.99986771 | 0.00090229 | 521 s | 10 bps | `6c8cfcbd9415fdee941fdbf1e303a98678633790e8802b46ce2448e821999373` | fail: stale |
+
+The repeated stale basket is an operational blocker for a transaction requiring all configured prices. Do not widen freshness limits to accommodate this sample; prove updater availability or amend the transaction/oracle interface with reviewed evidence before ETF execution.
+
 ## Primary sources
 
 - [Pyth Solana account modes and integration](https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana)
