@@ -13,7 +13,7 @@
 | Program ID | _TBD after program IDL/source freeze_ | No ETF program exists in this manifest. |
 | Program executable / loader owner | _TBD from direct Devnet read_ | Require an executable-account and ProgramData/upgrade-authority record. |
 | Program source/build hash | _TBD_ | Must match the reviewed source and reproducible build evidence. |
-| Pool identity / PDA | Derived from canonical `EtfPoolConfigV1` bytes as specified in [the contract](contracts/etf-v1.md#canonical-pool-and-strategy-identity) | S5A must publish the config hash, ordered bytes/vector, pool/asset/authority/share/custody PDAs and `etf1:<config-hash>` strategy ID. |
+| Pool identity / PDA | Derived from canonical `EtfPoolConfigV1` bytes as specified in [the contract](contracts/etf-v1.md#canonical-pool-and-strategy-identity) and [typed wire schema](contracts/etf-config-v1-wire.md) | A synthetic fixture now proves ordered bytes/hash/strategy ID and pool seed inputs. Program ID and deployed PDA addresses remain TBD; production fee/risk payload formats must be frozen before S5E. |
 | Initializer | _TBD; must be pinned before S5E deployment_ | Only this manifest-pinned signer may create the first reviewed pool PDA, once. It has no post-init admin or custody power. |
 | Governance authority | _TBD; exact key or program PDA must be pinned before S5E deployment_ | May propose only delayed resume or authority handoff; cannot change pool economics/configuration or transfer custody. |
 | Emergency guardian | _TBD; exact key must be pinned before S5E deployment_ | May pause risk-increasing actions immediately; cannot resume, alter policy or block in-kind exit. |

@@ -3,6 +3,7 @@ members = [
     "programs/coloyond-vault",
     "crates/etf-math",
     "crates/etf-oracle",
+    "crates/etf-identity",
 ]
 resolver = "2"
 
