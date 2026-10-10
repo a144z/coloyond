@@ -99,6 +99,10 @@ The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separ
 No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and both fresh and stale fail-closed behavior across several point-in-time Devnet reads. The refreshed slot `509642309` had SOL/BTC fresh at 22 seconds and USDC stale at 338 seconds under the diagnostic 60-second age ceiling. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
 
+## Probe response integrity — offline checks
+
+The read-only RPC probe now rejects a malformed result/context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. Six standard-library tests cover valid batch decoding and these failure cases. This prevents incomplete account batches from being silently accepted by iteration; it is offline parser evidence only and records no new Devnet observation.
+
 ## Primary sources
 
 - [Pyth Solana account modes and integration](https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana)
