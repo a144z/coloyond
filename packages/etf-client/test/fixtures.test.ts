@@ -34,6 +34,14 @@ test("large slots and token amounts remain decimal strings", () => {
   assert.equal(snapshot.balances?.[0]?.rawAmount, "18446744073709551615");
 });
 
+test("available snapshots reject duplicate mint balances", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  const balances = snapshot.balances as Record<string, unknown>[];
+  balances.push({ ...balances[0] });
+  assert.ok(validateReadModelDocument(candidate).some((error) => error.includes("duplicate mint in snapshot")));
+});
+
 test("integer string extremes pass and oversized decimals are rejected", () => {
   const boundary = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = boundary.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;

@@ -105,11 +105,16 @@ def _validate_snapshot(fixture, path, errors):
     if not isinstance(balances, list):
         errors.append(f"{path}.balances: expected array")
         return
+    mints = set()
     for index, balance in enumerate(balances):
         balance_path = f"{path}.balances[{index}]"
         if not _object(balance, balance_path, errors):
             continue
-        _required_text_fields(balance, ("mint",), balance_path, errors)
+        mint = balance.get("mint")
+        if _text(mint, f"{balance_path}.mint", errors):
+            if mint in mints:
+                errors.append(f"{balance_path}.mint: duplicate mint in snapshot")
+            mints.add(mint)
         decimals = balance.get("decimals")
         if not _bounded_json_integer(decimals, 0, 255):
             errors.append(f"{balance_path}.decimals: expected u8 JSON number")

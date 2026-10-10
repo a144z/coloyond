@@ -103,13 +103,17 @@ function validateSnapshot(fixture: UnknownRecord, path: string, errors: string[]
   if (!Array.isArray(fixture.balances)) {
     errors.push(`${path}.balances: expected array`);
   } else {
+    const mints = new Set<string>();
     fixture.balances.forEach((balance, index) => {
       const balancePath = `${path}.balances[${index}]`;
       if (!isRecord(balance)) {
         errors.push(`${balancePath}: expected object`);
         return;
       }
-      text(balance.mint, `${balancePath}.mint`, errors);
+      if (text(balance.mint, `${balancePath}.mint`, errors)) {
+        if (mints.has(balance.mint)) errors.push(`${balancePath}.mint: duplicate mint in snapshot`);
+        mints.add(balance.mint);
+      }
       if (typeof balance.decimals !== "number" || !Number.isInteger(balance.decimals) || balance.decimals < 0 || balance.decimals > 255) {
         errors.push(`${balancePath}.decimals: expected u8 JSON number`);
       }

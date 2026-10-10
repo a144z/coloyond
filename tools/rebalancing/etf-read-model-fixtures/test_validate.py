@@ -51,6 +51,13 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         errors = validate_document(document)
         self.assertTrue(any("rawAmount: expected base-10 integer string" in error for error in errors))
 
+    def test_available_snapshot_rejects_duplicate_mint_balances(self):
+        document = load_fixture()
+        balances = document["fixtures"][0]["balances"]
+        balances.append(copy.deepcopy(balances[0]))
+        errors = validate_document(document)
+        self.assertTrue(any("duplicate mint in snapshot" in error for error in errors))
+
     def test_integer_string_extremes_pass_and_oversized_decimals_return_errors(self):
         document = load_fixture()
         snapshot = document["fixtures"][0]
