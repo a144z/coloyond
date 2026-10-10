@@ -1822,6 +1822,11 @@ export type ColoyondVault = {
       "msg": "Condition observation is invalid"
     },
     {
+      "code": 7007,
+      "name": "ConditionFuturePublishTime",
+      "msg": "Condition observation publish time is future or before rule creation"
+    },
+    {
       "code": 7008,
       "name": "StaleObservation",
       "msg": "Condition observation is stale"
@@ -1855,6 +1860,11 @@ export type ColoyondVault = {
       "code": 7014,
       "name": "NonceMismatch",
       "msg": "Conditional rule nonce is stale or already consumed"
+    },
+    {
+      "code": 7015,
+      "name": "ConditionArithmeticOverflow",
+      "msg": "Condition arithmetic overflowed"
     },
     {
       "code": 7016,

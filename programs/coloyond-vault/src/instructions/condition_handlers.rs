@@ -86,11 +86,11 @@ pub fn propose_condition_rule(
         .max(condition_state.next_nonce);
     let nonce = previous_nonce
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     let next_revision = vault
         .configuration_revision
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     let rule = condition::ConditionalRule {
         version: condition::CONDITION_VERSION,
         enabled: false,
@@ -114,13 +114,13 @@ pub fn propose_condition_rule(
     let activate_after_slot = clock
         .slot
         .checked_add(governance.min_delay_slots)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     let state = &mut ctx.accounts.condition_state;
     state.next_nonce = nonce;
     state.sequence = state
         .sequence
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     state.pending = Some(PendingConditionRule {
         rule: rule.clone(),
         bounds,
@@ -192,7 +192,7 @@ pub fn execute_condition_rule(ctx: Context<ExecuteConditionRule>) -> Result<()> 
     state.sequence = state
         .sequence
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     emit!(ConditionRuleActivated {
         vault: vault_key,
         sequence: state.sequence,
@@ -250,7 +250,7 @@ pub fn observe_condition(ctx: Context<ObserveCondition>) -> Result<()> {
     state.sequence = state
         .sequence
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     emit!(ConditionObserved {
         vault: vault_key,
         sequence: state.sequence,
@@ -318,7 +318,7 @@ pub fn activate_condition(ctx: Context<ActivateCondition>, expected_nonce: u64) 
     let next_revision = vault
         .configuration_revision
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     require!(
         authorized.configuration_revision == vault.configuration_revision
             && authorized.target_revision == next_revision,
@@ -346,7 +346,7 @@ pub fn activate_condition(ctx: Context<ActivateCondition>, expected_nonce: u64) 
     state.sequence = state
         .sequence
         .checked_add(1)
-        .ok_or(ConditionInstructionError::ArithmeticOverflow)?;
+        .ok_or(ConditionInstructionError::ConditionArithmeticOverflow)?;
     emit!(ConditionActivated {
         vault: vault_key,
         sequence: state.sequence,

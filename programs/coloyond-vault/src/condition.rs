@@ -225,7 +225,7 @@ pub enum ConditionInstructionError {
     #[msg("Condition observation is invalid")]
     InvalidObservation,
     #[msg("Condition observation publish time is future or before rule creation")]
-    FuturePublishTime,
+    ConditionFuturePublishTime,
     #[msg("Condition observation is stale")]
     StaleObservation,
     #[msg("Condition observation replays an earlier Pyth publish time")]
@@ -241,7 +241,7 @@ pub enum ConditionInstructionError {
     #[msg("Conditional rule nonce is stale or already consumed")]
     NonceMismatch,
     #[msg("Condition arithmetic overflowed")]
-    ArithmeticOverflow,
+    ConditionArithmeticOverflow,
     #[msg("Condition state account version or vault binding is invalid")]
     InvalidState,
     #[msg("No active condition policy exists")]
@@ -484,7 +484,7 @@ pub fn map_condition_error(error: ConditionError) -> anchor_lang::error::Error {
         E::StaleTargetRevision => error!(I::StaleTargetRevision),
         E::StaleConfigurationRevision => error!(I::StaleConfigurationRevision),
         E::InvalidObservation => error!(I::InvalidObservation),
-        E::FuturePublishTime => error!(I::FuturePublishTime),
+        E::FuturePublishTime => error!(I::ConditionFuturePublishTime),
         E::StaleObservation => error!(I::StaleObservation),
         E::OracleReplay => error!(I::OracleReplay),
         E::ObservationTooClose => error!(I::ObservationTooClose),
@@ -492,7 +492,7 @@ pub fn map_condition_error(error: ConditionError) -> anchor_lang::error::Error {
         E::InvalidPredicate => error!(I::InvalidPredicate),
         E::NotTriggered => error!(I::NotTriggered),
         E::NonceMismatch => error!(I::NonceMismatch),
-        E::ArithmeticOverflow => error!(I::ArithmeticOverflow),
+        E::ArithmeticOverflow => error!(I::ConditionArithmeticOverflow),
     }
 }
 
