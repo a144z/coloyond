@@ -258,6 +258,13 @@ fn run() -> std::result::Result<(), String> {
         duration_slots,
         fee_bps: 20,
         maximum_fee_bps: 50,
+        // Localnet-only accounting terms. These values are fixture data, not
+        // production economics or defaults for an on-chain initializer.
+        fee_reserve_share_bps: 5_000,
+        reserve_floor: [0, 1_000_000],
+        epoch_bounty_budget: [0, 1_000_000],
+        bounty_epoch: 0,
+        bounty_epoch_spent: [0, 0],
         maximum_bounty_per_fill: 1_000_000,
         maximum_cumulative_nav_loss_bps: 100,
         maximum_nav_loss_bps: 25,
