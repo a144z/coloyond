@@ -39,12 +39,12 @@ def requeue_account_growth(serialized_task_body_bytes):
 
 
 def _u8(value, label):
-    if not isinstance(value, int) or not 0 <= value <= U8_MAX:
+    if type(value) is not int or not 0 <= value <= U8_MAX:
         raise ValueError(f"{label}: must fit u8")
 
 
 def _u32(value, label):
-    if not isinstance(value, int) or not 0 <= value <= U32_MAX:
+    if type(value) is not int or not 0 <= value <= U32_MAX:
         raise ValueError(f"{label}: must fit u32")
 
 
@@ -88,7 +88,7 @@ def compiled_task_account_size(
     if trigger == "now":
         trigger_bytes = 1
     elif trigger == "timestamp":
-        if not isinstance(timestamp, int) or not I64_MIN <= timestamp <= I64_MAX:
+        if type(timestamp) is not int or not I64_MIN <= timestamp <= I64_MAX:
             raise ValueError("timestamp: must fit i64")
         trigger_bytes = 1 + 8
     else:

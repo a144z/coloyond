@@ -66,6 +66,32 @@ class TukTukPayloadSizeTests(unittest.TestCase):
                 num_rw=2,
             )
 
+    def test_numeric_wire_fields_reject_booleans(self):
+        invalid_calls = (
+            lambda: compiled_task_account_size(account_key_count=True, instructions=[]),
+            lambda: compiled_task_account_size(
+                account_key_count=1, instructions=[], num_rw_signers=True
+            ),
+            lambda: compiled_task_account_size(
+                account_key_count=1, instructions=[], trigger="timestamp", timestamp=True
+            ),
+            lambda: compiled_task_account_size(
+                account_key_count=1,
+                instructions=[InstructionShape(True, (), 0)],
+            ),
+            lambda: compiled_task_account_size(
+                account_key_count=1,
+                instructions=[InstructionShape(0, (True,), 0)],
+            ),
+            lambda: compiled_task_account_size(
+                account_key_count=1,
+                instructions=[InstructionShape(0, (), True)],
+            ),
+        )
+        for call in invalid_calls:
+            with self.subTest(call=call), self.assertRaises(ValueError):
+                call()
+
     def test_signer_seed_count_and_length_match_compiled_task_decoder_limits(self):
         maximum = compiled_task_account_size(
             account_key_count=0,
