@@ -30,6 +30,8 @@
 
 ## Quote conservatism argument and independent review
 
+The focused `cargo test -p coloyond-etf-math --locked` suite was rerun at `7d90186295aa99fb6ed286187b7ef5a664359acb`; all 65 unit/integration tests passed. This validates the current pure-math crate test corpus, not the Android changes, integrated ETF program, token CPI, or a Devnet transaction.
+
 For a supported exact-in swap, the gross input is at most 30% of the input reserve and the fee-adjusted input is no larger than gross. Therefore the exact reserve ratio `B_in / (B_in + net_in)` is at least `10/13`. The weight ratio is at most 99 because weights sum to 10,000 bps and every weight is at least 100 bps. Thus `-ln(base) × weight_in / weight_out < -ln(10/13) × 99 < 26`, the documented exponential domain.
 
 The implementation rounds the reserve ratio up, the lower bound for `-ln(base)` down, and the exponent down. Its atanh-series terms round down and the omitted terms are nonnegative. For `exp(-z)`, it reduces `z` by flooring division by 256, evaluates the alternating Taylor series through even degree 12 on an argument below 0.102, and rounds positive terms and each of eight squarings up. These directions produce an upper bound for the curve power; subtracting from one and multiplying the output reserve with floor rounding produces an output no larger than the exact weighted-curve result. Because gross input is retained while only fee-adjusted input is priced, ideal invariant nondecrease follows for exact custody deltas. This is a mathematical argument for the bounded quote construction, not a substitute for broader implementation/property evidence or on-chain custody tests.
