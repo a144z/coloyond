@@ -1,6 +1,6 @@
 # S5 Pyth account-mode research
 
-**Status:** current-cluster fixed-feed/parser observation captured; S5C acceptance and S0B admission remain open. On 11 October 2026, `api.devnet.solana.com` at slot 509698933 and independent OnFinality Devnet RPC at slot 509698943 both returned `EtWTRAB...`, matching the Solana SDK genesis constant. The current Solana `getGenesisHash` documentation example instead shows `GH7ome...`; the live endpoints and SDK constant are used as cluster identity evidence, with the documentation discrepancy recorded. The latest feed snapshot is at slot 509699169: only SOL passes the diagnostic 60-second freshness limit; BTC and USDC fail stale. No ETF consumer transaction has run.
+**Status:** current-cluster fixed-feed/parser observations captured; S5C acceptance and S0B admission remain open. On 11 October 2026, `api.devnet.solana.com` at slot 509698933 and independent OnFinality Devnet RPC at slot 509698943 both returned `EtWTRAB...`, matching the Solana SDK genesis constant. The current Solana `getGenesisHash` documentation example instead shows `GH7ome...`; the live endpoints and SDK constant are used as cluster identity evidence, with the documentation discrepancy recorded. The latest feed snapshot is at slot 509700331: SOL is 9 seconds old, while BTC and USDC are each 66 seconds old and fail the diagnostic 60-second freshness check. No ETF consumer transaction has run.
 
 ## Account model decision
 
@@ -107,7 +107,7 @@ No S5A oracle mode change is proposed: fixed sponsored shard-0 feeds remain prim
 
 The read-only RPC probe validates JSON-RPC 2.0 response version, matching request ID, and an exclusive `result` or `error` field before using a result. It rejects malformed context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. It checks `getGenesisHash` against the pinned expected value (`EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`) before querying feed accounts or printing a Devnet label; any different hash fails closed. Fourteen standard-library tests cover pinned-manifest parity, valid and rejected genesis values, valid envelopes, JSON-RPC error-object code/message validation, signed 64-bit `getBlockTime` values, batch decoding and malformed response failure cases. This offline validation is separate from live evidence. On 11 October 2026, both the configured RPC and independent OnFinality RPC reported the pinned genesis at adjacent live slots. The refreshed account read below passed the pinned-genesis check and decoded all three manifest accounts.
 
-## Current-cluster read-only Devnet refresh — 11 October 2026
+## First current-cluster read-only Devnet refresh — 11 October 2026
 
 The probe fetched all three manifest-pinned accounts at confirmed slot `509699169`, cluster time `1791673252` (2026-10-11 07:00:52 +0800), on genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. Each account had the expected Receiver owner, 134-byte allocation, embedded feed ID and `Full` verification. Under the diagnostic 60-second age ceiling, SOL/USD passed at 16 seconds old; BTC/USD was 104 seconds old and USDC/USD 138 seconds old, so both were rejected stale. Confidence ratios were 4, 9 and 9 bps respectively; the ceiling remains `u16::MAX` and unapproved. This is a partial snapshot, not a usable three-feed basket or freshness guarantee. No transaction was sent.
 
@@ -116,6 +116,16 @@ The probe fetched all three manifest-pinned accounts at confirmed slot `50969916
 | SOL/USD | 110.38805180 | 0.04180529 | 16 s | 4 bps | `ca8a5d8baacd899ec43691bcae45cb47b0f56f5f2ced265179e45020aefcbecc` | pass |
 | BTC/USD | 83,015.93536435 | 71.72729866 | 104 s | 9 bps | `7117b2f8d1e34fcb908da8548998856dbf9a8492fe5aa050a37998fc6141225d` | fail: stale |
 | USDC/USD | 0.99988903 | 0.00081096 | 138 s | 9 bps | `4684d0dd72e08fbb66a08770a7a40f04e6df332960483b73e01d463393b393c6` | fail: stale |
+
+## Second current-cluster feed read — 11 October 2026
+
+A follow-up read at confirmed slot `509700331`, cluster time `1791673530` (2026-10-11 07:05:30 +0800), again decoded all three accounts as Full-verified with the expected owner, allocation and feed ID. SOL/USD was 9 seconds old; BTC/USD and USDC/USD shared publish time `1791673464` and were both 66 seconds old, so both failed the diagnostic 60-second age limit by 6 seconds. Confidence ratios were 4, 7 and 9 bps. This point-in-time read does not justify changing the limit; age policy still needs a reviewed volatility/latency analysis and remains unapproved.
+
+| Feed | Price × 10^exponent | Confidence × 10^exponent | Publish age | Confidence | Data SHA-256 | Adapter |
+|---|---:|---:|---:|---:|---|---|
+| SOL/USD | 110.39414263 | 0.04015976 | 9 s | 4 bps | `9f2100f76976fb6f0a9b79067180cd8c85e70fa6b6823f16c9a39e50d6c8a4b2` | pass |
+| BTC/USD | 83,022.63492250 | 53.39507750 | 66 s | 7 bps | `8ef9f3643ce7e1694a6aca2282c4355211aba17c9c866c7d96fb617d89367dda` | fail: stale |
+| USDC/USD | 0.99987043 | 0.00082956 | 66 s | 9 bps | `82556555f24c5da41f99e922aad0e73f10dcfad0f547900449c20fed10764426` | fail: stale |
 
 | Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Adapter at 60 seconds | Data SHA-256 |
 |---|---:|---:|---:|---|---|
