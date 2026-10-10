@@ -38,8 +38,34 @@ Option 2, buying through Symmetry's own deposit flow, was rejected. A deposit ta
 
 Option 1: keep the V1 spec. Financial actions stay disabled. The app shows Symmetry vaults as labeled read-only facts, including whether automation is on, and the full creative, share and remix flow ships. The Kotlin decoder and device probes continue.
 
+### Device probes (10 October 2026)
+
+Device: Android emulator `Medium_Phone_API_35` (Android 15, x86_64, 1080×2400), software rendering (`swiftshader_indirect`). The probe screen is the "Card probe" tab in the debug build.
+
+| Check | Result |
+|---|---|
+| On-screen card (Compose `Canvas`) | Pass. Shapes, grain, Arimo caption and footer wrap all draw. |
+| PNG export (`CanvasDrawScope` + `ImageBitmap`) | Pass. 1080×1350 RGBA, 97 KB. The image matches the on-screen card. |
+| Share PNG and strategy file (`ACTION_SEND_MULTIPLE`) | Failed first, then fixed (see below). The share sheet shows "Sharing 2 files" with the PNG preview. |
+| Share PNG only (`ACTION_SEND`) | Pass. "Sharing image". |
+| Share strategy file only (`ACTION_SEND`) | Pass. "Sharing 1 file", `card.coloyond.json`. |
+| Link `coloyond://import#…`, app running and app stopped | Pass. The payload length is read in both cases. |
+| Link with no fragment | Pass. Rejected: "link has no payload". |
+| Link of 2118 characters | Pass. Rejected before decoding. |
+| Link with another host | Pass. Android does not resolve it to the app; the in-app host check is a second guard. |
+| File by `ACTION_VIEW` and `ACTION_SEND` from MediaStore, app running and app stopped | Pass. 33 bytes read, type `application/json`. |
+| File of 300 KiB | Pass. Rejected: "file is larger than 256 KiB". |
+
+Bug found: `ClipData.newUri(null, …)` asks a `ContentResolver` for the MIME type, so the multi-file share crashed with a `NullPointerException`. `Sharing.cardAndStrategy` now builds the `ClipData` with the MIME types given directly.
+
+Limits of this run:
+
+- The file imports were sent from `adb shell`, which can already read shared storage. A real sender app (Files, Drive, a chat app) still needs a check on a physical device.
+- No share target was completed. The checks stop at the share sheet.
+- The emulator has no wallet app, so MWA sign-only support is not checked.
+
 ## Still to do
 
-- Kotlin account decoder and configuration projection, checked against SDK fixtures.
-- Device probes: Compose PNG export, `FileProvider` sharing, import intents, MWA sign-only support.
 - Configuration projection and keeper classifier.
+- MWA sign-only support, on a device with a wallet app.
+- Imports from real sender apps, and one completed share to a chat app, on a physical device.
