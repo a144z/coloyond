@@ -5,7 +5,8 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::{
     auction::{
-        AuctionPolicy, BountyClaim, RebalanceIntent, AUCTION_POLICY_SEED, BOUNTY_CLAIM_SEED,
+        AuctionPolicy, BountyClaim, PendingAuctionPolicy, RebalanceIntent,
+        AUCTION_POLICY_PROPOSAL_SEED, AUCTION_POLICY_SEED, BOUNTY_CLAIM_SEED,
         REBALANCE_INTENT_SEED,
     },
     condition::{ConditionState, CONDITION_STATE_SEED},
@@ -17,6 +18,7 @@ pub mod auction_handlers;
 pub mod condition_handlers;
 pub mod entry_exit;
 pub mod handlers;
+pub mod policy_handlers;
 
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const GOVERNANCE_SEED: &[u8] = b"governance";
@@ -205,6 +207,87 @@ pub struct ResumeRisk<'info> {
     pub vault: Account<'info, Vault>,
     #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
     pub governance: Account<'info, GovernanceAccount>,
+    pub governance_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeAuctionPolicy<'info> {
+    #[account(seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(
+        init,
+        payer = governance_authority,
+        space = PendingAuctionPolicy::SPACE,
+        seeds = [AUCTION_POLICY_PROPOSAL_SEED, vault.key().as_ref()],
+        bump
+    )]
+    pub pending_policy: Account<'info, PendingAuctionPolicy>,
+    #[account(seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()], bump)]
+    /// CHECK: This canonical PDA must have no data before the one-time initializer executes.
+    pub auction_policy: UncheckedAccount<'info>,
+    #[account(mut, address = governance.governance_authority)]
+    pub governance_authority: Signer<'info>,
+    #[account(address = vault.assets[0].custody)]
+    pub custody_a: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[1].custody)]
+    pub custody_b: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[0].mint)]
+    pub mint_a: Account<'info, Mint>,
+    #[account(address = vault.assets[1].mint)]
+    pub mint_b: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteAuctionPolicy<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(
+        init,
+        payer = executor,
+        space = AuctionPolicy::SPACE,
+        seeds = [AUCTION_POLICY_SEED, vault.key().as_ref()],
+        bump
+    )]
+    pub auction_policy: Account<'info, AuctionPolicy>,
+    #[account(
+        mut,
+        seeds = [AUCTION_POLICY_PROPOSAL_SEED, vault.key().as_ref()],
+        bump = pending_policy.bump,
+        close = vault
+    )]
+    pub pending_policy: Account<'info, PendingAuctionPolicy>,
+    #[account(mut)]
+    pub executor: Signer<'info>,
+    #[account(address = vault.assets[0].custody)]
+    pub custody_a: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[1].custody)]
+    pub custody_b: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[0].mint)]
+    pub mint_a: Account<'info, Mint>,
+    #[account(address = vault.assets[1].mint)]
+    pub mint_b: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelAuctionPolicyProposal<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(
+        mut,
+        seeds = [AUCTION_POLICY_PROPOSAL_SEED, vault.key().as_ref()],
+        bump = pending_policy.bump,
+        close = vault
+    )]
+    pub pending_policy: Account<'info, PendingAuctionPolicy>,
+    #[account(address = governance.governance_authority)]
     pub governance_authority: Signer<'info>,
 }
 

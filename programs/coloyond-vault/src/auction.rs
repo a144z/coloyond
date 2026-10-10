@@ -5,14 +5,240 @@
 
 use anchor_lang::prelude::*;
 
-use crate::state::{Vault, ASSET_COUNT};
+use crate::state::{Vault, ASSET_COUNT, VAULT_VERSION};
 
 pub const AUCTION_POLICY_SEED: &[u8] = b"auction_policy";
+pub const AUCTION_POLICY_PROPOSAL_SEED: &[u8] = b"auction_policy_proposal";
 pub const REBALANCE_INTENT_SEED: &[u8] = b"rebalance_intent";
 pub const BOUNTY_CLAIM_SEED: &[u8] = b"bounty_claim";
 pub const AUCTION_POLICY_VERSION: u8 = 2;
 pub const REBALANCE_INTENT_VERSION: u8 = 2;
 pub const BOUNTY_CLAIM_VERSION: u8 = 2;
+pub const AUCTION_POLICY_PROPOSAL_VERSION: u8 = 1;
+
+/// Complete caller-supplied policy. The protocol supplies no executable
+/// defaults; proposal and execution both validate these exact values.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+pub struct AuctionPolicyConfig {
+    pub maximum_age_seconds: u64,
+    pub maximum_confidence_bps: u16,
+    pub maximum_usdc_deviation_bps: u16,
+    pub minimum_drift_bps: u16,
+    pub maximum_trade_value_q9: u64,
+    pub cooldown_slots: u64,
+    pub curve_start_rate_bps: u16,
+    pub curve_end_rate_bps: u16,
+    pub duration_slots: u64,
+    pub fee_bps: u16,
+    pub maximum_fee_bps: u16,
+    pub fee_reserve_share_bps: u16,
+    pub reserve_floor: [u64; ASSET_COUNT],
+    pub epoch_bounty_budget: [u64; ASSET_COUNT],
+    pub maximum_bounty_per_fill: u64,
+    pub maximum_cumulative_nav_loss_bps: u16,
+    pub maximum_nav_loss_bps: u16,
+    pub asset_feed_indices: [u8; ASSET_COUNT],
+}
+
+impl AuctionPolicyConfig {
+    pub fn validate(
+        &self,
+        vault_key: Pubkey,
+        vault: &Vault,
+        actual_custody_amounts: [u64; ASSET_COUNT],
+    ) -> Result<()> {
+        require!(
+            vault.version == VAULT_VERSION
+                && vault.authority == vault_key
+                && vault.configuration_revision > 0
+                && vault.minimum_locked_shares > 0
+                && vault.total_shares > vault.minimum_locked_shares,
+            AuctionError::InvalidPolicy
+        );
+        require!(
+            actual_custody_amounts == vault.accounted_amounts,
+            AuctionError::SeedAccountingMismatch
+        );
+
+        let mut free_reserve = [0; ASSET_COUNT];
+        for (i, available) in free_reserve.iter_mut().enumerate() {
+            require!(
+                vault.bootstrap_reserve[i] <= vault.accounted_amounts[i]
+                    && vault.bounty_liabilities[i] <= vault.bootstrap_reserve[i],
+                AuctionError::InvalidFeePolicy
+            );
+            *available = vault.bootstrap_reserve[i]
+                .checked_sub(vault.bounty_liabilities[i])
+                .ok_or(AuctionError::InvalidFeePolicy)?;
+            require!(
+                self.reserve_floor[i] <= *available && self.epoch_bounty_budget[i] <= *available,
+                AuctionError::InvalidFeePolicy
+            );
+        }
+
+        let policy = self.to_policy(vault_key, vault.configuration_revision, 0);
+        policy.validate(vault_key, vault)?;
+        require!(
+            self.maximum_nav_loss_bps <= self.maximum_cumulative_nav_loss_bps,
+            AuctionError::InvalidPolicy
+        );
+        Ok(())
+    }
+
+    pub fn to_policy(
+        self,
+        vault: Pubkey,
+        configuration_revision: u64,
+        current_epoch: u64,
+    ) -> AuctionPolicy {
+        AuctionPolicy {
+            version: AUCTION_POLICY_VERSION,
+            vault,
+            configuration_revision,
+            maximum_age_seconds: self.maximum_age_seconds,
+            maximum_confidence_bps: self.maximum_confidence_bps,
+            maximum_usdc_deviation_bps: self.maximum_usdc_deviation_bps,
+            minimum_drift_bps: self.minimum_drift_bps,
+            maximum_trade_value_q9: self.maximum_trade_value_q9,
+            cooldown_slots: self.cooldown_slots,
+            last_completed_slot: None,
+            curve_start_rate_bps: self.curve_start_rate_bps,
+            curve_end_rate_bps: self.curve_end_rate_bps,
+            duration_slots: self.duration_slots,
+            fee_bps: self.fee_bps,
+            maximum_fee_bps: self.maximum_fee_bps,
+            fee_reserve_share_bps: self.fee_reserve_share_bps,
+            reserve_floor: self.reserve_floor,
+            epoch_bounty_budget: self.epoch_bounty_budget,
+            bounty_epoch: current_epoch,
+            bounty_epoch_spent: [0; ASSET_COUNT],
+            maximum_bounty_per_fill: self.maximum_bounty_per_fill,
+            maximum_cumulative_nav_loss_bps: self.maximum_cumulative_nav_loss_bps,
+            maximum_nav_loss_bps: self.maximum_nav_loss_bps,
+            asset_feed_indices: self.asset_feed_indices,
+        }
+    }
+}
+
+/// Delayed, one-time governance proposal for an already initialized vault.
+/// It snapshots both configuration revision and accounting sequence so a
+/// deposit, redemption, donation sync, or liability movement invalidates it.
+#[account]
+#[derive(InitSpace)]
+pub struct PendingAuctionPolicy {
+    pub version: u8,
+    pub bump: u8,
+    pub vault: Pubkey,
+    pub governance_authority: Pubkey,
+    pub configuration_revision: u64,
+    pub vault_sequence: u64,
+    pub proposed_at_slot: u64,
+    pub activate_after_slot: u64,
+    pub config: AuctionPolicyConfig,
+}
+
+impl PendingAuctionPolicy {
+    pub const SPACE: usize = 8 + Self::INIT_SPACE;
+
+    pub fn propose(
+        &mut self,
+        bump: u8,
+        caller: Pubkey,
+        governance_authority: Pubkey,
+        vault_key: Pubkey,
+        vault: &Vault,
+        config: AuctionPolicyConfig,
+        actual_custody_amounts: [u64; ASSET_COUNT],
+        min_delay_slots: u64,
+        current_slot: u64,
+        risk_paused: bool,
+        has_pending_target_proposal: bool,
+    ) -> Result<()> {
+        require!(self.version == 0, AuctionError::PolicyProposalPending);
+        require_keys_eq!(
+            caller,
+            governance_authority,
+            crate::governance::GovernanceError::UnauthorizedGovernance
+        );
+        require!(
+            risk_paused && vault.status == 2,
+            AuctionError::RiskUnavailable
+        );
+        require!(
+            !has_pending_target_proposal,
+            AuctionError::PolicyProposalPending
+        );
+        require!(min_delay_slots > 0, AuctionError::InvalidPolicy);
+        config.validate(vault_key, vault, actual_custody_amounts)?;
+        let activate_after_slot = current_slot
+            .checked_add(min_delay_slots)
+            .ok_or(AuctionError::ArithmeticOverflow)?;
+
+        self.version = AUCTION_POLICY_PROPOSAL_VERSION;
+        self.bump = bump;
+        self.vault = vault_key;
+        self.governance_authority = governance_authority;
+        self.configuration_revision = vault.configuration_revision;
+        self.vault_sequence = vault.sequence;
+        self.proposed_at_slot = current_slot;
+        self.activate_after_slot = activate_after_slot;
+        self.config = config;
+        Ok(())
+    }
+
+    pub fn execute(
+        &self,
+        vault_key: Pubkey,
+        current_governance_authority: Pubkey,
+        vault: &Vault,
+        actual_custody_amounts: [u64; ASSET_COUNT],
+        current_epoch: u64,
+        current_slot: u64,
+        risk_paused: bool,
+        has_pending_target_proposal: bool,
+    ) -> Result<AuctionPolicy> {
+        require!(
+            self.version == AUCTION_POLICY_PROPOSAL_VERSION && self.vault == vault_key,
+            AuctionError::InvalidPolicy
+        );
+        require_keys_eq!(
+            self.governance_authority,
+            current_governance_authority,
+            AuctionError::StaleConfiguration
+        );
+        require!(
+            self.configuration_revision == vault.configuration_revision
+                && self.vault_sequence == vault.sequence,
+            AuctionError::StaleConfiguration
+        );
+        require!(
+            current_slot >= self.activate_after_slot,
+            AuctionError::PolicyTimelockActive
+        );
+        require!(
+            risk_paused && vault.status == 2,
+            AuctionError::RiskUnavailable
+        );
+        require!(
+            !has_pending_target_proposal,
+            AuctionError::PolicyProposalPending
+        );
+        self.config
+            .validate(vault_key, vault, actual_custody_amounts)?;
+        Ok(self
+            .config
+            .to_policy(vault_key, vault.configuration_revision, current_epoch))
+    }
+}
+
+/// Refuse to propose initialization over any already-created policy account.
+pub fn require_policy_account_uninitialized(owner: Pubkey, data_is_empty: bool) -> Result<()> {
+    require!(
+        owner == anchor_lang::system_program::ID && data_is_empty,
+        AuctionError::PolicyAlreadyInitialized
+    );
+    Ok(())
+}
 
 /// Explicit on-chain risk parameters. Every value is stored, versioned and
 /// copied into an intent at start; this account has no initializer in S2D.
@@ -255,8 +481,20 @@ pub enum AuctionError {
     InvalidBountyClaim,
     #[msg("Bounty claim has already been consumed")]
     BountyClaimReplay,
+    #[msg("A policy proposal already exists or conflicts with another governance proposal")]
+    PolicyProposalPending,
+    #[msg("Policy proposal has not reached its governance delay")]
+    PolicyTimelockActive,
+    #[msg("Vault custody balances do not match the explicitly accounted seed state")]
+    SeedAccountingMismatch,
+    #[msg("The auction policy PDA has already been initialized")]
+    PolicyAlreadyInitialized,
 }
 
 #[cfg(test)]
 #[path = "../tests/auction/state_machine.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../tests/auction/policy_initialization.rs"]
+mod policy_tests;
