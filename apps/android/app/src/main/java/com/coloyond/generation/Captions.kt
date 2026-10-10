@@ -38,7 +38,7 @@ object Captions {
     ): List<String> {
         val recent = acceptedHistory.takeLast(MAX_HISTORY)
         val usedPhrases = recent.map(::diversityKey).toMutableSet()
-        val usedMotifs = recent.takeLast(5).flatMap(::motifs).toSet()
+        val usedMotifs = recent.takeLast(5).flatMap(::motifs).toMutableSet()
         val tickers = verifiedTickerSymbols.filter { it.matches(Regex("[A-Z0-9]{1,12}")) }.toSet()
         val accepted = mutableListOf<String>()
         for (candidate in candidates) {
@@ -47,6 +47,7 @@ object Captions {
             if (phrase.isEmpty() || !usedPhrases.add(phrase)) continue
             if (motifs(candidate).any { it in usedMotifs }) continue
             accepted += candidate
+            usedMotifs += motifs(candidate)
         }
         return accepted
     }

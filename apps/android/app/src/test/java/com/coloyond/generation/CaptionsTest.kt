@@ -45,6 +45,11 @@ class CaptionsTest {
         assertTrue(Captions.recentMotifStems(history).contains("light"))
     }
 
+    @Test fun modelCandidatesDoNotReuseMotifsWithinTheSameBatch() {
+        val candidates = listOf("Unfolding colors settle", "The unfolding shapes drift")
+        assertEquals(listOf("Unfolding colors settle"), Captions.filterModelCandidates(candidates, emptyList()))
+    }
+
     @Test fun userCaptionsCanRepeatButKeepSharedSafetyAndHistoryRules() {
         val history = listOf("Still becoming")
         assertEquals("Still becoming", Captions.validateUserCaption("Still becoming"))
