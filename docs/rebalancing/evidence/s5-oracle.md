@@ -81,6 +81,12 @@ The repository probe ran at confirmed slot `509642309`, block time `1791659662` 
 
 The probe used a 60-second maximum age and `u16::MAX` confidence ceiling for diagnosis only. No transaction was sent. The adapter accepts two feeds and rejects the third, so the basket-wide all-feeds prerequisite still fails. This observation establishes neither approved risk limits nor a freshness SLA.
 
+## Confidence and exponent policy status
+
+Pyth's current best-practices guidance describes confidence as an aggregate uncertainty interval, explains that the feed's publisher intervals are intended to provide 95% coverage, and recommends using the adverse side of that interval for executable prices. For wide confidence, it recommends widening spreads or capping trade size; it does not prescribe one universal confidence-ratio threshold for all protocols. The Solana guide also warns about oracle latency/adversarial selection and calls for strict freshness checks in executable-price flows. See [Pyth confidence intervals and executable-price risks](https://docs.pyth.network/price-feeds/core/best-practices) and [Pyth's Solana integration guide](https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana).
+
+The S5C adapter now exposes the exact fixed-point interval `[price - conf, price, price + conf]` through `ValidatedPrice::confidence_interval`, rejecting a nonpositive lower endpoint, overflow and any endpoint conversion that loses precision. This is a reusable data primitive only; no S5E valuation or swap path consumes the interval yet. It does not choose a maximum confidence ratio, freshness age, exponent allowlist, size cap or fee response. The live diagnostic observations of 3–10 bps confidence are too few and too narrow to set a production threshold. S5C still requires an explicit risk decision and tests at the selected thresholds; keep these limits unapproved until that work is reviewed.
+
 ## 11 October 2026 compatibility finding
 
 The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `PriceUpdateV2` parser and `get_price_no_older_than` method enforce the Receiver account discriminator, feed ID, maximum age and Full verification when used through Anchor `Account<PriceUpdateV2>`. A fixed sponsored feed is a different lifecycle (long-lived shard/feed PDA) from a user-posted ephemeral update, but Pyth's current official Push Oracle program source shows `update_price_feed` CPI-calls the Receiver's `post_update` using that PDA as the `price_update_account`, then deserializes it with `PriceUpdateV2::try_deserialize` and verifies the embedded feed ID. The direct observation above confirms all three candidate accounts use the Receiver owner and decode with the pinned SDK as Full-verified `PriceUpdateV2` data. Thus the current Rust parser is a viable account-mode match for this sample; no custom raw-byte parser is justified from the evidence found so far.
@@ -103,3 +109,4 @@ No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain 
 - [Pyth Core upgrade guide](https://docs.pyth.network/price-feeds/core/upgrade)
 - [Pyth Solana Rust account parser source](https://github.com/pyth-network/pyth-sdk-rs/blob/main/pyth-sdk-solana/src/state.rs)
 - [Pyth price safety guidance](https://docs.pyth.network/price-feeds/core/best-practices)
+- [Pyth confidence intervals and executable-price mitigations](https://docs.pyth.network/price-feeds/core/best-practices#confidence-intervals)

@@ -67,38 +67,65 @@ pub struct ValidatedPrice {
     pub confidence_bps: u128,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedPriceInterval {
+    pub lower: u128,
+    pub midpoint: u128,
+    pub upper: u128,
+}
+
 impl ValidatedPrice {
     /// Convert to an unsigned fixed-point value exactly. Reject unsupported
     /// exponents, overflow, or any conversion that would discard precision.
     pub fn to_fixed(self, decimals: u8) -> Result<u128> {
-        let shift = self
-            .exponent
-            .checked_add(i32::from(decimals))
-            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
-        let mantissa = u128::from(self.mantissa);
-        if shift >= 0 {
-            let scale = ten_to(
-                u32::try_from(shift).map_err(|_| error!(OracleError::UnsupportedExponent))?,
-            )?;
-            mantissa
-                .checked_mul(scale)
-                .ok_or_else(|| error!(OracleError::ArithmeticOverflow))
-        } else {
-            let divisor = ten_to(
-                u32::try_from(
-                    shift
-                        .checked_neg()
-                        .ok_or_else(|| error!(OracleError::UnsupportedExponent))?,
-                )
-                .map_err(|_| error!(OracleError::UnsupportedExponent))?,
-            )?;
-            require!(mantissa % divisor == 0, OracleError::PrecisionLoss);
-            Ok(mantissa / divisor)
-        }
+        raw_to_fixed(u128::from(self.mantissa), self.exponent, decimals)
     }
 
     pub fn to_usd_fixed(self) -> Result<u128> {
         self.to_fixed(USD_FIXED_DECIMALS)
+    }
+
+    /// Return the exact fixed-point Pyth `price ± conf` interval. The lower
+    /// endpoint must remain positive; all endpoints must convert without loss.
+    pub fn confidence_interval(self, decimals: u8) -> Result<FixedPriceInterval> {
+        let lower = self
+            .mantissa
+            .checked_sub(self.confidence)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| error!(OracleError::NonPositivePrice))?;
+        let upper = u128::from(self.mantissa)
+            .checked_add(u128::from(self.confidence))
+            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
+
+        Ok(FixedPriceInterval {
+            lower: raw_to_fixed(u128::from(lower), self.exponent, decimals)?,
+            midpoint: self.to_fixed(decimals)?,
+            upper: raw_to_fixed(upper, self.exponent, decimals)?,
+        })
+    }
+}
+
+fn raw_to_fixed(mantissa: u128, exponent: i32, decimals: u8) -> Result<u128> {
+    let shift = exponent
+        .checked_add(i32::from(decimals))
+        .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
+    if shift >= 0 {
+        let scale =
+            ten_to(u32::try_from(shift).map_err(|_| error!(OracleError::UnsupportedExponent))?)?;
+        mantissa
+            .checked_mul(scale)
+            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))
+    } else {
+        let divisor = ten_to(
+            u32::try_from(
+                shift
+                    .checked_neg()
+                    .ok_or_else(|| error!(OracleError::UnsupportedExponent))?,
+            )
+            .map_err(|_| error!(OracleError::UnsupportedExponent))?,
+        )?;
+        require!(mantissa % divisor == 0, OracleError::PrecisionLoss);
+        Ok(mantissa / divisor)
     }
 }
 
@@ -291,6 +318,59 @@ mod tests {
         .unwrap();
         assert_eq!(price.to_usd_fixed().unwrap(), 7_160_106_530_690_000_000_000);
         assert_eq!(price.publish_time, NOW);
+    }
+
+    #[test]
+    fn confidence_interval_uses_exact_fixed_point_price_plus_and_minus_confidence() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            716_010_653_069,
+            5_000_000,
+            NOW,
+        );
+        let price = validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            limits(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            price.confidence_interval(USD_FIXED_DECIMALS).unwrap(),
+            FixedPriceInterval {
+                lower: 7_160_056_530_690_000_000_000,
+                midpoint: 7_160_106_530_690_000_000_000,
+                upper: 7_160_156_530_690_000_000_000,
+            }
+        );
+    }
+
+    #[test]
+    fn confidence_interval_rejects_nonpositive_lower_bound_and_precision_loss() {
+        let no_positive_lower = ValidatedPrice {
+            mantissa: 100,
+            confidence: 100,
+            exponent: -8,
+            publish_time: NOW,
+            confidence_bps: 10_000,
+        };
+        assert!(no_positive_lower
+            .confidence_interval(USD_FIXED_DECIMALS)
+            .is_err());
+
+        let unrepresentable_bound = ValidatedPrice {
+            mantissa: 100,
+            confidence: 1,
+            exponent: -1,
+            publish_time: NOW,
+            confidence_bps: 1,
+        };
+        assert_eq!(unrepresentable_bound.to_fixed(0).unwrap(), 10);
+        assert!(unrepresentable_bound.confidence_interval(0).is_err());
     }
 
     #[test]
