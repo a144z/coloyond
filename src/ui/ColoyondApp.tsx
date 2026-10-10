@@ -7,6 +7,7 @@ import { ReferenceArt } from "./ReferenceArt.js";
 import { PortfolioTokens } from "./portfolio/PortfolioTokens.js";
 import { RebalanceDesk } from "./portfolio/RebalanceDesk.js";
 import { useRebalanceDesk } from "./portfolio/useRebalanceDesk.js";
+import { ConditionStatus } from "./rebalancing/ConditionStatus.js";
 import { ConnectButton } from "./wallet/ConnectButton.js";
 import {
   ECOSYSTEM,
@@ -243,6 +244,7 @@ export function ColoyondApp() {
               <aside className="cr-health-panel"><span className="cr-kicker">Portfolio signal / Live demo state</span><div className="cr-health-number">{health}<span>/ 100</span></div><h3>{driftLabel(drift)}</h3><p>Aggregate distance from the saved targets: {drift.toFixed(1)} percentage points, recomputed live from the desk. The label is an illustration, not a risk score.</p><div className="cr-health-rule"><span style={{ width: `${health}%` }} /></div><div className="cr-next-label">Where to next</div><button onClick={() => setTab("Shield")}>Compare routes <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Yield")}>Explore yield <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Game")}>View progress <span aria-hidden="true">↗</span></button></aside>
             </section>
             <RebalanceDesk desk={desk} />
+            <ConditionStatus />
             <PortfolioTokens sectionIndex="D /" onRouteToShield={() => { setTab("Shield"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
           </>}
 
