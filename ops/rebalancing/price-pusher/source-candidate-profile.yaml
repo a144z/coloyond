@@ -1,0 +1,66 @@
+# Evidence-only source candidate. This is NOT accepted by Pyth Price Pusher.
+# Do not rename this as a runtime price-config.yaml or deploy it.
+# Status remains blocked until final account reads, pusher release/config probe,
+# RPC/operator selection, and the feed/age/confidence policy are reviewed.
+kind: coloyond-pyth-pusher-source-candidate
+schema_version: 1
+status: blocked
+checked_utc: "2026-10-10"
+cluster_profiles:
+  devnet:
+    source_listed: true
+    live_account_verified: false
+    genesis_hash: null
+    rpc_provider: null
+    rpc_url_secret_ref: null
+  mainnet:
+    enabled_for_sprint: false
+    live_account_verified: false
+    genesis_hash: null
+    rpc_provider: null
+    rpc_url_secret_ref: null
+pyth:
+  pusher_minimum_version: "10.5.0"
+  pusher_exact_version_or_image_digest: null
+  feed_program_id_source_listed: pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT
+  receiver_program_id_source_listed: rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ
+  shard_id: 0
+  hermes_endpoint_source_recommended: https://pyth.dourolabs.app/hermes
+  hermes_api_key_secret_ref: null
+  polling_frequency_seconds: null
+  pushing_frequency_seconds: null
+feeds:
+  - alias: SOL/USD
+    feed_id: "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"
+    shard_0_account_source_listed: 7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE
+    live_account_verified: false
+    pyth_sponsored_update_heartbeat_seconds: 55
+    pyth_sponsored_price_deviation_percent: 0.5
+    pusher_confidence_ratio_percent: null
+  - alias: USDC/USD
+    feed_id: "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"
+    shard_0_account_source_listed: Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX
+    live_account_verified: false
+    pyth_sponsored_update_heartbeat_seconds: 55
+    pyth_sponsored_price_deviation_percent: 0.5
+    pusher_confidence_ratio_percent: null
+operators:
+  - name: operator-a
+    independent_host: null
+    rpc_provider: null
+    hermes_api_key_secret_ref: null
+    payer_keypair_secret_ref: null
+    fee_budget_lamports: null
+  - name: operator-b
+    independent_host: null
+    rpc_provider: null
+    hermes_api_key_secret_ref: null
+    payer_keypair_secret_ref: null
+    fee_budget_lamports: null
+blockers:
+  - finalized_devnet_account_owner_feed_id_and_freshness_observations
+  - pyth_price_pusher_exact_release_and_hermes_auth_runtime_probe
+  - approved_devnet_rpc_and_independent_provider_selection
+  - pusher_runtime_confidence_ratio_and_poll_push_fee_budget
+  - two_operator_independence_and_failover_evidence
+  - localnet_pyth_program_and_hermes_test_fixture_for_pusher_transaction_validation
