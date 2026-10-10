@@ -117,3 +117,40 @@ fn rejects_invalid_asset_counts_weights_and_zero_nav() {
         Err(MathError::ZeroTotalValue)
     );
 }
+
+#[test]
+fn generated_two_and_three_asset_vectors_match_exact_integer_reference() {
+    let mut tested = 0usize;
+    for line in include_str!("deviation_vectors.csv").lines().skip(1) {
+        let fields: Vec<u128> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        assert_eq!(fields.len(), 13);
+        let count = fields[0] as usize;
+        assert!((2..=3).contains(&count));
+        let weights = [fields[1] as u16, fields[2] as u16, fields[3] as u16];
+        let pre = [fields[4], fields[5], fields[6]];
+        let post = [fields[7], fields[8], fields[9]];
+        assert_eq!(
+            deviation_bps(&pre[..count], &weights[..count]),
+            Ok(fields[10] as u16),
+            "pre deviation mismatch: {line}"
+        );
+        assert_eq!(
+            deviation_bps(&post[..count], &weights[..count]),
+            Ok(fields[11] as u16),
+            "post deviation mismatch: {line}"
+        );
+        assert_eq!(
+            is_strict_deviation_improvement(&pre[..count], &post[..count], &weights[..count]),
+            Ok(fields[12] == 1),
+            "strict direction mismatch: {line}"
+        );
+        tested += 1;
+    }
+    assert_eq!(
+        tested, 1_024,
+        "regenerate and review the full deviation vector set"
+    );
+}

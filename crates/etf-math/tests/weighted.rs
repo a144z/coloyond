@@ -1,5 +1,6 @@
 use coloyond_etf_math::{
-    is_strict_deviation_improvement, quote_exact_in, MathError, SwapQuote, USD_VALUE_SCALE,
+    is_strict_deviation_improvement, normalize_usd_value, quote_exact_in, MathError, SwapQuote,
+    USD_VALUE_SCALE,
 };
 
 #[test]
@@ -185,6 +186,44 @@ fn retained_fee_quote_preserves_invariant_and_improves_value_weights() {
         &weights,
     )
     .unwrap());
+}
+
+#[test]
+fn unequal_weight_three_asset_trade_preserves_pair_invariant_and_improves_usd_drift() {
+    let reserves = [50_000_u64, 20_000_u64, 30_000_u64];
+    let weights = [4_000_u16, 3_000_u16, 3_000_u16];
+    let quote = quote_exact_in(&reserves, &weights, 1, 0, 1_000, 30).unwrap();
+    assert_eq!(quote.amount_out, 1_791);
+
+    let post_reserves = [
+        reserves[0] - quote.amount_out,
+        reserves[1] + quote.amount_in,
+        reserves[2],
+    ];
+    // The third reserve is unchanged and cancels from the full invariant.
+    // Dividing pair exponents by gcd(3,4) yields this exact integer comparison.
+    let pair_invariant =
+        |balances: [u64; 2]| u128::from(balances[0]).pow(4) * u128::from(balances[1]).pow(3);
+    assert!(
+        pair_invariant([post_reserves[0], post_reserves[1]])
+            >= pair_invariant([reserves[0], reserves[1]])
+    );
+
+    // The oracle price of asset 0 moved from $0.5333 to $0.80 while balances
+    // stayed fixed. Assets 1 and 2 remain $1.00. The trader supplies asset 1;
+    // retained fee stays in custody and all post-state values use the same mark.
+    let to_usd = |amount, price| normalize_usd_value(amount, 3, price, -8).unwrap();
+    let pre_values = [
+        to_usd(reserves[0], 80_000_000),
+        to_usd(reserves[1], 100_000_000),
+        to_usd(reserves[2], 100_000_000),
+    ];
+    let post_values = [
+        to_usd(post_reserves[0], 80_000_000),
+        to_usd(post_reserves[1], 100_000_000),
+        to_usd(post_reserves[2], 100_000_000),
+    ];
+    assert!(is_strict_deviation_improvement(&pre_values, &post_values, &weights).unwrap());
 }
 
 #[test]

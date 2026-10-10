@@ -16,8 +16,10 @@
 
 - High-precision reference outputs generated independently with Python `Decimal` at 90-digit precision for equal and unequal weights, 100/9,800 bps boundary weights, multiple fees, and larger reserve/input values.
 - A reproducible deterministic envelope generator now produces exactly 1,036 two-asset vectors spanning reserve scales through `10^18`, weight extremes, balanced/skewed reserves, five input ratios and five fee levels. Tests require no overpayment and cap the algorithmic shortfall below the ideal integer-floor output at one part per billion using ceiling division; the current run's worst relative shortfall is at most 11 parts per trillion. The largest absolute shortfall was 114 base units at the largest reserve scale, so a one-base-unit global bound is not claimed. This comparison excludes the fractional remainder between continuous output and its integer floor.
+- A separate exact-integer reference generator produces exactly 1,024 two/three-asset valuation vectors, including totals up to the implementation's checked range. It validates rounded-up display deviation and strict pre/post deviation improvement against arbitrary-precision exact rational comparisons.
 - The original small-point golden tests remain within one token base unit of the independent integer-floor references.
-- A combined equal-weight case proves a nontrivial retained-fee quote can preserve the exact reserve product and strictly improve value-weight deviation under equal oracle prices.
+- For a two-asset exact-in trade, invariant preservation reduces to `(B_in + net_in)^w_in * (B_out - amount_out)^w_out >= B_in^w_in * B_out^w_out`; rearranging yields the weighted-mean exact output formula used by the reference vectors. The conservative upper bound on the curve power and floor-rounded output never exceed that formula; gross input is at least net input, so a retained fee only increases the actual input reserve. Unchanged assets cancel from the multi-asset invariant comparison. This argument covers the bounded input/weight domain recorded above, subject to actual custody deltas matching the quote.
+- A concrete unequal-weight three-asset case verifies pairwise invariant nondecrease with retained fee and strict USD-weight drift improvement after an oracle price move; a separate equal-weight case also covers exact reserve-product preservation.
 - Existing valuation tests cover decimal/exponent normalization, scale underflow, unsupported values, total-variation rounding and exact strict-improvement comparison.
 - `U256` multiplication is checked against exactly 320 deterministic exact vectors generated independently with Python's arbitrary-precision integers, including edge, single-limb and cross-limb values.
 
@@ -31,9 +33,8 @@ An independent read-only code review found no arithmetic unsoundness in the insp
 
 ## Open S5B acceptance work
 
-- Further property/boundary vectors for fixed-point monotonicity, error propagation, and three-asset state/deviation behavior.
-- General weighted-invariant comparisons beyond the exact equal-weight product case; prove reserve-unit/exponent/oracle-price behavior across admitted pools.
-- Demonstrate useful swaps under realistic oracle-price and target-weight states across the supported weight/decimal envelope, including separation of invariant preservation from custody/share backing and value-weight improvement.
+- Further property/boundary vectors for fixed-point monotonicity and error propagation; the 1,024 deviation vectors now cover two/three-asset state and large-value cross products.
+- Broader oracle-price/target-weight trade vectors across the supported weight/decimal envelope, including separate custody/share-backing accounting. The pairwise invariant derivation plus generated two-asset quotes covers the mathematical quote relation, but not real token CPI accounting.
 - Measure compute units in the target Solana program/runtime and confirm the final fixed-scale/share formula contract.
 - Review whether the 100 bps minimum weight and 30% input/output caps are economically and operationally acceptable before S5E.
 
