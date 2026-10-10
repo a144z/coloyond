@@ -93,6 +93,13 @@ def validate_rpc_response(body, *, expected_id, method):
     return body["result"]
 
 
+def validate_block_time(value):
+    """Require Solana getBlockTime's signed 64-bit integer result."""
+    if isinstance(value, bool) or not isinstance(value, int) or not -(1 << 63) <= value < (1 << 63):
+        raise RuntimeError("getBlockTime: result must be a signed 64-bit JSON integer")
+    return value
+
+
 def rpc(method, params=None):
     request_id = 1
     request = urllib.request.Request(
@@ -109,9 +116,7 @@ def main():
     genesis = rpc("getGenesisHash")
     accounts = rpc("getMultipleAccounts", [list(FEEDS.values()), {"encoding": "base64", "commitment": "confirmed"}])
     slot, decoded_accounts = validate_account_batch_result(accounts, FEEDS.items())
-    cluster_time = rpc("getBlockTime", [slot])
-    if cluster_time is None:
-        raise RuntimeError(f"Devnet returned no block time for slot {slot}")
+    cluster_time = validate_block_time(rpc("getBlockTime", [slot]))
 
     print(f"cluster=devnet genesis={genesis} slot={slot} cluster_unix_time={cluster_time}")
     with tempfile.TemporaryDirectory(prefix="etf-pyth-probe-") as temp_dir:

@@ -11,4 +11,4 @@ The standard-library script reads the Devnet genesis hash, current slot/time, an
 
 The diagnostic policy uses 60 seconds maximum age and `u16::MAX` confidence bps so the command can report actual freshness and confidence. These are probe ceilings, not approved production limits. The report is a dated account observation, not a continuing SLA, proof of Devnet SPL-mint backing, or S5C acceptance; refresh it before deployment and keep the final risk limits under review.
 
-The offline response tests validate JSON-RPC 2.0 version/ID/result-or-error envelopes, then validate the complete `getMultipleAccounts` batch, context slot, each account record, base64 decoding and agreement between decoded bytes and RPC `space`. They do not query Devnet or add an account observation.
+The offline response tests validate JSON-RPC 2.0 version/ID/result-or-error envelopes, the signed 64-bit integer returned by `getBlockTime`, then the complete `getMultipleAccounts` batch, context slot, each account record, base64 decoding and agreement between decoded bytes and RPC `space`. They do not query Devnet or add an account observation.

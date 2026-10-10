@@ -3,7 +3,7 @@
 import base64
 import unittest
 
-from probe import RECEIVER, validate_account_batch_result, validate_rpc_response
+from probe import RECEIVER, validate_account_batch_result, validate_block_time, validate_rpc_response
 
 
 EXPECTED = (("sol", "Sol111"), ("btc", "Btc111"))
@@ -23,6 +23,14 @@ def result(values, *, slot=42):
 
 
 class OracleProbeResponseTests(unittest.TestCase):
+    def test_block_time_requires_signed_64_bit_json_integer(self):
+        for value in (0, -1, (1 << 63) - 1, -(1 << 63)):
+            with self.subTest(value=value):
+                self.assertEqual(validate_block_time(value), value)
+        for value in (None, True, 1.5, "42", 1 << 63, -(1 << 63) - 1):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "signed 64-bit"):
+                validate_block_time(value)
+
     def test_accepts_matching_json_rpc_result_envelope(self):
         self.assertEqual(
             validate_rpc_response(
