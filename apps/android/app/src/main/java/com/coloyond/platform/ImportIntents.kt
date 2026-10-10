@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import com.coloyond.strategy.CardExchange
 import com.coloyond.strategy.ValidatedRecord
+import java.io.IOException
 import java.io.InputStream
 
 /** Bounded Activity intent ingress. Call [readValidated] before exposing imported records to UI code. */
@@ -33,11 +34,11 @@ object ImportIntents {
         return when {
             intent.action == Intent.ACTION_VIEW && data?.scheme == SCHEME -> readLink(data)
             intent.action == Intent.ACTION_VIEW && data?.scheme == ContentResolver.SCHEME_CONTENT ->
-                readContent(data, intent.type ?: resolver.getType(data), resolver)
+                readContent(data, intent.type, resolver)
             intent.action == Intent.ACTION_SEND -> {
                 val uri = intent.streamUri() ?: return ImportProbeResult.Rejected("share had no file")
                 if (uri.scheme != ContentResolver.SCHEME_CONTENT) return ImportProbeResult.Rejected("not a content URI")
-                readContent(uri, intent.type ?: resolver.getType(uri), resolver)
+                readContent(uri, intent.type, resolver)
             }
             else -> null
         }
@@ -67,7 +68,7 @@ object ImportIntents {
         if (uris.isEmpty() || uris.size > MAX_SHARED_URIS) return ValidatedImport.Rejected("share must contain one or two files")
         val valid = uris.mapNotNull { uri ->
             if (uri.scheme != ContentResolver.SCHEME_CONTENT) return@mapNotNull null
-            val file = readContent(uri, intent.type ?: resolver.getType(uri), resolver) as? ImportProbeResult.File
+            val file = readContent(uri, intent.type, resolver) as? ImportProbeResult.File
                 ?: return@mapNotNull null
             runCatching { CardExchange.parseExport(file.bytes) }.getOrNull()
         }
@@ -89,39 +90,71 @@ object ImportIntents {
     }
 
     private fun readContent(uri: Uri, mime: String?, resolver: ContentResolver): ImportProbeResult {
+        val resolvedMime = mime ?: try {
+            resolver.getType(uri)
+        } catch (_: RuntimeException) {
+            null
+        }
         val stream = try {
             resolver.openInputStream(uri)
         } catch (e: SecurityException) {
             return ImportProbeResult.Rejected("no read permission")
         } catch (e: java.io.FileNotFoundException) {
             return ImportProbeResult.Rejected("file not found")
+        } catch (_: IOException) {
+            return ImportProbeResult.Rejected("file could not be opened")
+        } catch (_: RuntimeException) {
+            return ImportProbeResult.Rejected("file could not be opened")
         } ?: return ImportProbeResult.Rejected("file could not be opened")
-        val bytes = stream.use { it.readBounded(MAX_IMPORT_BYTES) }
-            ?: return ImportProbeResult.Rejected("file is larger than ${MAX_IMPORT_BYTES / 1024} KiB")
-        return ImportProbeResult.File(uri, mime, bytes)
+        val bytes = (try {
+            stream.use { it.readBounded(MAX_IMPORT_BYTES) }
+        } catch (e: SecurityException) {
+            return ImportProbeResult.Rejected("no read permission")
+        } catch (e: java.io.FileNotFoundException) {
+            return ImportProbeResult.Rejected("file not found")
+        } catch (_: IOException) {
+            return ImportProbeResult.Rejected("file could not be read")
+        } catch (_: RuntimeException) {
+            return ImportProbeResult.Rejected("file could not be read")
+        }) ?: return ImportProbeResult.Rejected("file is larger than ${MAX_IMPORT_BYTES / 1024} KiB")
+        return ImportProbeResult.File(uri, resolvedMime, bytes)
     }
 
     /** Reads at most [limit] bytes; returns null when the stream is longer. */
     internal fun InputStream.readBounded(limit: Int): ByteArray? {
+        require(limit in 0 until Int.MAX_VALUE) { "Import limit is invalid" }
         val buffer = ByteArray(limit + 1)
         var total = 0
         while (total <= limit) {
             val n = read(buffer, total, buffer.size - total)
             if (n < 0) break
-            total += n
+            if (n == 0) {
+                // A few provider streams return zero for a non-empty read; force progress.
+                val next = read()
+                if (next < 0) break
+                buffer[total++] = next.toByte()
+            } else {
+                total += n
+            }
         }
         return if (total > limit) null else buffer.copyOf(total)
     }
 
     @Suppress("DEPRECATION")
-    private fun Intent.streamUri(): Uri? =
+    private fun Intent.streamUri(): Uri? = try {
         if (Build.VERSION.SDK_INT >= 33) getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         else getParcelableExtra(Intent.EXTRA_STREAM)
+    } catch (_: RuntimeException) {
+        null
+    }
 
     @Suppress("DEPRECATION")
-    private fun Intent.streamUris(): List<Uri> =
+    private fun Intent.streamUris(): List<Uri> = try {
         if (Build.VERSION.SDK_INT >= 33) getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
         else getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+    } catch (_: RuntimeException) {
+        emptyList()
+    }
 
     private const val MAX_SHARED_URIS = 2
     private const val LINK_PREFIX = CardExchange.LINK_PREFIX

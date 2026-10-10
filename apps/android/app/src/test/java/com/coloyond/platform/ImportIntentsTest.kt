@@ -29,6 +29,12 @@ class ImportIntentsTest {
     }
 
     @Test
+    fun zeroLengthBulkReadsStillMakeBoundedProgress() {
+        val bytes = byteArrayOf(1, 2, 3)
+        assertArrayEquals(bytes, ZeroThenBytes(bytes).readBounded(bytes.size))
+    }
+
+    @Test
     fun readsAnEmptyStream() {
         assertArrayEquals(ByteArray(0), ByteArrayInputStream(ByteArray(0)).readBounded(10))
     }
@@ -43,6 +49,24 @@ class ImportIntentsTest {
             if (c < 0) return -1
             b[off] = c.toByte()
             return 1
+        }
+    }
+
+    private class ZeroThenBytes(private val data: ByteArray) : InputStream() {
+        private var pos = 0
+        private var returnZero = true
+        override fun read(): Int = if (pos < data.size) data[pos++].toInt() and 0xff else -1
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (returnZero) {
+                returnZero = false
+                return 0
+            }
+            if (len == 0) return 0
+            if (pos == data.size) return -1
+            val count = minOf(len, data.size - pos)
+            data.copyInto(b, off, pos, pos + count)
+            pos += count
+            return count
         }
     }
 }
