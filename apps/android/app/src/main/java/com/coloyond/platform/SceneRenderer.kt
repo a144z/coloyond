@@ -65,7 +65,7 @@ object SceneRenderer {
         require(strategyId == checkedStrategy.id) { "Expression belongs to another strategy" }
         val checkedExpression = StrategyRecords.validateExpression(
             expression.value,
-            coloyond = strategyId.startsWith("cbe2:"),
+            coloyond = strategyId.startsWith("cb3:"),
         )
         require(checkedExpression.id == expression.id) { "Expression identity changed" }
         val fields = checkedExpression.value.asObject("expression")
@@ -89,7 +89,7 @@ object SceneRenderer {
 
         val checkedExpression = StrategyRecords.validateExpression(
             expression.value,
-            coloyond = expression.value.asObject("expression").field("strategyId").asString("strategyId").startsWith("cbe2:"),
+            coloyond = expression.value.asObject("expression").field("strategyId").asString("strategyId").startsWith("cb3:"),
         )
         val scene = checkedExpression.value.asObject("expression").field("scene").asObject("scene")
         val fit = minOf(size.width / CardLayoutV1.WIDTH, size.height / CardLayoutV1.HEIGHT)
