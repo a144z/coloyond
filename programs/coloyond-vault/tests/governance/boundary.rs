@@ -13,7 +13,7 @@ fn vault_fixture() -> Vault {
     Vault {
         version: VAULT_VERSION,
         bump: 1,
-        status: 1,
+        status: 2,
         authority: key(4),
         configuration_revision: 7,
         assets: [
@@ -43,7 +43,17 @@ fn vault_fixture() -> Vault {
 }
 
 fn governance_fixture() -> GovernanceState {
-    GovernanceState::initialize(key(9), &vault_fixture(), key(5), key(6), 10).unwrap()
+    let mut state =
+        GovernanceState::initialize(key(9), &vault_fixture(), key(5), key(6), 10).unwrap();
+    state.resume_risk(key(5)).unwrap();
+    state
+}
+
+#[test]
+fn fresh_governance_bootstrap_starts_paused() {
+    let state = GovernanceState::initialize(key(9), &vault_fixture(), key(5), key(6), 10).unwrap();
+    assert!(state.risk_paused);
+    assert!(state.require_risk_allowed().is_err());
 }
 
 #[test]

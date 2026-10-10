@@ -1,12 +1,23 @@
-//! Minimal serialized state for the first two-asset vault accounting pass.
+//! Serialized state and checked accounting boundaries for the two-asset vault.
 //!
-//! This is an unfunded/local interface choice. S1F owns wiring it into the
-//! entrypoint and publishing the matching IDL.
+//! The current bootstrap path is source-implemented but remains unfunded and
+//! awaits signed Localnet initializer/CPI and admission evidence.
 
 use anchor_lang::prelude::*;
 
 pub const VAULT_VERSION: u8 = 1;
 pub const ASSET_COUNT: usize = 2;
+pub const SHARE_MINT_DECIMALS: u8 = 6;
+
+/// Seed shares use a fixed $1 unit and floor rounding, so the seed cannot
+/// receive more shares than the conservative oracle NAV supports.
+pub fn seed_share_supply_from_nav_q9(nav_q9: u128) -> Result<u64> {
+    require!(nav_q9 > 0, VaultError::ZeroShares);
+    let supply =
+        u64::try_from(nav_q9 / 1_000).map_err(|_| error!(VaultError::ArithmeticOverflow))?;
+    require!(supply > 0, VaultError::ZeroShares);
+    Ok(supply)
+}
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
 pub struct AssetConfig {
@@ -91,7 +102,7 @@ impl Vault {
 
         self.version = VAULT_VERSION;
         self.bump = bump;
-        self.status = 1;
+        self.status = 2;
         self.authority = authority;
         self.configuration_revision = configuration_revision;
         self.assets = assets;
@@ -112,6 +123,12 @@ pub enum VaultError {
     AlreadyInitialized,
     #[msg("Vault configuration is invalid")]
     InvalidConfiguration,
+    #[msg("Only the verified program upgrade authority may initialize the first vault")]
+    InvalidBootstrapAuthority,
+    #[msg("The share mint does not match the vault share-token policy")]
+    InvalidShareMint,
+    #[msg("Custody accounts must be empty before the first seed")]
+    CustodyNotEmpty,
     #[msg("Share amount must be nonzero")]
     ZeroShares,
     #[msg("Minimum locked shares must be nonzero")]

@@ -1,8 +1,7 @@
-//! Testable policy transitions for the S1 governance boundary.
+//! Testable policy transitions for the on-chain governance boundary.
 //!
-//! This module is deliberately not wired to a callable financial instruction.
-//! S1F must supply account constraints, serialize this policy into a PDA, and
-//! invoke these transitions atomically with the corresponding instruction.
+//! Anchor contexts persist these transitions in a vault-scoped account and
+//! validate its link to vault configuration before each financial action.
 
 use anchor_lang::prelude::*;
 
@@ -82,7 +81,7 @@ impl GovernanceState {
             target_bps: [vault.assets[0].target_bps, vault.assets[1].target_bps],
             proposal_nonce: 0,
             pending: None,
-            risk_paused: false,
+            risk_paused: true,
         })
     }
 

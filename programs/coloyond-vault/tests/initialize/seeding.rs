@@ -1,8 +1,9 @@
 use super::*;
-use crate::{
-    auction::AUCTION_POLICY_VERSION,
-    state::{AssetConfig, Vault, VaultError, VAULT_VERSION},
-};
+use crate::state::{seed_share_supply_from_nav_q9, AssetConfig, Vault, VaultError, VAULT_VERSION};
+
+fn key(byte: u8) -> Pubkey {
+    Pubkey::new_from_array([byte; 32])
+}
 
 fn init_fixture() -> VaultInit {
     VaultInit {
@@ -10,26 +11,13 @@ fn init_fixture() -> VaultInit {
         target_bps: [6_000, 4_000],
         seed_amounts: [10_000, 20_000],
         reserve_contributions: [300, 400],
-        initial_shares: 1_000,
         minimum_locked_shares: 10,
-        governance_authority: Pubkey::new_unique(),
-        emergency_authority: Pubkey::new_unique(),
+        governance_authority: key(11),
+        emergency_authority: key(12),
         min_delay_slots: 32,
         maximum_age_seconds: 64,
         maximum_confidence_bps: 100,
         maximum_usdc_deviation_bps: 100,
-        minimum_drift_bps: 250,
-        maximum_trade_value_q9: 1_000_000_000_000,
-        cooldown_slots: 10,
-        curve_start_rate_bps: 10_100,
-        curve_end_rate_bps: 10_000,
-        duration_slots: 200,
-        fee_bps: 20,
-        maximum_fee_bps: 50,
-        maximum_bounty_per_fill: 100,
-        maximum_nav_loss_bps: 25,
-        maximum_cumulative_nav_loss_bps: 100,
-        asset_feed_indices: [0, 1],
     }
 }
 
@@ -42,21 +30,21 @@ fn fresh_vault(init: &VaultInit, vault_key: Pubkey) -> Vault {
         configuration_revision: 0,
         assets: [
             AssetConfig {
-                mint: Pubkey::new_unique(),
+                mint: key(1),
                 token_program: anchor_spl::token::ID,
-                custody: Pubkey::new_unique(),
+                custody: key(2),
                 decimals: 9,
                 target_bps: init.target_bps[0],
             },
             AssetConfig {
-                mint: Pubkey::new_unique(),
+                mint: key(3),
                 token_program: anchor_spl::token::ID,
-                custody: Pubkey::new_unique(),
+                custody: key(4),
                 decimals: 6,
                 target_bps: init.target_bps[1],
             },
         ],
-        share_mint: Pubkey::new_unique(),
+        share_mint: key(5),
         total_shares: 0,
         minimum_locked_shares: 0,
         accounted_amounts: [0; 2],
@@ -74,7 +62,7 @@ fn fresh_vault(init: &VaultInit, vault_key: Pubkey) -> Vault {
             vault.share_mint,
             init.seed_amounts,
             init.reserve_contributions,
-            init.initial_shares,
+            1_000,
             init.minimum_locked_shares,
         )
         .unwrap();
@@ -82,42 +70,34 @@ fn fresh_vault(init: &VaultInit, vault_key: Pubkey) -> Vault {
 }
 
 #[test]
-fn admitted_values_form_a_valid_policy_for_the_fresh_vault() {
-    let init = init_fixture();
-    let vault_key = Pubkey::new_unique();
-    let vault = fresh_vault(&init, vault_key);
-    let policy = policy_from_init(&init, vault_key, &vault);
-    assert_eq!(policy.version, AUCTION_POLICY_VERSION);
-    assert_eq!(policy.last_completed_slot, None);
-    policy.validate(vault_key, &vault).unwrap();
+fn seed_share_supply_uses_a_fixed_dollar_unit_and_floors_fractional_shares() {
+    // $12.345678901 of NAV produces 12.345678 whole shares at six decimals.
+    assert_eq!(
+        seed_share_supply_from_nav_q9(12_345_678_901).unwrap(),
+        12_345_678
+    );
+    assert!(seed_share_supply_from_nav_q9(999).is_err());
+    assert!(seed_share_supply_from_nav_q9(u128::MAX).is_err());
 }
 
 #[test]
-fn policy_initialization_fails_closed_on_unadmitted_bounds() {
-    let vault_key = Pubkey::new_unique();
-    let mut init = init_fixture();
-    init.minimum_drift_bps = 0;
+fn first_seed_initializes_vault_paused_with_reserve_inside_accounted_assets() {
+    let init = init_fixture();
+    let vault_key = key(9);
     let vault = fresh_vault(&init, vault_key);
-    let policy = policy_from_init(&init, vault_key, &vault);
-    assert_eq!(
-        policy.validate(vault_key, &vault).unwrap_err(),
-        error!(crate::auction::AuctionError::InvalidPolicy)
-    );
 
-    let mut init = init_fixture();
-    init.maximum_age_seconds = 0;
-    let vault = fresh_vault(&init, vault_key);
-    assert!(policy_from_init(&init, vault_key, &vault)
-        .validate(vault_key, &vault)
-        .is_err());
+    assert_eq!(vault.version, VAULT_VERSION);
+    assert_eq!(vault.status, 2);
+    assert_eq!(vault.accounted_amounts, init.seed_amounts);
+    assert_eq!(vault.bootstrap_reserve, init.reserve_contributions);
+    assert_eq!(vault.total_shares, 1_000);
 }
 
 #[test]
 fn the_first_seed_is_the_only_transition_that_accepts_zeroed_state() {
     let init = init_fixture();
-    let vault_key = Pubkey::new_unique();
+    let vault_key = key(9);
     let mut vault = fresh_vault(&init, vault_key);
-    assert_eq!(vault.version, VAULT_VERSION);
     let configs = vault.assets;
     let error = vault
         .initialize(
@@ -128,7 +108,7 @@ fn the_first_seed_is_the_only_transition_that_accepts_zeroed_state() {
             vault.share_mint,
             init.seed_amounts,
             init.reserve_contributions,
-            init.initial_shares,
+            1_000,
             init.minimum_locked_shares,
         )
         .unwrap_err();

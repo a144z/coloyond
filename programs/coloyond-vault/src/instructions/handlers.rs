@@ -1,12 +1,13 @@
 //! On-chain handlers that pair accounting transitions with SPL Token CPIs.
 use crate::{
-    auction::{self, AUCTION_POLICY_VERSION},
+    auction,
     governance::{GovernanceError, GovernanceState},
     instructions::{
         self, ActivateTargets, DepositProportional, InitializeVault, PauseRisk, ProposeTargets,
-        RedeemInKind, ResumeRisk, VAULT_SEED, VaultInit,
+        RedeemInKind, ResumeRisk, VaultInit, VAULT_SEED,
     },
-    state::{VaultError, ASSET_COUNT},
+    oracle::{self, OracleLimits, PinnedFeed},
+    state::{seed_share_supply_from_nav_q9, VaultError, SHARE_MINT_DECIMALS},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, MintTo, Transfer};
@@ -14,19 +15,45 @@ use anchor_spl::token::{self, Burn, MintTo, Transfer};
 pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Result<()> {
     let vault_key = ctx.accounts.vault.key();
     let seeder = ctx.accounts.seeder.key();
+    let mints = [ctx.accounts.mint_a.key(), ctx.accounts.mint_b.key()];
+    let decimals = [ctx.accounts.mint_a.decimals, ctx.accounts.mint_b.decimals];
 
-    // The program serves one vault, so the deployer must pass the single
-    // program-wide vault PDA and the stored bump must match its address.
+    require!(
+        ctx.accounts.program_data.upgrade_authority_address
+            == Some(ctx.accounts.bootstrap_authority.key()),
+        VaultError::InvalidBootstrapAuthority
+    );
+    require_keys_eq!(
+        init.governance_authority,
+        ctx.accounts.governance_authority.key(),
+        VaultError::InvalidBootstrapAuthority
+    );
+    require_keys_eq!(
+        init.emergency_authority,
+        ctx.accounts.emergency_authority.key(),
+        VaultError::InvalidBootstrapAuthority
+    );
+
+    // The one global vault is reserved for the verified program bootstrapper.
     let (derived, bump) = Pubkey::find_program_address(&[VAULT_SEED], &crate::ID);
     require_keys_eq!(derived, vault_key, VaultError::InvalidConfiguration);
+    let feed_indices = oracle::validate_asset_pair(mints, decimals)?;
+    require!(
+        init.maximum_age_seconds > 0
+            && init.maximum_confidence_bps <= 10_000
+            && init.maximum_usdc_deviation_bps <= 10_000,
+        oracle::OracleError::InvalidOraclePolicy
+    );
 
     require!(
         ctx.accounts.share_mint.mint_authority == Some(vault_key).into(),
-        VaultError::InvalidConfiguration
+        VaultError::InvalidShareMint
     );
     require!(
-        ctx.accounts.share_mint.supply == 0,
-        VaultError::InvalidConfiguration
+        ctx.accounts.share_mint.supply == 0
+            && ctx.accounts.share_mint.decimals == SHARE_MINT_DECIMALS
+            && ctx.accounts.share_mint.freeze_authority.is_none(),
+        VaultError::InvalidShareMint
     );
     require_keys_eq!(
         ctx.accounts.seeder_shares.key(),
@@ -38,6 +65,52 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
         VaultError::InvalidConfiguration
     );
 
+    // Seed valuation is separate from the executable auction policy installed
+    // later through the S4C governance timelock.
+    let clock = Clock::get()?;
+    let limits = OracleLimits {
+        maximum_age_seconds: init.maximum_age_seconds,
+        maximum_confidence_bps: init.maximum_confidence_bps,
+        maximum_usdc_deviation_bps: init.maximum_usdc_deviation_bps,
+    };
+    let sol_price = oracle::validate_pinned_price(
+        PinnedFeed::SolUsd,
+        ctx.accounts.sol_usd.key(),
+        *ctx.accounts.sol_usd.to_account_info().owner,
+        &ctx.accounts.sol_usd,
+        &clock,
+        limits,
+    )?;
+    let usdc_price = oracle::validate_pinned_price(
+        PinnedFeed::UsdcUsd,
+        ctx.accounts.usdc_usd.key(),
+        *ctx.accounts.usdc_usd.to_account_info().owner,
+        &ctx.accounts.usdc_usd,
+        &clock,
+        limits,
+    )?;
+    oracle::validate_usdc_parity(usdc_price, limits)?;
+    let lower_prices_by_feed = [
+        oracle::conservative_lower_price_q9(sol_price)?,
+        oracle::conservative_lower_price_q9(usdc_price)?,
+    ];
+    let lower_prices = [
+        lower_prices_by_feed[feed_indices[0] as usize],
+        lower_prices_by_feed[feed_indices[1] as usize],
+    ];
+    let seed_value_a_q9 =
+        auction::token_value_floor_q9(init.seed_amounts[0], decimals[0], lower_prices[0])?;
+    let seed_value_b_q9 =
+        auction::token_value_floor_q9(init.seed_amounts[1], decimals[1], lower_prices[1])?;
+    let seed_nav_q9 = seed_value_a_q9
+        .checked_add(seed_value_b_q9)
+        .ok_or(VaultError::ArithmeticOverflow)?;
+    let initial_shares = seed_share_supply_from_nav_q9(seed_nav_q9)?;
+    require!(
+        initial_shares > init.minimum_locked_shares,
+        VaultError::InsufficientSeedShares
+    );
+
     {
         let vault = &mut ctx.accounts.vault;
         vault.initialize(
@@ -45,15 +118,15 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
             vault_key,
             init.configuration_revision,
             instructions::asset_configs(
-                [ctx.accounts.mint_a.key(), ctx.accounts.mint_b.key()],
+                mints,
                 [ctx.accounts.custody_a.key(), ctx.accounts.custody_b.key()],
-                [ctx.accounts.mint_a.decimals, ctx.accounts.mint_b.decimals],
+                decimals,
                 init.target_bps,
             ),
             ctx.accounts.share_mint.key(),
             init.seed_amounts,
             init.reserve_contributions,
-            init.initial_shares,
+            initial_shares,
             init.minimum_locked_shares,
         )?;
     }
@@ -65,6 +138,10 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
         &ctx.accounts.mint_a,
         &ctx.accounts.mint_b,
     )?;
+    require!(
+        ctx.accounts.custody_a.amount == 0 && ctx.accounts.custody_b.amount == 0,
+        VaultError::CustodyNotEmpty
+    );
 
     let state = GovernanceState::initialize(
         vault_key,
@@ -76,46 +153,7 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
     ctx.accounts.governance.store(state);
     instructions::validate_governance(&ctx.accounts.governance, &ctx.accounts.vault, vault_key)?;
 
-    *ctx.accounts.auction_policy = policy_from_init(&init, vault_key, &ctx.accounts.vault);
-    instructions::auction_handlers::validate_policy(
-        &ctx.accounts.auction_policy,
-        vault_key,
-        &ctx.accounts.vault,
-    )?;
-
-    // Seed valuation gate: both pinned feeds must be freshly, fully verified,
-    // inside policy bounds, and every seeded asset must carry positive value.
-    let clock = Clock::get()?;
-    let (prices_q9, _publish_times) = instructions::auction_handlers::validated_prices(
-        &ctx.accounts.auction_policy,
-        ctx.accounts.sol_usd.key(),
-        *ctx.accounts.sol_usd.to_account_info().owner,
-        &ctx.accounts.sol_usd,
-        ctx.accounts.usdc_usd.key(),
-        *ctx.accounts.usdc_usd.to_account_info().owner,
-        &ctx.accounts.usdc_usd,
-        &clock,
-    )?;
-    let prices =
-        instructions::auction_handlers::prices_by_asset(&ctx.accounts.auction_policy, prices_q9)?;
-    let seed_value_a_q9 = auction::token_value_ceil_q9(
-        init.seed_amounts[0],
-        ctx.accounts.vault.assets[0].decimals,
-        prices[0],
-    )?;
-    let seed_value_b_q9 = auction::token_value_ceil_q9(
-        init.seed_amounts[1],
-        ctx.accounts.vault.assets[1].decimals,
-        prices[1],
-    )?;
-    require!(
-        seed_value_a_q9 > 0 && seed_value_b_q9 > 0,
-        VaultError::ZeroSeedAmount
-    );
-
-    // Every validation passed, so the whole first seed is applied atomically:
-    // custody transfers plus the first share mint. A later donation cannot
-    // dilute the deployer because share supply and locked shares are fixed now.
+    // Every validation passed, so seed transfers and share mint are atomic.
     token::transfer(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -150,7 +188,7 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
             },
             &[signer_seeds],
         ),
-        init.initial_shares,
+        initial_shares,
     )?;
 
     emit!(VaultInitialized {
@@ -159,42 +197,11 @@ pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Resul
         configuration_revision: init.configuration_revision,
         seed_amounts: init.seed_amounts,
         reserve_contributions: init.reserve_contributions,
-        total_shares: ctx.accounts.vault.total_shares
+        seed_lower_bound_prices_q9: lower_prices,
+        seed_nav_q9,
+        total_shares: initial_shares,
     });
     Ok(())
-}
-
-/// Build the versioned policy from the deployment-time admission values. The
-/// fee ledger fields (share, floors, epoch budget and spend) start at zero and
-/// are tuned afterwards through the governed policy path. The handler stores
-/// the result and rejects it through the shared validator.
-fn policy_from_init(init: &VaultInit, vault_key: Pubkey, vault: &crate::state::Vault) -> auction::AuctionPolicy {
-    auction::AuctionPolicy {
-        version: AUCTION_POLICY_VERSION,
-        vault: vault_key,
-        configuration_revision: vault.configuration_revision,
-        maximum_age_seconds: init.maximum_age_seconds,
-        maximum_confidence_bps: init.maximum_confidence_bps,
-        maximum_usdc_deviation_bps: init.maximum_usdc_deviation_bps,
-        minimum_drift_bps: init.minimum_drift_bps,
-        maximum_trade_value_q9: init.maximum_trade_value_q9,
-        cooldown_slots: init.cooldown_slots,
-        last_completed_slot: None,
-        curve_start_rate_bps: init.curve_start_rate_bps,
-        curve_end_rate_bps: init.curve_end_rate_bps,
-        duration_slots: init.duration_slots,
-        fee_bps: init.fee_bps,
-        maximum_fee_bps: init.maximum_fee_bps,
-        fee_reserve_share_bps: 0,
-        reserve_floor: [0; ASSET_COUNT],
-        epoch_bounty_budget: [0; ASSET_COUNT],
-        bounty_epoch: 0,
-        bounty_epoch_spent: [0; ASSET_COUNT],
-        maximum_bounty_per_fill: init.maximum_bounty_per_fill,
-        maximum_nav_loss_bps: init.maximum_nav_loss_bps,
-        maximum_cumulative_nav_loss_bps: init.maximum_cumulative_nav_loss_bps,
-        asset_feed_indices: init.asset_feed_indices,
-    }
 }
 
 pub fn deposit_proportional(
@@ -437,6 +444,11 @@ pub fn pause_risk(ctx: Context<PauseRisk>) -> Result<()> {
 pub fn resume_risk(ctx: Context<ResumeRisk>) -> Result<()> {
     let vault = &mut ctx.accounts.vault;
     instructions::validate_governance(&ctx.accounts.governance, vault, vault.key())?;
+    instructions::auction_handlers::validate_policy(
+        &ctx.accounts.auction_policy,
+        vault.key(),
+        vault,
+    )?;
     let mut state = ctx.accounts.governance.state();
     state.resume_risk(ctx.accounts.governance_authority.key())?;
     vault.status = 1;
@@ -495,6 +507,8 @@ pub struct VaultInitialized {
     pub configuration_revision: u64,
     pub seed_amounts: [u64; 2],
     pub reserve_contributions: [u64; 2],
+    pub seed_lower_bound_prices_q9: [u64; 2],
+    pub seed_nav_q9: u128,
     pub total_shares: u64,
 }
 

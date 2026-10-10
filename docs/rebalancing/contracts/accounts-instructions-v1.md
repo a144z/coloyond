@@ -15,7 +15,7 @@
 
 | Instruction | Caller | Required atomic checks / effect |
 |---|---|---|
-| `initialize_vault` | configured initializer | Create config, mints/accounts and initial seed/share state atomically; reject pre-seed donation/inflation condition |
+| `initialize_vault` | one-time program-upgrade-authority bootstrap signer plus separate seeder, governance and emergency signers | Create Vault and Governance PDAs; validate a pre-created zero-supply share mint and empty custody accounts; value the seed from pinned Full Pyth feeds; atomically transfer seed assets and mint computed shares; leave vault and governance paused and AuctionPolicy absent |
 | `deposit_proportional` | holder | Check current backing ratio, user max inputs/min shares, exact token programs, sync donation or reject; mint shares atomically |
 | `redeem_in_kind` | holder | Burn shares then transfer pro-rata assets and eligible reserve claim; no oracle/keeper/auction dependency; failure rolls back |
 | `sync_donation` | permissionless | Account direct token donations to holder backing deterministically; no caller payout |
@@ -32,7 +32,15 @@
 
 Every price-dependent instruction verifies the supplied account's owner and exact address/feed ID, Full verification, positive price, age, confidence and approved USDC depeg guard. All arithmetic uses checked integer fixed point and explicit exponent/decimal bounds. No action trusts a keeper-provided price or arbitrary CPI/program. State sequence and revision make stale/replayed submissions reject. Failed token transfer or downstream instruction rolls back all account and event effects. Pause is a risk gate, not a custody lock. Program upgrade authority remains a separate deployment trust boundary.
 
-Precise account serialization, PDA seeds, event fields, instruction arguments, integer scale, dust policy, fee values, oracle thresholds, and bounty values remain for the S1/S2/S4 contract passes; they are deliberately not guessed here. The generated IDL becomes authoritative only when S1F records its hash and matching client vectors.
+The frozen S0 interface paragraph above records the original design boundary; later source refinements are listed below. The current generated IDL is authoritative for instruction/account serialization, while deployment and funded use still require the documented gates.
+
+## Bootstrap implementation refinement (10 October 2026)
+
+- The initializer creates only the Vault and Governance PDAs. The classic SPL token mints, seeder token accounts and PDA-controlled custody token accounts must already exist. The share mint must have six decimals, zero supply, the Vault PDA as mint authority and no freeze authority; both custody accounts must be empty. Anchor creates the Vault/Governance accounts and seed transfers/share mint are atomic within the instruction.
+- `bootstrap_authority` must be the current upgrade authority in the program's canonical loader `ProgramData`; it is separate from the seeder and the distinct governance/emergency signers. This requires an upgradeable deployment and is not proof that a deployment has been admitted.
+- Current source computes seed NAV in Q9 USD from fresh, fully verified pinned feeds, values each asset at the Pyth lower confidence bound (`price - confidence`), converts that NAV to six-decimal share units at a provisional $1/share, and floors fractional shares. This is a conservative implementation convention, not an approved market price or finalized economic parameter. The minimum locked share floor, privileged feed limits and asset manifest still require review before funded use.
+- The admitted source profile currently pairs classic SPL WSOL with canonical mainnet or Devnet USDC and maps each mint to its corresponding SOL/USD or USDC/USD feed. The program cannot infer the active cluster; the reviewed deployment manifest must choose the matching profile.
+- No AuctionPolicy is created by bootstrap. The first policy must use the S4C governance proposal and delay; `resume_risk` validates the resulting policy before enabling risk.
 
 ## S3E condition interface revision 1
 

@@ -169,7 +169,12 @@ function pauseRisk(): TransactionInstruction {
 function resumeRisk(): TransactionInstruction {
   return new TransactionInstruction({
     programId: PROGRAM_ID,
-    keys: [meta(vault, true), meta(governance, true), meta(governanceAuthority, false, true)],
+    keys: [
+      meta(vault, true),
+      meta(governance, true),
+      meta(auctionPolicy),
+      meta(governanceAuthority, false, true),
+    ],
     data: Buffer.from([207, 89, 77, 209, 47, 207, 14, 13]),
   });
 }

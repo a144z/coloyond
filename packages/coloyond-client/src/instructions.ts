@@ -9,9 +9,13 @@ export const INITIALIZE_VAULT_DISCRIMINATOR = Uint8Array.of(48, 191, 163, 44, 71
 export const INITIALIZE_VAULT_ACCOUNT_ORDER = [
   "vault",
   "governance",
-  "auction_policy",
   "share_mint",
   "seeder",
+  "bootstrap_authority",
+  "governance_authority",
+  "emergency_authority",
+  "program",
+  "program_data",
   "seeder_shares",
   "seeder_asset_a",
   "seeder_asset_b",
@@ -30,7 +34,6 @@ export type VaultInitArgs = {
   targetBps: [number, number];
   seedAmounts: [bigint, bigint];
   reserveContributions: [bigint, bigint];
-  initialShares: bigint;
   minimumLockedShares: bigint;
   governanceAuthority: string;
   emergencyAuthority: string;
@@ -38,18 +41,6 @@ export type VaultInitArgs = {
   maximumAgeSeconds: bigint;
   maximumConfidenceBps: number;
   maximumUsdcDeviationBps: number;
-  minimumDriftBps: number;
-  maximumTradeValueQ9: bigint;
-  cooldownSlots: bigint;
-  curveStartRateBps: number;
-  curveEndRateBps: number;
-  durationSlots: bigint;
-  feeBps: number;
-  maximumFeeBps: number;
-  maximumBountyPerFill: bigint;
-  maximumNavLossBps: number;
-  maximumCumulativeNavLossBps: number;
-  assetFeedIndices: [number, number];
 };
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -119,7 +110,6 @@ export function encodeInitializeVault(init: VaultInitArgs): Uint8Array {
   writer.u64(init.seedAmounts[1]);
   writer.u64(init.reserveContributions[0]);
   writer.u64(init.reserveContributions[1]);
-  writer.u64(init.initialShares);
   writer.u64(init.minimumLockedShares);
   writer.pubkey(init.governanceAuthority);
   writer.pubkey(init.emergencyAuthority);
@@ -127,18 +117,5 @@ export function encodeInitializeVault(init: VaultInitArgs): Uint8Array {
   writer.u64(init.maximumAgeSeconds);
   writer.u16(init.maximumConfidenceBps);
   writer.u16(init.maximumUsdcDeviationBps);
-  writer.u16(init.minimumDriftBps);
-  writer.u64(init.maximumTradeValueQ9);
-  writer.u64(init.cooldownSlots);
-  writer.u16(init.curveStartRateBps);
-  writer.u16(init.curveEndRateBps);
-  writer.u64(init.durationSlots);
-  writer.u16(init.feeBps);
-  writer.u16(init.maximumFeeBps);
-  writer.u64(init.maximumBountyPerFill);
-  writer.u16(init.maximumNavLossBps);
-  writer.u16(init.maximumCumulativeNavLossBps);
-  writer.u8(init.assetFeedIndices[0]);
-  writer.u8(init.assetFeedIndices[1]);
   return writer.bytes.subarray(0, writer.length);
 }

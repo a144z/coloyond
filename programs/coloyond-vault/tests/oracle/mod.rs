@@ -7,9 +7,10 @@ use pyth_solana_receiver_sdk::price_update::{
 mod oracle;
 
 use oracle::{
-    validate_pinned_price, validate_usdc_parity, OracleLimits, PinnedFeed,
-    PYTH_RECEIVER_PROGRAM_ID, SOL_USD_FEED_ACCOUNT, SOL_USD_FEED_ID, USDC_USD_FEED_ACCOUNT,
-    USD_FIXED_DECIMALS,
+    conservative_lower_price_q9, feed_indices_for_assets, validate_asset_pair,
+    validate_pinned_price, validate_usdc_parity, OracleLimits, PinnedFeed, ValidatedPrice,
+    DEVNET_USDC_MINT, MAINNET_USDC_MINT, PYTH_RECEIVER_PROGRAM_ID, SOL_USD_FEED_ACCOUNT,
+    SOL_USD_FEED_ID, USDC_USD_FEED_ACCOUNT, USD_FIXED_DECIMALS, WSOL_MINT,
 };
 
 const NOW: i64 = 1_000;
@@ -54,6 +55,20 @@ fn clock(unix_timestamp: i64) -> Clock {
     }
 }
 
+#[test]
+fn asset_allowlist_binds_each_mint_to_its_price_feed_and_decimals() {
+    assert_eq!(
+        validate_asset_pair([WSOL_MINT, DEVNET_USDC_MINT], [9, 6]).unwrap(),
+        [0, 1]
+    );
+    assert_eq!(
+        validate_asset_pair([MAINNET_USDC_MINT, WSOL_MINT], [6, 9]).unwrap(),
+        [1, 0]
+    );
+    assert!(feed_indices_for_assets([WSOL_MINT, Pubkey::new_unique()]).is_err());
+    assert!(validate_asset_pair([WSOL_MINT, DEVNET_USDC_MINT], [6, 6]).is_err());
+}
+
 fn valid(
     feed: PinnedFeed,
     price: i64,
@@ -95,6 +110,24 @@ fn accepts_pinned_full_verified_sol_vector_and_converts_exactly() {
         71_601_065_306_990_000_000_000
     );
     assert_eq!(price.publish_time, NOW);
+}
+
+#[test]
+fn seed_price_uses_positive_lower_confidence_bound_and_rejects_zero_bound() {
+    let sample = ValidatedPrice {
+        mantissa: 100_000_000,
+        confidence: 1_000_000,
+        exponent: -8,
+        publish_time: NOW,
+        confidence_bps: 100,
+    };
+    assert_eq!(conservative_lower_price_q9(sample).unwrap(), 990_000_000);
+
+    let no_lower_bound = ValidatedPrice {
+        confidence: sample.mantissa,
+        ..sample
+    };
+    assert!(conservative_lower_price_q9(no_lower_bound).is_err());
 }
 
 #[test]

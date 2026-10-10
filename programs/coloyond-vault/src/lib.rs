@@ -18,8 +18,8 @@ declare_id!("FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6");
 pub mod coloyond_vault {
     use super::*;
 
-    /// Initialization now validates the seed against the pinned feeds
-    /// instead of refusing, so a seeded vault can run the auction loop.
+    /// Initialize the seed atomically from pinned-feed NAV. Bootstrap remains
+    /// paused until S4C creates an AuctionPolicy through its governance delay.
     pub fn initialize_vault(ctx: Context<InitializeVault>, init: VaultInit) -> Result<()> {
         instructions::handlers::initialize_vault(ctx, init)
     }

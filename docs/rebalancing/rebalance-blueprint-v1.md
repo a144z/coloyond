@@ -1,25 +1,20 @@
-# Coloyond rebalance blueprint v1 (oracle-anchored AMM on Devnet)
+# Historical rebalance blueprint v1 (oracle-anchored AMM concept; superseded)
 
-Converted from `p.txt` on 10 October 2026. It is a design brief, not an approved
-spec: the code blocks below are illustrative sketches and **the code should be
-used with caution**. Where this blueprint and
-[the spec](spec-v1.md) disagree, the spec and
-[the amendment](../product/2026-10-10-onchain-rebalancing-spec-amendment.md) win.
+Converted from `p.txt` on 10 October 2026. This is archived concept material,
+not an approved specification or implementation guide. Its passive AMM and
+arbitrage-fee-reflow design was not selected as the custody core. The controlling
+decision is the custom Anchor/SPL/Pyth bounded-auction design in the
+[portfolio plan](../product/onchain-portfolio-rebalancing-plan.md) and
+[versioned spec](spec-v1.md); use those docs for current decisions. The code
+blocks below are illustrative sketches and **must not be deployed**.
 
-## Can this fully work on Solana Devnet?
+## Historical claim: not demonstrated by this repository
 
-Yes. The architecture leans on native Solana features: the Anchor framework, the
-SPL Token program and Pyth Network price oracles. By writing a multi-token
-index/ETF as an oracle-anchored, arbitrage-driven AMM liquidity pool, the need
-for an off-chain backend tracker disappears.
-
-- **The Mainnet reality:** on Mainnet, public MEV searchers and routers like
-  Jupiter would drive this traffic for you automatically, to secure cheap
-  arbitrage profit.
-- **The Devnet caveat:** Devnet has zero organic trading volume and no real
-  arbitrage bots, so coloyond must act as its own arbitrageur by running a
-  simple loop script to simulate market movements and to force rebalancing.
-  (Section III.)
+The source document asserted that an oracle-anchored passive pool would rebalance
+through arbitrage, but this repository has not demonstrated that mechanism,
+organic Mainnet searcher participation, keeper uptime, or fee capture. The
+active product does not depend on those assumptions. Devnet and Mainnet feed
+account contents remain unverified under the open S0B gate.
 
 ## I. The passive multi-token ETF rebalancing blueprint
 
@@ -205,57 +200,35 @@ Open question from the source: whether to map the exact mathematical curve
 constraints (for example, the constant-product invariant) so bots can never
 extract more money than the base fee allows.
 
-## Coloyond MVP status on Devnet (10 October 2026)
+## Repository status (10 October 2026)
 
-What runs today, honestly labelled:
-
-- Controlling architecture decision (from the sprint integration): the custom
-  Anchor/SPL/Pyth auction is the rebalancing path; **Symmetry is kept as a
-  separate Devnet comparison**, not as the core. See
-  [the SDK survey](../integrations/2026-10-10-solana-vault-sdk-survey.md) status
-  banner and [the amendment](../product/2026-10-10-onchain-rebalancing-spec-amendment.md).
-- Browser routes: `/rebalancing-lab` runs coloyond's own Anchor auction
-  workbench; on Localnet it executes the actual SBF program with SPL transfers,
-  but its oracle bytes, prices and token mints are synthetic fixtures.
-  `/symmetry-devnet` reads public Symmetry V3 vault state through
-  `@symmetry-hq/sdk` and is read-only; it cannot submit transactions, and the
-  app has no Mainnet action path. No coloyond contract is deployed to Devnet.
-- Phase 1 (oracle mapping) and the anti-exploit engine are implemented in
-  coloyond's own Anchor program: the pinned Pyth adapter, the bounded auction
-  math, the conditional rule core and the fail-closed keeper client in
-  `programs/coloyond-vault` compile and pass their native cargo tests on this
-  machine (51 tests, 10 October 2026). The `initialize_vault` entry point is no
-  longer a stub: its handler, `VaultInit` argument and `VaultInitialized` event
-  are implemented and covered by three seeding tests; the IDL
-  (`idl/coloyond_vault.json` and the client's TS mirror) now carry its 16
-  accounts, its argument and the new types, and
-  `packages/coloyond-client/src/instructions.ts` encodes the instruction
-  byte for byte. No deployment address is claimed.
-- Phase 2 (deployment) and Phase 3 (seeding) wait on the anchor/solana CLIs
-  (absent on this machine; `cargo`/`rustc` are present) and on the deploy
-  account being topped up — the owner tops up the devnet account later, which
-  covers the gas. `Anchor.toml` carries the devnet program id and wallet slots,
-  so `anchor build && anchor deploy --provider devnet` is ready to run. For
-  Phase 1 the program's own pinned feed accounts were verified on-cluster by
-  `tools/rebalancing/verify-devnet-feeds.mjs` (10 October 2026): both exist at
-  the same addresses on Devnet and Mainnet-beta, owned by receiver program
-  `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, as 134-byte Full-variant accounts
-  embedding the pinned feed ID at byte offset 41. The feed account quoted in the
-  matrix (`H6AR...`) is source-listed only:
-  [the manifest](deployment-manifest-v1.md) has not verified it on-cluster, so
-  it must be read finalized before being copied anywhere.
-- Phase 4 (stress testing) is the loop script of section III. Its working
-  realization for the current, working devnet read path is
-  `tools/symmetry-fixtures/devnet-rebalance-loop.mjs`: it re-reads a chosen
-  devnet vault, computes drift against the on-chain automation trigger, and
-  (when given a funded keypair) submits Symmetry's permissionless
-  `rebalanceVaultTx`, rotating RPC endpoints and pausing between rounds —
-  coloyond acting as its own arbitrageur, because devnet has no organic keeper
-  traffic. Verified read-only against four automation-enabled devnet vaults on
-  10 October 2026; sending its first transaction waits on the topped-up signer.
-- The program-side companion is `tools/rebalancing/coloyond-drift-loop.mjs`: a
-  read-only loop that reports whether the program is deployed, scans every
-  Vault account it owns, decodes the 353-byte layout shared with the client
-  decoder, reads both custody balances and both pinned Pyth prices, and prints
-  each asset's drift in basis points against its baked target. It was run on
-  10 October 2026 and correctly reported the program as not deployed yet.
+- The controlling architecture is the custom Anchor/SPL/Pyth auction; Symmetry
+  remains a separate read-only Devnet comparison. See the
+  [SDK survey](../integrations/2026-10-10-solana-vault-sdk-survey.md),
+  [product plan](../product/onchain-portfolio-rebalancing-plan.md), and
+  [versioned amendment](../product/2026-10-10-onchain-rebalancing-spec-amendment.md).
+- `/rebalancing-lab` executes auction instructions and SPL transfers against
+  the actual SBF program on Localnet, using synthetic token/oracle fixtures.
+  `/symmetry-devnet` reads Symmetry state and cannot submit transactions. No
+  Coloyond program deployment or admitted feed/mint account state is claimed.
+- The program source includes Pyth validation, bounded auction math,
+  conditional rules, keeper clients, and a bootstrap path authenticated by the
+  current program upgrade authority. That bootstrap starts paused, derives
+  shares from verified oracle NAV, and leaves AuctionPolicy creation to S4C's
+  delayed governance flow. Rust helper tests pass; the initializer/IDL/client
+  contract and signed Localnet bootstrap-to-policy transaction proof remain
+  incomplete. S0B remains held and S4A has approved no economic parameters.
+- `tools/rebalancing/verify-devnet-feeds.mjs` is a raw-account candidate probe,
+  not complete Pyth verification. It does not establish Full verification,
+  current price, confidence or freshness. The finalized feed/mint reads required
+  by S0B remain unverified. Anchor uses one `[provider]` table; for Devnet, use
+  the documented CLI overrides `--provider.cluster devnet` and
+  `--provider.wallet <wallet-path>` after the test-cluster deployment gate is
+  reviewed. The default project provider remains Localnet.
+- `tools/rebalancing/coloyond-drift-loop.mjs` is diagnostic prototype code and
+  must not be treated as a verified drift reading or trigger until its vault,
+  custody, policy and Pyth decoders pass real-chain validation. The last
+  recorded attempt found no Coloyond Devnet deployment.
+- S3F has one complete Localnet condition-liveness run with shared RPC and
+  synthetic Pyth data. It is not independent-operator, Devnet, or production
+  liveness evidence; see [the retained transcript](evidence/s3-liveness-localnet-success-20261010.jsonl).

@@ -19,14 +19,14 @@ fn fixture() -> (Pubkey, Vault, AuctionPolicy) {
         configuration_revision: 7,
         assets: [
             AssetConfig {
-                mint: Pubkey::new_unique(),
+                mint: crate::oracle::WSOL_MINT,
                 token_program: anchor_spl::token::ID,
                 custody: Pubkey::new_unique(),
                 decimals: 9,
                 target_bps: 6000,
             },
             AssetConfig {
-                mint: Pubkey::new_unique(),
+                mint: crate::oracle::DEVNET_USDC_MINT,
                 token_program: anchor_spl::token::ID,
                 custody: Pubkey::new_unique(),
                 decimals: 6,
@@ -130,10 +130,16 @@ fn bounty_claims_cannot_exceed_seeded_unencumbered_reserve() {
 }
 
 #[test]
-fn policy_asset_feed_mapping_is_a_permutation_of_the_two_pinned_feeds() {
+fn policy_asset_feed_mapping_matches_the_mint_order() {
     let (vault_key, vault, mut policy) = fixture();
-    policy.asset_feed_indices = [1, 0];
     assert!(policy.validate(vault_key, &vault).is_ok());
+    policy.asset_feed_indices = [1, 0];
+    assert!(policy.validate(vault_key, &vault).is_err());
+
+    let mut reversed_vault = vault.clone();
+    reversed_vault.assets.swap(0, 1);
+    policy.asset_feed_indices = [1, 0];
+    assert!(policy.validate(vault_key, &reversed_vault).is_ok());
 
     let (_, vault, mut policy) = fixture();
     policy.asset_feed_indices = [1, 2];

@@ -15,6 +15,3 @@ coloyond_vault = "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"
 [provider]
 cluster = "localnet"
 wallet = ".anchor/localnet-wallet.json"
-
-[provider.devnet]
-wallet = ".anchor/devnet-wallet.json"

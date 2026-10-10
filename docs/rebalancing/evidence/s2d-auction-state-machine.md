@@ -32,8 +32,12 @@ the separate payout path remains S4 work under S0F's `claim_bounty` contract.
   age/confidence/USDC deviation, drift, maximum trade value, cooldown, auction
   duration/curve, fee, bounty, per-fill and cumulative NAV-loss, and feed-map
   parameters. No numeric defaults are embedded. Start copies the relevant
-  bounds into the intent. Policy has **no initializer** in this revision, so
-  callers cannot create an executable policy before S4/config admission.
+  bounds into the intent. There is no direct policy initializer: the first
+  executable policy must use S4C's governance-authorized proposal and delayed
+  permissionless execution, while the vault is paused. The auction harness can
+  execute SBF auction transfers against injected Localnet fixtures, but no
+  browser-wallet CP2b walkthrough or bootstrap/seed rollback proof is recorded;
+  the full bootstrap-to-policy sequence remains unvalidated.
 - Start, fill, and price-dependent early finish require the two pinned Pyth
   `PriceUpdateV2` accounts. The S2A SDK adapter checks account address/owner,
   feed ID, `Full` verification, freshness, positive price, confidence and
@@ -69,9 +73,10 @@ from the actual program entrypoints. The Solana v1.57 SBF build completed with
 no stack-frame overflow diagnostics after boxing the auction accounts and
 splitting fill math/CPI work into bounded helpers.
 
-These are local compile/unit/SBF and IDL checks. The package cannot prove actual
-SPL CPI rollback against a local validator because S1F intentionally leaves
-`initialize_vault` unavailable, and the policy account has no approved
-initializer. S0B feed accounts/authority and S4 economics/configuration remain
-admission blockers. Do not enable funded UI, seed, Devnet operation, or public
-custody based on this package.
+These are local compile/unit/SBF and IDL checks. The auction Localnet harness
+uses genesis-injected vault, governance, policy and token fixtures; it does not
+yet exercise the current `initialize_vault` path or prove its seed CPI rollback
+and follow-on S4C policy delay. The safe source sequence now exists, but those
+transactions remain unverified. S0B feed accounts/authority and S4 economics/
+configuration remain admission blockers. Do not enable funded UI, Devnet
+operation, or public custody based on this package.

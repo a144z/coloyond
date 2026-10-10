@@ -6,12 +6,13 @@ use crate::{
         AuctionError, AuctionPolicy, BountyClaim, AUCTION_POLICY_VERSION, BOUNTY_CLAIM_VERSION,
     },
     fees::{self, FeeTerms},
+    oracle::{DEVNET_USDC_MINT, WSOL_MINT},
     state::{AssetConfig, Vault, ASSET_COUNT},
 };
 
-fn asset(decimals: u8, target_bps: u16) -> AssetConfig {
+fn asset(mint: Pubkey, decimals: u8, target_bps: u16) -> AssetConfig {
     AssetConfig {
-        mint: Pubkey::new_unique(),
+        mint,
         token_program: anchor_spl::token::ID,
         custody: Pubkey::new_unique(),
         decimals,
@@ -26,7 +27,10 @@ fn vault(amounts: [u64; ASSET_COUNT], reserve: [u64; ASSET_COUNT]) -> Vault {
         status: 0,
         authority: Pubkey::default(),
         configuration_revision: 0,
-        assets: [asset(6, 5_000), asset(6, 5_000)],
+        assets: [
+            asset(WSOL_MINT, 9, 5_000),
+            asset(DEVNET_USDC_MINT, 6, 5_000),
+        ],
         share_mint: Pubkey::default(),
         total_shares: 0,
         minimum_locked_shares: 0,

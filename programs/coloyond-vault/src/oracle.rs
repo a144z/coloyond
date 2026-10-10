@@ -16,6 +16,9 @@ pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5
 /// deployment manifest. S0B has not verified these accounts on-chain.
 pub const SOL_USD_FEED_ACCOUNT: Pubkey = pubkey!("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
 pub const USDC_USD_FEED_ACCOUNT: Pubkey = pubkey!("Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX");
+pub const WSOL_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
+pub const MAINNET_USDC_MINT: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+pub const DEVNET_USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 
 pub const SOL_USD_FEED_ID: &str =
     "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";
@@ -30,6 +33,32 @@ pub const USD_FIXED_DECIMALS: u8 = 18;
 pub enum PinnedFeed {
     SolUsd,
     UsdcUsd,
+}
+
+/// Resolve only the reviewed WSOL/USDC mint profiles to their pinned price
+/// feeds. The program cannot infer Solana's cluster, so the deployment
+/// manifest must select the correct USDC profile for the target cluster.
+pub fn feed_indices_for_assets(mints: [Pubkey; 2]) -> Result<[u8; 2]> {
+    let is_usdc = |mint| mint == MAINNET_USDC_MINT || mint == DEVNET_USDC_MINT;
+    if mints[0] == WSOL_MINT && is_usdc(mints[1]) {
+        Ok([0, 1])
+    } else if is_usdc(mints[0]) && mints[1] == WSOL_MINT {
+        Ok([1, 0])
+    } else {
+        err!(OracleError::UnsupportedAssetMint)
+    }
+}
+
+pub fn validate_asset_pair(mints: [Pubkey; 2], decimals: [u8; 2]) -> Result<[u8; 2]> {
+    let indices = feed_indices_for_assets(mints)?;
+    for index in 0..2 {
+        let expected = if indices[index] == 0 { 9 } else { 6 };
+        require!(
+            decimals[index] == expected,
+            OracleError::UnsupportedAssetDecimals
+        );
+    }
+    Ok(indices)
 }
 
 impl PinnedFeed {
@@ -109,6 +138,23 @@ impl ValidatedPrice {
         }
         .to_usd_fixed()
     }
+}
+
+/// Convert the lower edge of Pyth's confidence interval to Q9 USD. Seed-share
+/// valuation uses this conservative bound rather than the point estimate, so
+/// uncertainty cannot increase the initial share supply.
+pub fn conservative_lower_price_q9(price: ValidatedPrice) -> Result<u64> {
+    let point_q9 = price.to_fixed(9)?;
+    let confidence_q9 = ValidatedPrice {
+        mantissa: price.confidence,
+        ..price
+    }
+    .to_fixed(9)?;
+    let lower_q9 = point_q9
+        .checked_sub(confidence_q9)
+        .ok_or_else(|| error!(OracleError::NonPositivePrice))?;
+    require!(lower_q9 > 0, OracleError::NonPositivePrice);
+    u64::try_from(lower_q9).map_err(|_| error!(OracleError::ArithmeticOverflow))
 }
 
 /// Validate an account already deserialized by Anchor as `PriceUpdateV2`.
@@ -214,6 +260,10 @@ fn ten_to(power: u32) -> Result<u128> {
 
 #[error_code]
 pub enum OracleError {
+    #[msg("Only the reviewed WSOL and USDC mint pair is supported")]
+    UnsupportedAssetMint,
+    #[msg("Asset decimals do not match the reviewed WSOL/USDC mint")]
+    UnsupportedAssetDecimals,
     #[msg("Oracle account is not the pinned feed account")]
     WrongFeedAccount,
     #[msg("Oracle account owner is not the pinned Pyth Receiver program")]

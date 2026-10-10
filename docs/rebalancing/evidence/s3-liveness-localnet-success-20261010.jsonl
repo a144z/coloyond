@@ -1,0 +1,47 @@
+{"event":"condition_proposed","signature":"GrbF7SwkmctUn6u9sM3M5TiUo8LEzqWmZr1h6ebNNZkQhFYkFiQY9XrNcTZBq3XMWdgxqxAJinkATthyAkd6aFB","slot":33,"nonce":"1","activateAfterSlot":"97"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"33"}
+{"event":"keeper_b_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"33"}
+{"event":"keeper_b_event","status":"error","action":null,"signature":null,"reason":"Account subscription unavailable; periodic chain reconciliation remains active: INJECTED_WEBSOCKET_SETUP_LOSS; scheduler must continue through bounded polling","slot":null}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"34"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"36"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"39"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"40"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"42"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"44"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"46"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"48"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"50"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"52"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"54"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"56"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"58"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"60"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"62"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"64"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"65"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"67"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"69"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"71"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"73"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"75"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"77"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"79"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"81"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"83"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"85"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"87"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"89"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"91"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"93"}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"Governance timelock has not reached its on-chain activation slot","slot":"95"}
+{"event":"condition_eligible","slot":"97","observedAt":"2026-10-10T13:20:20.960Z"}
+{"event":"keeper_a_event","status":"error","action":"execute","signature":null,"reason":"INJECTED_DROP_BEFORE_RPC_SEND; retry requires a fresh RPC reconciliation; chain state was reread before any retry","slot":"97"}
+{"event":"keeper_a_stopped_after_injected_pre_send_drop","action":"execute","chainSubmission":false}
+{"event":"keeper_b_event","status":"pending","action":"execute","signature":"376E4iQcGdjmt9e6Lps7hrnKenc58xkfk4ZDbLEz7qzHiUSKMCxkQeokRSFUhbrLRwCiB2Mj4YaKLfmFtY4fTCgF","reason":"INJECTED_RESPONSE_LOSS_AFTER_RPC_SEND; signed transaction was sent before the response was hidden","slot":"97"}
+{"event":"keeper_b_event","status":"confirmed","action":"execute","signature":"376E4iQcGdjmt9e6Lps7hrnKenc58xkfk4ZDbLEz7qzHiUSKMCxkQeokRSFUhbrLRwCiB2Mj4YaKLfmFtY4fTCgF","reason":null,"slot":"99"}
+{"event":"keeper_b_recovered_by_poll_and_chain_reconciliation","signature":"376E4iQcGdjmt9e6Lps7hrnKenc58xkfk4ZDbLEz7qzHiUSKMCxkQeokRSFUhbrLRwCiB2Mj4YaKLfmFtY4fTCgF","caller":"Et7nETz6Q1MbTwGFcWvEdD2UX1DKfB758zf8cdhqa3gP","confirmation":"confirmed_from_rpc_state","injectedFault":"INJECTED_RESPONSE_LOSS_AFTER_RPC_SEND","eligibleToSubmittedMs":124}
+{"event":"both_keepers_stopped","keeperA":"97QyzA1by2fCPS7jcLSy6g8LdKmSUivo9x3jbyUcgWPg","keeperB":"Et7nETz6Q1MbTwGFcWvEdD2UX1DKfB758zf8cdhqa3gP"}
+{"event":"unrelated_caller_completed_eligible_sbf_action","caller":"48UNkT2ZaHYhTrPFgrBsKAzNUgRuULXPxhT9efAvPwmE","observeSignature":"2RzqJr2itQqDna37U4Lbru4F6PfqtEqHMvLrKUr1bDmDRitRmpNw7d9GtBJTMVsEkJPtUv6m1G9U3mxURG3GNhvi","activationSignature":"3JgTdY8UTvLnY4Xgir9nrfjMUborHJyxHgT7mYpe9fSewF5m7cXhMJZvqcw5mnMbTVqL6TV9CmkTUqEXgQAKa3MH","finalSlot":"101","targetBps":[6000,4000],"configurationRevision":"2","syntheticOracleFixture":true}
+{"event":"keeper_a_event","status":"idle","action":null,"signature":null,"reason":"No enabled condition rule is active","slot":"101"}
+{"event":"keeper_restart_reconciled_without_replay","status":"idle","slot":"101"}
+{"event":"limitations","localnetSbf":"verified by confirmed Coloyond program transactions","pyth":"synthetic PriceUpdateV2-shaped Localnet fixture; not authenticated","rpcIndependence":"two distinct clients share one Localnet RPC endpoint","operatorIndependence":"not proven by this single-process deterministic harness","droppedRequest":"injected before RPC send; no network packet-loss claim","devnet":"not tested"}

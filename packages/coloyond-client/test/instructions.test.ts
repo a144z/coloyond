@@ -24,7 +24,6 @@ const sample: VaultInitArgs = {
   targetBps: [6000, 4000],
   seedAmounts: [1000n, 2000n],
   reserveContributions: [10n, 20n],
-  initialShares: 1000000000n,
   minimumLockedShares: 1n,
   governanceAuthority: "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
   emergencyAuthority: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
@@ -32,18 +31,6 @@ const sample: VaultInitArgs = {
   maximumAgeSeconds: 600n,
   maximumConfidenceBps: 100,
   maximumUsdcDeviationBps: 250,
-  minimumDriftBps: 75,
-  maximumTradeValueQ9: 4831813792n,
-  cooldownSlots: 32n,
-  curveStartRateBps: 400,
-  curveEndRateBps: 8000,
-  durationSlots: 240n,
-  feeBps: 30,
-  maximumFeeBps: 500,
-  maximumBountyPerFill: 5000n,
-  maximumNavLossBps: 150,
-  maximumCumulativeNavLossBps: 600,
-  assetFeedIndices: [0, 1],
 };
 
 test("encoder discriminator and account order match the published IDL", () => {
@@ -75,7 +62,7 @@ test("encoded length equals the IDL VaultInit field sizes", () => {
   };
   assert.ok(types.has("VaultInit"), "VaultInit type is published in the IDL");
   const fields = (types.get("VaultInit") as JsonRecord).fields as JsonRecord[];
-  assert.equal(fields.length, 24);
+  assert.equal(fields.length, 11);
   const expectedLength = 8 + fields.reduce((total, field) => total + sizeOf(field.type as JsonValue), 0);
   assert.equal(encodeInitializeVault(sample).byteLength, expectedLength);
 });
@@ -88,14 +75,12 @@ test("encodeInitializeVault writes little endian fields in IDL order", () => {
   assert.equal(view.getUint16(16, true), 6000);
   assert.equal(view.getUint16(18, true), 4000);
   assert.equal(view.getBigUint64(20, true), 1000n);
-  assert.equal(view.getBigUint64(52, true), 1000000000n);
-  assert.deepEqual([...bytes.subarray(68, 100)], [...base58Decode(sample.governanceAuthority)]);
-  assert.deepEqual([...bytes.subarray(100, 132)], [...base58Decode(sample.emergencyAuthority)]);
-  assert.equal(view.getUint16(148, true), 100);
-  assert.equal(view.getUint16(150, true), 250);
-  assert.equal(view.getBigUint64(154, true), 4831813792n);
-  assert.equal(bytes[198], 0);
-  assert.equal(bytes[199], 1);
+  assert.equal(view.getBigUint64(52, true), 1n);
+  assert.deepEqual([...bytes.subarray(60, 92)], [...base58Decode(sample.governanceAuthority)]);
+  assert.deepEqual([...bytes.subarray(92, 124)], [...base58Decode(sample.emergencyAuthority)]);
+  assert.equal(view.getUint16(140, true), 100);
+  assert.equal(view.getUint16(142, true), 250);
+  assert.equal(bytes.byteLength, 144);
 });
 
 test("base58Decode rejects invalid characters and oversized values", () => {

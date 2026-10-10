@@ -1,7 +1,7 @@
 //! Versioned, fail-closed auction state for the first pooled vault.
 //!
-//! No initializer exists for `AuctionPolicy`: S0F/S4 admission values are not
-//! approved, so no caller can create executable risk policy in this revision.
+//! `AuctionPolicy` is absent at bootstrap and can only be created through the
+//! S4C governance proposal plus delay; no executable numeric defaults exist.
 
 use anchor_lang::prelude::*;
 
@@ -261,7 +261,7 @@ pub struct AuctionPolicy {
     pub fee_bps: u16,
     pub maximum_fee_bps: u16,
     /// Share of the charged fill fee assigned to the holder-owned reserve.
-    /// No policy initializer or default exists; governance must supply it.
+    /// Governance supplies this through the delayed S4C policy transition.
     pub fee_reserve_share_bps: u16,
     /// Minimum free reserve balance that must remain after a bounty is booked.
     pub reserve_floor: [u64; ASSET_COUNT],
@@ -311,6 +311,14 @@ impl AuctionPolicy {
         );
         require!(
             (self.asset_feed_indices == [0, 1] || self.asset_feed_indices == [1, 0]),
+            AuctionError::InvalidPolicy
+        );
+        require!(
+            self.asset_feed_indices
+                == crate::oracle::feed_indices_for_assets([
+                    vault.assets[0].mint,
+                    vault.assets[1].mint,
+                ])?,
             AuctionError::InvalidPolicy
         );
         Ok(())
@@ -369,6 +377,19 @@ pub fn cumulative_loss_within_cap(
         return false;
     };
     loss_scaled <= cap_scaled
+}
+
+/// Conservative token value in USD × 1e9, ignoring fractional token dust so
+/// an oracle-valued seed cannot mint shares against overstated NAV.
+pub fn token_value_floor_q9(amount: u64, decimals: u8, price_q9: u64) -> Result<u128> {
+    require!(decimals <= 18 && price_q9 > 0, AuctionError::InvalidPolicy);
+    let scale = 10u128
+        .checked_pow(u32::from(decimals))
+        .ok_or(AuctionError::ArithmeticOverflow)?;
+    u128::from(amount)
+        .checked_mul(u128::from(price_q9))
+        .map(|product| product / scale)
+        .ok_or_else(|| error!(AuctionError::ArithmeticOverflow))
 }
 
 /// Conservative token value in USD × 1e9; fractional dust rounds against the

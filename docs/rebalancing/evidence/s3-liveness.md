@@ -1,6 +1,6 @@
 # S3F condition scheduler and liveness evidence
 
-**Gate: OPEN.** The deterministic harness and focused scheduler checks are in place, and a partial Localnet run has confirmed the proposal and keeper execute instructions on the Coloyond SBF program. Post-send reconciliation currently fails on the condition-account tail, so the complete two-keeper liveness scenario remains unverified. This evidence must not be treated as a developer checkpoint acceptance.
+**Gate: OPEN.** A complete deterministic Localnet scenario has now passed once against the Coloyond SBF program, including polling recovery after a deliberately hidden post-send response, third-party completion with both keepers stopped, and restart reconciliation. Both keeper clients shared one Localnet RPC endpoint and used synthetic Pyth-shaped fixtures, so independent-operator/provider liveness and authenticated oracle evidence remain open. This evidence is not a developer checkpoint acceptance.
 
 ## Audit against the S3F contract
 
@@ -81,7 +81,13 @@ The harness reports one latency sample per invocation. Do not report p50/p95 fro
 - `npm --prefix packages/keeper run typecheck` — passed.
 - `npm --prefix packages/keeper test` — passed, 37 tests.
 
-## Observed Localnet attempt (2026-10-10)
+## Successful complete Localnet run (2026-10-10)
+
+The complete rerun transcript is preserved in [s3-liveness-localnet-success-20261010.jsonl](s3-liveness-localnet-success-20261010.jsonl). It records a confirmed governance proposal, Keeper A's injected pre-send failure, Keeper B's confirmed execute transaction after a deliberately hidden RPC response, Keeper B's recovery through chain reconciliation, an unrelated caller completing observation and activation while both keepers were stopped, and Keeper A restarting idle without replay. The observed eligible-to-submitted latency was 124 ms for this single run; it is one measurement, not a latency distribution.
+
+The transcript reports final configuration revision 2 and target weights `[6000, 4000]`. The Coloyond SBF transactions were confirmed on Localnet. The oracle data was synthetic, both keeper clients used the same Localnet RPC endpoint, and the injected response-loss hook ran after submission inside the harness. This establishes the listed Localnet state transitions and recovery scenario only; it does not prove provider/operator independence, production packet loss, Devnet availability, Pyth authenticity, keeper reliability, or economics.
+
+## Earlier failed Localnet attempt (2026-10-10; retained for history)
 
 The validation used a disposable checkout with root feature commit `789586ac07ea9d691175bdb25a52267356884cb1` plus S3F package commit `66e6fe3e5f36d65f4789a21eb7bbc15f62831a1c`; neither the root checkout nor `main` was modified. The updated v2 fixture generator completed successfully, and the `coloyond_vault` SBF build completed successfully. Solana CLI and `solana-test-validator` were version 2.3.0. The run used genesis `HCtdPGkxPuKaLR7kYVSne7FmyGsPY5n2CYsdZMtj1uUE`, program `FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6`, and RPC `http://127.0.0.1:54899`.
 
@@ -91,6 +97,6 @@ The validation used a disposable checkout with root feature commit `789586ac07ea
 - Keeper B could not reconcile the applied action. The condition PDA `HqczQzABWWn1gQBoKtkfeiMGvQbHcnpUCjMrVKmC4SXm` is allocated 453 bytes. After the pending rule becomes active, its serialized active schedule ends at offset 209, but byte 209 remains nonzero (`1`) from the former pending rule. The current strict `ConditionState` decoder rejects this stale account tail with `ConditionState contains nonzero bytes outside the pinned layout`.
 - The harness therefore stopped before a confirmed Keeper B reconciliation, unrelated-caller observation/activation, or restart reconciliation. It emitted no eligible-to-submitted latency metric. The Localnet execute transaction succeeded, but this is not a complete S3F liveness result.
 
-The required follow-up is an S3E writer-side account-tail fix that clears bytes beyond the newly serialized state while keeping the client decoder strict. Rerun the complete harness after that fix. Until then, keep the S3F checklist item and two-keeper liveness gate unchecked.
+That run exposed the stale tail-byte defect. The writer-side fix and successful full rerun are documented above; this failed transcript remains historical evidence and is not the current S3F result.
 
-Keeper A and Keeper B used separate connection clients pointed at the same Localnet RPC endpoint; this does not prove RPC-provider or operator independence. The Pyth-shaped accounts carried synthetic fixture values, not authenticated Pyth updates. No Devnet or independent-operator evidence was produced. The full JSON-lines transcript is preserved in [s3-liveness-localnet-attempt-20261010.jsonl](s3-liveness-localnet-attempt-20261010.jsonl); it contains public signatures and scheduler events only, no wallet secrets.
+Keeper A and Keeper B used separate connection clients pointed at the same Localnet RPC endpoint; this does not prove RPC-provider or operator independence. The Pyth-shaped accounts carried synthetic fixture values, not authenticated Pyth updates. No Devnet or independent-operator evidence was produced in this earlier attempt. Its JSON-lines transcript remains at [s3-liveness-localnet-attempt-20261010.jsonl](s3-liveness-localnet-attempt-20261010.jsonl); it contains public signatures and scheduler events only, no wallet secrets.

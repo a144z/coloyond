@@ -21,14 +21,14 @@ fn vault() -> Vault {
         configuration_revision: 7,
         assets: [
             AssetConfig {
-                mint: key(2),
+                mint: crate::oracle::WSOL_MINT,
                 token_program: anchor_spl::token::ID,
                 custody: key(3),
                 decimals: 9,
                 target_bps: 6_000,
             },
             AssetConfig {
-                mint: key(4),
+                mint: crate::oracle::DEVNET_USDC_MINT,
                 token_program: anchor_spl::token::ID,
                 custody: key(5),
                 decimals: 6,

@@ -1,6 +1,6 @@
 [package]
 name = "coloyond-vault"
-version = "0.2.0"
+version = "0.3.0"
 description = "Coloyond pooled two-asset vault program"
 edition = "2021"
 
