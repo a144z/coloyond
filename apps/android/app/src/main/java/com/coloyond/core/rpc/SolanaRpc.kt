@@ -110,12 +110,14 @@ class SolanaRpc(
     }
 
     /** Typed blockhash snapshot while preserving the historical string-returning API below. */
-    suspend fun getLatestBlockhashWithContext(): RpcLatestBlockhash =
+    suspend fun getLatestBlockhashWithContext(minContextSlot: ULong? = null): RpcLatestBlockhash =
         withRetry(retry, "getLatestBlockhash") {
             parseResponse("getLatestBlockhash") {
+                val config = JSONObject().put("commitment", "confirmed")
+                minContextSlot?.let { config.put("minContextSlot", BigInteger(it.toString())) }
                 val result = post(
                     "getLatestBlockhash",
-                    JSONArray().put(JSONObject().put("commitment", "confirmed")),
+                    JSONArray().put(config),
                 ).getJSONObject("result")
                 val value = result.getJSONObject("value")
                 RpcLatestBlockhash(
@@ -219,6 +221,28 @@ class SolanaRpc(
             }
         }
 
+    /** Submit exact signed wire bytes once. Ambiguous transport failures are intentionally not retried. */
+    suspend fun sendTransactionOnce(signedWireTransaction: ByteArray): String {
+        require(signedWireTransaction.isNotEmpty() && signedWireTransaction.size <= MAX_TRANSACTION_BYTES) {
+            "Signed transaction is empty or exceeds Solana's packet limit"
+        }
+        val response = post(
+            method = "sendTransaction",
+            params = JSONArray()
+                .put(Base64.getEncoder().encodeToString(signedWireTransaction))
+                .put(
+                    JSONObject()
+                        .put("encoding", "base64")
+                        .put("skipPreflight", false)
+                        .put("preflightCommitment", "confirmed")
+                        .put("maxRetries", 0),
+                ),
+        )
+        return parseResponse("sendTransaction") {
+            response.get("result").asNonBlankString("result")
+        }
+    }
+
     private suspend fun post(method: String, params: JSONArray): JSONObject {
         val body = JSONObject()
             .put("jsonrpc", "2.0")
@@ -275,6 +299,7 @@ class SolanaRpc(
 
     private companion object {
         const val MAX_MULTIPLE_ACCOUNTS = 100
+        const val MAX_TRANSACTION_BYTES = 1232
         val UNSIGNED_INTEGER = Regex("0|[1-9][0-9]*")
         val SIGNED_INTEGER = Regex("-?(0|[1-9][0-9]*)")
     }

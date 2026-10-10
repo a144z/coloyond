@@ -41,6 +41,20 @@ class TransactionObservationDecoderTest {
     }
 
     @Test
+    fun decodesLegacyInstructionProgramAccountsAndExactInstructionData() {
+        val decoded = TransactionObservationDecoder.decode(
+            TransactionObservation(45uL, signed(legacyMessageWithAccounts()), null, null),
+        )
+
+        val instruction = decoded.instructions.single()
+        assertEquals(2, instruction.accountIndexes.size)
+        assertEquals(listOf(0, 1), instruction.accountIndexes)
+        assertEquals(decoded.staticAccountKeys[2], instruction.programId)
+        assertEquals(listOf(decoded.staticAccountKeys[0], decoded.staticAccountKeys[1]), instruction.accountAddresses)
+        assertEquals("pQ==", instruction.dataBase64)
+    }
+
+    @Test
     fun preservesStructuredTransactionErrorAndRawLogMessages() {
         val structuredError = """{"InstructionError":[1,{"Custom":6000}]}"""
         val logs = listOf("Program 11111111111111111111111111111111 invoke [1]", "Program failed: custom program error: 0x1770")
@@ -227,6 +241,24 @@ class TransactionObservationDecoderTest {
         write(shortVec(1)) // instructions
         write(0) // program id index
         write(shortVec(0)) // account indexes
+        write(shortVec(1)) // instruction data length
+        write(0xA5)
+    }.toByteArray()
+
+    private fun legacyMessageWithAccounts(): ByteArray = ByteArrayOutputStream().apply {
+        write(1) // required signatures
+        write(0) // readonly signed accounts
+        write(2) // readonly unsigned accounts
+        write(shortVec(3)) // static account keys
+        write(ByteArray(32)) // fee payer
+        write(ByteArray(32) { 1 }) // instruction account
+        write(ByteArray(32) { 2 }) // program id
+        write(ByteArray(32) { 7 }) // recent blockhash
+        write(shortVec(1)) // instructions
+        write(2) // program id index
+        write(shortVec(2)) // account indexes
+        write(0)
+        write(1)
         write(shortVec(1)) // instruction data length
         write(0xA5)
     }.toByteArray()

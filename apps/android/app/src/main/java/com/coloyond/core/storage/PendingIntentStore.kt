@@ -7,11 +7,17 @@ import java.math.BigInteger
 import java.util.UUID
 
 /** Writes synchronously before wallet handoff so process death cannot silently lose an attempted action. */
-class PendingIntentStore(context: Context) {
+interface PendingActionPersistence {
+    fun current(): PendingActionRecord?
+    fun save(record: PendingActionRecord)
+    fun clear()
+}
+
+class PendingIntentStore(context: Context) : PendingActionPersistence {
 
     private val prefs = context.getSharedPreferences("coloyond-pending", Context.MODE_PRIVATE)
 
-    fun current(): PendingActionRecord? {
+    override fun current(): PendingActionRecord? {
         val encoded = prefs.getString(KEY_ACTION, null)
         if (encoded != null) {
             val decoded = PendingActionCodec.decodeStored(encoded, UUID.randomUUID().toString())
@@ -41,13 +47,13 @@ class PendingIntentStore(context: Context) {
     }
 
     /** A failed durable write aborts the caller before it can open a wallet handoff. */
-    fun save(record: PendingActionRecord) {
+    override fun save(record: PendingActionRecord) {
         check(prefs.edit().putString(KEY_ACTION, PendingActionCodec.encode(record)).commit()) {
             "Could not durably save pending wallet action"
         }
     }
 
-    fun clear() {
+    override fun clear() {
         check(prefs.edit().remove(KEY_ACTION).remove(KEY_LEGACY_INTENT).commit()) {
             "Could not clear pending wallet action"
         }
@@ -62,7 +68,10 @@ class PendingIntentStore(context: Context) {
 /** Pure codec kept separately so schema validation and recovery can be covered by JVM tests. */
 internal object PendingActionCodec {
     fun decodeStored(json: String, fallbackId: String): DecodedPendingAction =
-        runCatching { DecodedPendingAction(decode(json), wasCorrupt = false) }
+        runCatching {
+            val version = JSONObject(json).getInt("version")
+            DecodedPendingAction(decode(json), wasCorrupt = version < VERSION)
+        }
             .getOrElse { DecodedPendingAction(unresolvedCorruptRecord(fallbackId), wasCorrupt = true) }
 
     fun encode(record: PendingActionRecord): String = JSONObject()
@@ -77,6 +86,17 @@ internal object PendingActionCodec {
         .putNullable("vaultAddress", record.vaultAddress)
         .putNullable("configurationRevision", record.configurationRevision?.toString())
         .putNullable("reviewedMessageDigest", record.reviewedMessageDigest)
+        .putNullable("reviewedMessageBase64", record.reviewedMessageBase64)
+        .put("reviewedAccountKeys", JSONArray(record.reviewedAccountKeys))
+        .putNullable("reviewedInstructionProgramId", record.reviewedInstructionProgramId)
+        .put("reviewedInstructionAccounts", JSONArray(record.reviewedInstructionAccounts))
+        .putNullable("reviewedInstructionDataBase64", record.reviewedInstructionDataBase64)
+        .putNullable("rpcEndpoint", record.rpcEndpoint)
+        .putNullable("genesisHash", record.genesisHash)
+        .putNullable("recentBlockhash", record.recentBlockhash)
+        .putNullable("lastValidBlockHeight", record.lastValidBlockHeight?.toString())
+        .putNullable("reviewContextSlot", record.reviewContextSlot?.toString())
+        .putNullable("signedTransactionBase64", record.signedTransactionBase64)
         .putNullable("signature", record.signature)
         .put("expectedEffects", JSONArray().also { array ->
             record.expectedEffects.forEach { effect ->
@@ -102,7 +122,8 @@ internal object PendingActionCodec {
 
     fun decode(json: String): PendingActionRecord {
         val obj = JSONObject(json)
-        require(obj.getInt("version") == VERSION) { "Unsupported pending action version" }
+        val version = obj.getInt("version")
+        require(version in 1..VERSION) { "Unsupported pending action version" }
         val expected = obj.getJSONArray("expectedEffects").let { array ->
             List(array.length()) { index ->
                 val item = array.getJSONObject(index)
@@ -126,10 +147,11 @@ internal object PendingActionCodec {
                 )
             }
         }
+        val legacy = version == 1
         return PendingActionRecord(
             id = obj.getString("id"),
-            kind = PendingActionKind.valueOf(obj.getString("kind")),
-            state = PendingActionState.valueOf(obj.getString("state")),
+            kind = if (legacy) PendingActionKind.UNKNOWN_LEGACY else PendingActionKind.valueOf(obj.getString("kind")),
+            state = if (legacy) PendingActionState.RECONCILIATION_REQUIRED else PendingActionState.valueOf(obj.getString("state")),
             createdAtMillis = obj.getLong("createdAtMillis"),
             cluster = obj.getString("cluster"),
             walletAddress = obj.optNullableString("walletAddress"),
@@ -137,16 +159,33 @@ internal object PendingActionCodec {
             vaultAddress = obj.optNullableString("vaultAddress"),
             configurationRevision = obj.optNullableString("configurationRevision")?.toCanonicalBigInteger(),
             reviewedMessageDigest = obj.optNullableString("reviewedMessageDigest"),
+            reviewedMessageBase64 = if (legacy) null else obj.optNullableString("reviewedMessageBase64"),
+            reviewedAccountKeys = if (legacy) emptyList() else obj.optStringList("reviewedAccountKeys"),
+            reviewedInstructionProgramId = if (legacy) null else obj.optNullableString("reviewedInstructionProgramId"),
+            reviewedInstructionAccounts = if (legacy) emptyList() else obj.optStringList("reviewedInstructionAccounts"),
+            reviewedInstructionDataBase64 = if (legacy) null else obj.optNullableString("reviewedInstructionDataBase64"),
+            rpcEndpoint = if (legacy) null else obj.optNullableString("rpcEndpoint"),
+            genesisHash = if (legacy) null else obj.optNullableString("genesisHash"),
+            recentBlockhash = if (legacy) null else obj.optNullableString("recentBlockhash"),
+            lastValidBlockHeight = if (legacy) null else obj.optNullableString("lastValidBlockHeight")?.toCanonicalBigInteger(),
+            reviewContextSlot = if (legacy) null else obj.optNullableString("reviewContextSlot")?.toCanonicalBigInteger(),
+            signedTransactionBase64 = if (legacy) null else obj.optNullableString("signedTransactionBase64"),
             signature = obj.optNullableString("signature"),
             expectedEffects = expected,
             observedEffects = observed,
-            lastError = obj.optNullableString("lastError"),
+            lastError = if (legacy) "Recovered v1 wallet record lacks exact RPC and signed-message evidence; manual reconciliation is required"
+                else obj.optNullableString("lastError"),
         )
     }
 
     private fun JSONObject.putNullable(key: String, value: String?): JSONObject = put(key, value ?: JSONObject.NULL)
     private fun JSONObject.optNullableString(key: String): String? =
         if (!has(key) || isNull(key)) null else getString(key)
+
+    private fun JSONObject.optStringList(key: String): List<String> {
+        val array = getJSONArray(key)
+        return List(array.length()) { index -> array.getString(index).also { require(it.isNotBlank()) } }
+    }
 
     private fun String.toCanonicalBigInteger(): BigInteger = BigInteger(this).also {
         require(it.toString() == this) { "Expected canonical decimal integer" }
@@ -161,7 +200,7 @@ internal object PendingActionCodec {
         lastError = "Stored pending action could not be decoded; manual reconciliation is required",
     )
 
-    private const val VERSION = 1
+    private const val VERSION = 2
 }
 
 internal data class DecodedPendingAction(val record: PendingActionRecord, val wasCorrupt: Boolean)

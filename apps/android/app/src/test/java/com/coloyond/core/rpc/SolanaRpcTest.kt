@@ -108,7 +108,7 @@ class SolanaRpcTest {
 
     @Test
     fun latestBlockhashSnapshotIncludesContextAndLastValidHeight() = runBlocking {
-        val (_, rpc) = rpc(
+        val (transport, rpc) = rpc(
             """{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":81},"value":{"blockhash":"EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N","lastValidBlockHeight":3090}}}""",
         )
         assertEquals(
@@ -117,8 +117,9 @@ class SolanaRpcTest {
                 blockhash = "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
                 lastValidBlockHeight = 3090uL,
             ),
-            rpc.getLatestBlockhashWithContext(),
+            rpc.getLatestBlockhashWithContext(minContextSlot = 79uL),
         )
+        assertEquals("79", transport.requests.single().getJSONArray("params").getJSONObject(0).get("minContextSlot").toString())
     }
 
     @Test
@@ -192,6 +193,40 @@ class SolanaRpcTest {
     fun getTransactionReturnsNullWhenSignatureIsUnseen() = runBlocking {
         val (_, rpc) = rpc("""{"jsonrpc":"2.0","id":1,"result":null}""")
         assertNull(rpc.getTransaction("not-yet-seen"))
+    }
+
+    @Test
+    fun sendTransactionSubmitsExactBytesOnceWithPreflightAndNoRetries() = runBlocking {
+        val signedWire = byteArrayOf(0, 1, 2, 255.toByte())
+        val (transport, rpc) = rpc("""{"jsonrpc":"2.0","id":1,"result":"saved-signature"}""")
+
+        assertEquals("saved-signature", rpc.sendTransactionOnce(signedWire))
+
+        assertEquals(1, transport.requests.size)
+        val request = transport.requests.single()
+        assertEquals("sendTransaction", request.getString("method"))
+        val params = request.getJSONArray("params")
+        assertEquals(java.util.Base64.getEncoder().encodeToString(signedWire), params.getString(0))
+        val config = params.getJSONObject(1)
+        assertEquals("base64", config.getString("encoding"))
+        assertEquals(false, config.getBoolean("skipPreflight"))
+        assertEquals("confirmed", config.getString("preflightCommitment"))
+        assertEquals(0, config.getInt("maxRetries"))
+    }
+
+    @Test
+    fun sendTransactionDoesNotRetryAnAmbiguousRpcError() = runBlocking {
+        val error = """{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"preflight timeout"}}"""
+        val (transport, rpc) = rpc(error, error)
+
+        try {
+            rpc.sendTransactionOnce(byteArrayOf(1))
+            fail("expected RpcException")
+        } catch (expected: RpcException) {
+            assertTrue(expected.message!!.contains("preflight timeout"))
+        }
+
+        assertEquals(1, transport.requests.size)
     }
 
     @Test

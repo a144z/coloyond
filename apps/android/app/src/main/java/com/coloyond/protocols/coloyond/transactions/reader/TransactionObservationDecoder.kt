@@ -29,6 +29,14 @@ data class ExactTokenBalanceDelta(
 
 enum class SolanaMessageVersion { LEGACY, V0 }
 
+data class DecodedMessageInstruction(
+    val programId: String,
+    val accountIndexes: List<Int>,
+    /** Null when one or more v0 accounts are loaded from an address table. */
+    val accountAddresses: List<String>?,
+    val dataBase64: String,
+)
+
 /** A read-only view of the exact message and balance evidence returned by confirmed RPC. */
 data class DecodedTransactionObservation(
     val slot: ULong,
@@ -42,6 +50,8 @@ data class DecodedTransactionObservation(
     val messageVersion: SolanaMessageVersion,
     val serializedMessage: ByteArray,
     val messageSha256: String,
+    val staticAccountKeys: List<String>,
+    val instructions: List<DecodedMessageInstruction>,
     val metadataAvailable: Boolean,
     val preTokenBalancesAvailable: Boolean,
     val postTokenBalancesAvailable: Boolean,
@@ -66,7 +76,8 @@ object TransactionObservationDecoder {
     private const val BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
     fun decode(observation: TransactionObservation): DecodedTransactionObservation = try {
-        val (signature, message, version) = decodeWire(observation.wireTransaction)
+        val (signature, message) = decodeWire(observation.wireTransaction)
+        val parsedMessage = parseMessage(message)
         val signatureBase58 = encodeBase58(signature)
         if (observation.requestedSignature != null && observation.requestedSignature != signatureBase58) {
             fail("Fetched transaction first signature does not match the requested signature")
@@ -79,9 +90,11 @@ object TransactionObservationDecoder {
             transactionErrorJson = parsedMeta?.transactionErrorJson,
             logMessages = parsedMeta?.logMessages,
             firstSignatureBase58 = signatureBase58,
-            messageVersion = version,
+            messageVersion = parsedMessage.version,
             serializedMessage = message,
             messageSha256 = sha256Hex(message),
+            staticAccountKeys = parsedMessage.accountKeys,
+            instructions = parsedMessage.instructions,
             metadataAvailable = parsedMeta != null,
             preTokenBalancesAvailable = parsedMeta?.preAvailable == true,
             postTokenBalancesAvailable = parsedMeta?.postAvailable == true,
@@ -95,19 +108,28 @@ object TransactionObservationDecoder {
         throw TransactionObservationDecodeException("Malformed transaction observation", error)
     }
 
-    private fun decodeWire(wire: ByteArray): Triple<ByteArray, ByteArray, SolanaMessageVersion> {
+    private fun decodeWire(wire: ByteArray): Pair<ByteArray, ByteArray> {
         val cursor = Cursor(wire)
         val signatureCount = cursor.shortVec("signature count")
         if (signatureCount !in 1..127) fail("Transaction must contain 1 to 127 signatures")
         val signatures = List(signatureCount) { cursor.read(SIGNATURE_SIZE, "signature") }
         val messageBytes = cursor.read(wire.size - cursor.position, "serialized message")
         if (messageBytes.isEmpty()) fail("Transaction message is empty")
-        val (version, requiredSignatures) = validateMessage(messageBytes)
-        if (signatureCount != requiredSignatures) fail("Wire signature count does not match the message header")
-        return Triple(signatures.first(), messageBytes, version)
+        val parsedMessage = parseMessage(messageBytes)
+        if (signatureCount != parsedMessage.requiredSignatures) fail("Wire signature count does not match the message header")
+        return signatures.first() to messageBytes
     }
 
-    private fun validateMessage(message: ByteArray): Pair<SolanaMessageVersion, Int> {
+    private data class RawInstruction(val programIndex: Int, val accountIndexes: List<Int>, val data: ByteArray)
+
+    private data class ParsedMessage(
+        val version: SolanaMessageVersion,
+        val requiredSignatures: Int,
+        val accountKeys: List<String>,
+        val instructions: List<DecodedMessageInstruction>,
+    )
+
+    private fun parseMessage(message: ByteArray): ParsedMessage {
         val cursor = Cursor(message)
         val first = cursor.u8("message header")
         val version = if (first and 0x80 != 0) {
@@ -129,23 +151,24 @@ object TransactionObservationDecoder {
         if (readonlySigned > requiredSignatures || readonlyUnsigned > staticKeyCount - requiredSignatures) {
             fail("Message readonly account counts are invalid")
         }
-        repeat(staticKeyCount) { cursor.read(PUBKEY_SIZE, "static account key") }
+        val accountKeys = List(staticKeyCount) { encodeBase58(cursor.read(PUBKEY_SIZE, "static account key")) }
         cursor.read(PUBKEY_SIZE, "recent blockhash")
 
         var totalAccountCount = staticKeyCount
         val instructionCount = cursor.shortVec("compiled instruction count")
-        repeat(instructionCount) {
+        val rawInstructions = List(instructionCount) {
             val programIndex = cursor.u8("instruction program index")
             if (programIndex >= staticKeyCount) fail("Instruction program index is not a static account")
             val accountCount = cursor.shortVec("instruction account count")
-            repeat(accountCount) {
-                val accountIndex = cursor.u8("instruction account index")
-                if (version == SolanaMessageVersion.LEGACY && accountIndex >= totalAccountCount) {
-                    fail("Instruction account index is out of range")
+            val accountIndexes = List(accountCount) {
+                cursor.u8("instruction account index").also { index ->
+                    if (version == SolanaMessageVersion.LEGACY && index >= totalAccountCount) {
+                        fail("Instruction account index is out of range")
+                    }
                 }
             }
             val dataLength = cursor.shortVec("instruction data length")
-            cursor.read(dataLength, "instruction data")
+            RawInstruction(programIndex, accountIndexes, cursor.read(dataLength, "instruction data"))
         }
 
         if (version == SolanaMessageVersion.V0) {
@@ -159,51 +182,26 @@ object TransactionObservationDecoder {
                 totalAccountCount += writableCount + readonlyCount
                 if (totalAccountCount > MAX_ACCOUNT_KEYS) fail("Resolved account count exceeds Solana limits")
             }
-            // Validate loaded account indexes after all lookup-table key counts are known.
-            validateV0InstructionIndexes(message, requiredSignatures, staticKeyCount, totalAccountCount)
+            if (rawInstructions.any { instruction -> instruction.accountIndexes.any { it >= totalAccountCount } }) {
+                fail("Versioned instruction account index is out of range")
+            }
         }
 
         if (!cursor.isAtEnd()) fail("Transaction message contains trailing bytes")
-        return version to requiredSignatures
-    }
-
-    /** Re-reads only the already bounded structure to validate v0 indexes against loaded addresses. */
-    private fun validateV0InstructionIndexes(
-        message: ByteArray,
-        requiredSignatures: Int,
-        staticKeyCount: Int,
-        totalAccountCount: Int,
-    ) {
-        val cursor = Cursor(message)
-        cursor.u8("version prefix")
-        cursor.u8("required signatures")
-        cursor.u8("readonly signed account count")
-        cursor.u8("readonly unsigned account count")
-        val keyCount = cursor.shortVec("static account key count")
-        repeat(keyCount) { cursor.read(PUBKEY_SIZE, "static account key") }
-        cursor.read(PUBKEY_SIZE, "recent blockhash")
-        val instructionCount = cursor.shortVec("compiled instruction count")
-        repeat(instructionCount) {
-            val programIndex = cursor.u8("instruction program index")
-            if (programIndex >= staticKeyCount) fail("Instruction program index is not a static account")
-            val accountCount = cursor.shortVec("instruction account count")
-            repeat(accountCount) {
-                val accountIndex = cursor.u8("instruction account index")
-                if (accountIndex >= totalAccountCount) fail("Instruction account index is out of range")
-            }
-            val dataLength = cursor.shortVec("instruction data length")
-            cursor.read(dataLength, "instruction data")
-        }
-        val lookupCount = cursor.shortVec("address table lookup count")
-        repeat(lookupCount) {
-            cursor.read(PUBKEY_SIZE, "address table key")
-            val writableCount = cursor.shortVec("writable lookup index count")
-            cursor.read(writableCount, "writable lookup indexes")
-            val readonlyCount = cursor.shortVec("readonly lookup index count")
-            cursor.read(readonlyCount, "readonly lookup indexes")
-        }
-        if (!cursor.isAtEnd()) fail("Versioned transaction message contains trailing bytes")
-        if (requiredSignatures !in 1..127) fail("Versioned message required-signature count is invalid")
+        return ParsedMessage(
+            version = version,
+            requiredSignatures = requiredSignatures,
+            accountKeys = accountKeys,
+            instructions = rawInstructions.map { instruction ->
+                DecodedMessageInstruction(
+                    programId = accountKeys[instruction.programIndex],
+                    accountIndexes = instruction.accountIndexes,
+                    accountAddresses = instruction.accountIndexes.mapNotNull(accountKeys::getOrNull)
+                        .takeIf { it.size == instruction.accountIndexes.size },
+                    dataBase64 = java.util.Base64.getEncoder().encodeToString(instruction.data),
+                )
+            },
+        )
     }
 
     private data class ParsedMeta(
