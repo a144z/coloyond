@@ -196,6 +196,17 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.validate(returned(task()), free_task_ids=ids, occupied_task_ids=occupied)
 
+    def test_rejects_unhashable_or_noninteger_free_task_ids_as_value_errors(self):
+        for task_id in ([], "1", True):
+            with self.subTest(task_id=task_id), self.assertRaisesRegex(
+                ValueError, "free task ID must be below queue capacity"
+            ):
+                self.validate(
+                    returned(task()),
+                    free_task_ids=[task_id],
+                    free_task_accounts=[self.context_account(2)],
+                )
+
     def test_rejects_overlong_utf8_description(self):
         with self.assertRaisesRegex(ValueError, "40 UTF-8 bytes"):
             self.validate(returned(task(description="界" * 14)))

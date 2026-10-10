@@ -226,9 +226,8 @@ def validate_compiled_requeue(
         raise ValueError("returned children exceed crank-turner supplied free task IDs")
     if len(free_task_accounts) != len(free_task_ids):
         raise ValueError("free task account count must match supplied free task IDs")
-    if len(set(free_task_ids)) != len(free_task_ids):
-        raise ValueError("free task IDs must be unique")
     occupied = set(occupied_task_ids)
+    seen_task_ids = set()
     for task_id in free_task_ids:
         if (
             isinstance(task_id, bool)
@@ -236,6 +235,9 @@ def validate_compiled_requeue(
             or not 0 <= task_id < queue_capacity
         ):
             raise ValueError("free task ID must be below queue capacity")
+        if task_id in seen_task_ids:
+            raise ValueError("free task IDs must be unique")
+        seen_task_ids.add(task_id)
         if task_id in occupied:
             raise ValueError("free task ID is already occupied")
 
