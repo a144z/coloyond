@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import "./AuctionWorkbench.css";
+import "./LocalnetWorkbench.css";
+
+const LocalnetWorkbench = lazy(() => import("./LocalnetWorkbench.js").then((module) => ({ default: module.LocalnetWorkbench })));
 import {
   applyWorkbenchAction,
   createWorkbenchState,
@@ -46,6 +49,22 @@ function AssetRow({ label, target, actual, amountText }: { label: string; target
 }
 
 export function AuctionWorkbench() {
+  const [mode, setMode] = useState<"localnet" | "fixture">("localnet");
+  if (mode === "fixture") return <FixtureWorkbench onLocalnetMode={() => setMode("localnet")} />;
+  return (
+    <div className="cr-app aw-app">
+      <div className="cr-shell">
+        <header className="cr-topbar aw-topbar">
+          <a className="cr-brand" href="/" aria-label="Return to Coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <div className="cr-topbar-right"><span className="cr-demo-label">Localnet SBF workbench</span><a className="cr-reference-link" href="/">Back to app <span aria-hidden="true">↗</span></a></div>
+        </header>
+        <main className="aw-main"><Suspense fallback={<p className="aw-empty-state">Loading the Localnet workbench…</p>}><LocalnetWorkbench onFixtureMode={() => setMode("fixture")} /></Suspense></main>
+      </div>
+    </div>
+  );
+}
+
+function FixtureWorkbench({ onLocalnetMode }: { onLocalnetMode(): void }) {
   const [state, setState] = useState(() => createWorkbenchState());
   const weights = portfolioWeights(state.balances);
   const active = state.phase === "open" || state.phase === "partial";
@@ -56,7 +75,7 @@ export function AuctionWorkbench() {
       <div className="cr-shell">
         <header className="cr-topbar aw-topbar">
           <a className="cr-brand" href="/" aria-label="Return to Coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
-          <div className="cr-topbar-right"><span className="cr-demo-label">Developer-only interaction rehearsal</span><a className="cr-reference-link" href="/">Back to app <span aria-hidden="true">↗</span></a></div>
+          <div className="cr-topbar-right"><span className="cr-demo-label">CP2a browser fixture</span><button className="cr-reference-link aw-mode-top-button" type="button" onClick={onLocalnetMode}>Switch to Localnet SBF <span aria-hidden="true">↗</span></button><a className="cr-reference-link" href="/">Back to app <span aria-hidden="true">↗</span></a></div>
         </header>
 
         <main className="aw-main">
