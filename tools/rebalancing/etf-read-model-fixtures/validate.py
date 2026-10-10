@@ -68,11 +68,13 @@ def _validate_snapshot(fixture, path, errors):
         "processed", "confirmed", "finalized"
     }:
         errors.append(f"{path}.network.commitment: unsupported commitment")
-    revision = fixture.get("protocolRevision", fixture.get("configRevision"))
+    revision = fixture.get("protocolRevision")
+    if revision is None:
+        revision = fixture.get("configRevision")
     _text(revision, f"{path}.protocolRevision", errors)
 
-    oracle = fixture.get("oracle")
-    if oracle is not None:
+    if "oracle" in fixture:
+        oracle = fixture["oracle"]
         if _object(oracle, f"{path}.oracle", errors):
             _validate_oracle(oracle, f"{path}.oracle", errors)
 
@@ -159,6 +161,10 @@ def _validate_receipt(fixture, path, errors):
         errors.append(f"{path}.status: unsupported wallet-action state")
         return
     if status in {"draft", "awaiting_signature"}:
+        if "confirmationSlot" in fixture:
+            errors.append(f"{path}.confirmationSlot: only confirmed receipts carry a confirmation slot")
+        if "tokenDeltas" in fixture or "shareDelta" in fixture:
+            errors.append(f"{path}: unconfirmed receipt cannot assert RPC-derived deltas")
         return
     if status == "confirmed":
         _required_text_fields(fixture, ("signature", "messageHash", "genesisHash"), path, errors)

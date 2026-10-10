@@ -77,6 +77,46 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         self.assertTrue(any("must not automatically resend" in error for error in errors))
         self.assertTrue(any("cannot assert RPC-derived deltas" in error for error in errors))
 
+    def test_draft_and_awaiting_signature_receipts_cannot_claim_rpc_effects(self):
+        for status in ("draft", "awaiting_signature"):
+            with self.subTest(status=status):
+                document = load_fixture()
+                document["fixtures"].append(
+                    {
+                        "id": f"receipt-{status}-with-fabricated-deltas",
+                        "kind": "wallet-action",
+                        "status": status,
+                        "confirmationSlot": "42",
+                        "tokenDeltas": [
+                            {
+                                "mint": "So11111111111111111111111111111111111111112",
+                                "rawDelta": "1",
+                            }
+                        ],
+                        "shareDelta": "1",
+                    }
+                )
+                errors = validate_document(document)
+                self.assertTrue(any("only confirmed receipts" in error for error in errors))
+                self.assertTrue(any("cannot assert RPC-derived deltas" in error for error in errors))
+
+    def test_oracle_null_is_rejected_but_omitted_oracle_is_allowed(self):
+        document = load_fixture()
+        del document["fixtures"][0]["oracle"]
+        document["fixtures"][0]["mode"] = "receiver_full"
+        self.assertEqual(validate_document(document), [])
+
+        document["fixtures"][0]["oracle"] = None
+        errors = validate_document(document)
+        self.assertTrue(any(".oracle: expected object" in error for error in errors))
+
+    def test_null_protocol_revision_falls_back_to_config_revision(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        snapshot["protocolRevision"] = None
+        snapshot["configRevision"] = "fallback-revision"
+        self.assertEqual(validate_document(document), [])
+
     def test_confirmed_receipt_requires_confirmed_identity_and_rpc_deltas(self):
         document = load_fixture()
         confirmed = next(item for item in document["fixtures"] if item["status"] == "confirmed")

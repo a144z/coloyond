@@ -183,6 +183,12 @@ export function validateReadModelDocument(input: unknown): string[] {
   if (input.fixtureOnly !== true) errors.push("$.fixtureOnly: must remain true; this validator is not production policy");
   if (!Array.isArray(input.fixtures) || input.fixtures.length === 0) return [...errors, "$.fixtures: expected non-empty array"];
   const ids = new Set<string>();
+  const observationStates = new Set<string>();
+  const oracleModes = new Set<string>();
+  const receiptStates = new Set<string>();
+  let hasAvailableSnapshot = false;
+  let hasLargeWireInteger = false;
+  let hasMaxU64Amount = false;
   input.fixtures.forEach((fixture, index) => {
     const path = `$.fixtures[${index}]`;
     if (!isRecord(fixture)) {
@@ -192,10 +198,42 @@ export function validateReadModelDocument(input: unknown): string[] {
     if (!text(fixture.id, `${path}.id`, errors)) return;
     if (ids.has(fixture.id)) errors.push(`${path}.id: duplicate fixture id ${fixture.id}`);
     ids.add(fixture.id);
-    if (fixture.kind === "wallet-action") validateReceipt(fixture, path, errors);
-    else if (fixture.kind === "observation" || fixture.kind === "oracle-observation") validateObservation(fixture, path, errors);
+    if (fixture.kind === "wallet-action") {
+      validateReceipt(fixture, path, errors);
+      if (typeof fixture.status === "string") receiptStates.add(fixture.status);
+    }
+    else if (fixture.kind === "observation" || fixture.kind === "oracle-observation") {
+      validateObservation(fixture, path, errors);
+      if (typeof fixture.status === "string") observationStates.add(fixture.status);
+      const oracle = isRecord(fixture.oracle) ? fixture.oracle : undefined;
+      const mode = typeof fixture.mode === "string" ? fixture.mode : oracle?.mode;
+      if (typeof mode === "string" && (mode === "receiver_full" || mode === "push_feed")) oracleModes.add(mode);
+      if (fixture.kind === "observation" && fixture.status === "available") {
+        hasAvailableSnapshot = true;
+        if (isRecord(fixture.network) && typeof fixture.network.contextSlot === "string" && /^\d+$/.test(fixture.network.contextSlot)) {
+          if (BigInt(fixture.network.contextSlot) > BigInt(Number.MAX_SAFE_INTEGER)) hasLargeWireInteger = true;
+        }
+        if (Array.isArray(fixture.balances) && fixture.balances.some((balance) =>
+          isRecord(balance) && balance.rawAmount === U64_MAX.toString()
+        )) hasMaxU64Amount = true;
+      }
+    }
     else errors.push(`${path}.kind: unsupported fixture kind`);
   });
+
+  for (const required of ["stale", "unavailable"]) {
+    if (!observationStates.has(required)) errors.push(`$.fixtures: missing ${required} observation example`);
+  }
+  if (!hasAvailableSnapshot) errors.push("$.fixtures: missing available snapshot with network identity");
+  for (const required of ["receiver_full", "push_feed"]) {
+    if (!oracleModes.has(required)) errors.push(`$.fixtures: missing ${required} oracle-mode example`);
+  }
+  for (const required of ["confirmed", "unknown"]) {
+    if (!receiptStates.has(required)) errors.push(`$.fixtures: missing ${required} wallet-action example`);
+  }
+  if (!hasLargeWireInteger || !hasMaxU64Amount) {
+    errors.push("$.fixtures: missing integer-precision boundaries (>2^53 slot and max-u64 token amount)");
+  }
   return errors;
 }
 

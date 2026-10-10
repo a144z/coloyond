@@ -52,6 +52,38 @@ test("draft and awaiting-signature receipts cannot claim confirmed RPC effects",
   }
 });
 
+test("oracle omission is allowed but explicit null is malformed", () => {
+  const omitted = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = omitted.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  delete snapshot.oracle;
+  snapshot.mode = "receiver_full";
+  assert.deepEqual(validateReadModelDocument(omitted), []);
+
+  const explicitNull = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  explicitNull.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!.oracle = null;
+  assert.ok(validateReadModelDocument(explicitNull).some((error) => error.includes("oracle: expected object")));
+});
+
+test("null protocol revision falls back to config revision", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  snapshot.protocolRevision = null;
+  snapshot.configRevision = "fallback-revision";
+  assert.deepEqual(validateReadModelDocument(candidate), []);
+});
+
+test("the shared corpus keeps required tagged-state and precision examples", () => {
+  const missing = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  missing.fixtures = missing.fixtures.filter((fixture) =>
+    !["oracle-stale", "snapshot-unavailable", "oracle-available-push-feed", "receipt-confirmed-with-token-deltas"].includes(String(fixture.id))
+  );
+  const errors = validateReadModelDocument(missing);
+  assert.ok(errors.some((error) => error.includes("missing stale observation example")));
+  assert.ok(errors.some((error) => error.includes("missing unavailable observation example")));
+  assert.ok(errors.some((error) => error.includes("missing push_feed oracle-mode example")));
+  assert.ok(errors.some((error) => error.includes("missing confirmed wallet-action example")));
+});
+
 test("oracle verification is mode-specific", () => {
   const bad = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const push = bad.fixtures.find((fixture) => fixture.id === "oracle-available-push-feed")!;
