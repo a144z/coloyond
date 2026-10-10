@@ -47,7 +47,7 @@ export const READ_MODEL_FIXTURES = {
       kind: "fixture",
       providerLabel: "SYNTHETIC FIXTURE — no RPC source",
       observedAt: "2000-01-01T00:00:00.000Z",
-      slot: 1,
+      slot: "1",
     },
     program: { programId: null, binaryHash: null, verified: false },
     vault: {

@@ -15,7 +15,8 @@ export interface ReadModelV1 {
     kind: "rpc" | "fixture";
     providerLabel: string | null;
     observedAt: string | null;
-    slot: number | null;
+    /** Solana u64 encoded as canonical base-10 text to preserve precision. */
+    slot: string | null;
   };
   program: {
     programId: string | null;
@@ -25,7 +26,8 @@ export interface ReadModelV1 {
   vault: {
     address: string | null;
     shareMint: string | null;
-    configRevision: number | null;
+    /** Solana u64 encoded as canonical base-10 text to preserve precision. */
+    configRevision: string | null;
     phase: "unavailable" | "active" | "paused" | "auction" | "unknown";
     target: Array<{ mint: string; symbol: string; weightBps: number }>;
     actual: Array<{ mint: string; symbol: string; weightBps: number }> | null;
@@ -42,7 +44,8 @@ export interface ReadModelV1 {
     state: "fresh" | "stale" | "depegged" | "unavailable" | "unknown";
   }>;
   auction: {
-    sequence: number | null;
+    /** Solana u64 encoded as canonical base-10 text to preserve precision. */
+    sequence: string | null;
     remaining: string | null;
     expiresAt: string | null;
     feeBps: number | null;
@@ -54,7 +57,8 @@ export interface ReadModelV1 {
   lastConfirmedTransition: {
     signature: string;
     kind: string;
-    slot: number;
+    /** Solana u64 encoded as canonical base-10 text to preserve precision. */
+    slot: string;
   } | null;
 }
 
