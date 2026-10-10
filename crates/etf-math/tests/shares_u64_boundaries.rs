@@ -103,6 +103,15 @@ fn three_asset_near_max_deposit_and_redemption_preserve_each_asset_backing() {
         [max - 1, max - 1_000_000_000, max - 2_000_000_000]
     );
 
+    let immediate_redeem =
+        quote_proportional_redeem(deposit.shares_out, post_supply, &post_reserves).unwrap();
+    for index in 0..3 {
+        assert!(
+            immediate_redeem.amounts_out[index] <= deposit.consumed[index],
+            "near-u64 instant redemption extracted existing holder asset {index}"
+        );
+    }
+
     let shares_to_burn = post_supply / 3;
     let redeem = quote_proportional_redeem(shares_to_burn, post_supply, &post_reserves).unwrap();
     assert_eq!(redeem.asset_count, 3);
