@@ -1,0 +1,1057 @@
+{
+  "address": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+  "metadata": {
+    "name": "coloyond_vault",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Coloyond pooled two-asset vault program"
+  },
+  "instructions": [
+    {
+      "name": "activate_targets",
+      "discriminator": [
+        181,
+        9,
+        93,
+        20,
+        130,
+        145,
+        243,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deposit_proportional",
+      "discriminator": [
+        63,
+        57,
+        128,
+        46,
+        164,
+        238,
+        143,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "share_mint",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "user_shares",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "signer": true
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "user_asset_a",
+          "writable": true
+        },
+        {
+          "name": "user_asset_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_amounts",
+          "type": {
+            "array": [
+              "u64",
+              2
+            ]
+          }
+        },
+        {
+          "name": "min_shares_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_vault",
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [],
+      "args": []
+    },
+    {
+      "name": "pause_risk",
+      "discriminator": [
+        221,
+        2,
+        34,
+        100,
+        217,
+        178,
+        42,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose_targets",
+      "discriminator": [
+        173,
+        80,
+        241,
+        209,
+        171,
+        165,
+        93,
+        64
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance_authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "proposed_target_bps",
+          "type": {
+            "array": [
+              "u16",
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "redeem_in_kind",
+      "discriminator": [
+        102,
+        58,
+        189,
+        252,
+        192,
+        219,
+        140,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "share_mint",
+          "writable": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "user_shares",
+          "writable": true
+        },
+        {
+          "name": "holder",
+          "signer": true
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "user_asset_a",
+          "writable": true
+        },
+        {
+          "name": "user_asset_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "shares_to_burn",
+          "type": "u64"
+        },
+        {
+          "name": "min_amounts_out",
+          "type": {
+            "array": [
+              "u64",
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "resume_risk",
+      "discriminator": [
+        207,
+        89,
+        77,
+        209,
+        47,
+        207,
+        14,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance_authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GovernanceAccount",
+      "discriminator": [
+        145,
+        56,
+        248,
+        48,
+        121,
+        81,
+        15,
+        22
+      ]
+    },
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "DepositRecorded",
+      "discriminator": [
+        0,
+        223,
+        90,
+        235,
+        183,
+        248,
+        79,
+        67
+      ]
+    },
+    {
+      "name": "RedemptionRecorded",
+      "discriminator": [
+        249,
+        2,
+        221,
+        44,
+        24,
+        250,
+        99,
+        43
+      ]
+    },
+    {
+      "name": "RiskPauseChanged",
+      "discriminator": [
+        187,
+        81,
+        218,
+        209,
+        143,
+        122,
+        187,
+        36
+      ]
+    },
+    {
+      "name": "TargetsActivated",
+      "discriminator": [
+        60,
+        214,
+        221,
+        19,
+        123,
+        190,
+        202,
+        77
+      ]
+    },
+    {
+      "name": "TargetsProposed",
+      "discriminator": [
+        156,
+        177,
+        52,
+        11,
+        233,
+        173,
+        58,
+        116
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidVault",
+      "msg": "Vault version or address is invalid"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidRoles",
+      "msg": "Governance and emergency roles must be distinct, nonzero signers"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidDelay",
+      "msg": "Timelock delay must be explicitly configured and nonzero"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidAssetSet",
+      "msg": "Vault asset set is invalid"
+    },
+    {
+      "code": 6004,
+      "name": "AssetNotAllowed",
+      "msg": "Mint is outside the immutable two-asset allowlist"
+    },
+    {
+      "code": 6005,
+      "name": "UnauthorizedGovernance",
+      "msg": "Only governance may propose or resume policy"
+    },
+    {
+      "code": 6006,
+      "name": "UnauthorizedEmergency",
+      "msg": "Only the emergency authority may pause risk"
+    },
+    {
+      "code": 6007,
+      "name": "RiskPaused",
+      "msg": "Risk-increasing operations are paused"
+    },
+    {
+      "code": 6008,
+      "name": "ProposalPending",
+      "msg": "A policy proposal is already pending"
+    },
+    {
+      "code": 6009,
+      "name": "StaleRevision",
+      "msg": "Expected configuration revision is stale"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTargets",
+      "msg": "Target weights must be positive and total 10000 basis points"
+    },
+    {
+      "code": 6011,
+      "name": "TimelockActive",
+      "msg": "A proposal has not reached its activation slot"
+    },
+    {
+      "code": 6012,
+      "name": "NoPendingProposal",
+      "msg": "No policy proposal is pending"
+    },
+    {
+      "code": 6013,
+      "name": "ProposalReplay",
+      "msg": "Proposal nonce is stale or has already been consumed"
+    },
+    {
+      "code": 6014,
+      "name": "ArithmeticOverflow",
+      "msg": "Governance arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "AssetConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "custody",
+            "type": "pubkey"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "target_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amounts_in",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "shares_out",
+            "type": "u64"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed_mints",
+            "type": {
+              "array": [
+                "pubkey",
+                2
+              ]
+            }
+          },
+          {
+            "name": "governance_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "emergency_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_delay_slots",
+            "type": "u64"
+          },
+          {
+            "name": "configuration_revision",
+            "type": "u64"
+          },
+          {
+            "name": "target_bps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "proposal_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PolicyProposal"
+                }
+              }
+            }
+          },
+          {
+            "name": "risk_paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyProposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "expected_revision",
+            "type": "u64"
+          },
+          {
+            "name": "proposed_target_bps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          },
+          {
+            "name": "proposed_at_slot",
+            "type": "u64"
+          },
+          {
+            "name": "activate_after_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "shares_burned",
+            "type": "u64"
+          },
+          {
+            "name": "amounts_out",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RiskPauseChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TargetsActivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "target_bps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TargetsProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "expected_revision",
+            "type": "u64"
+          },
+          {
+            "name": "target_bps",
+            "type": {
+              "array": [
+                "u16",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "configuration_revision",
+            "type": "u64"
+          },
+          {
+            "name": "assets",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "AssetConfig"
+                  }
+                },
+                2
+              ]
+            }
+          },
+          {
+            "name": "share_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_shares",
+            "type": "u64"
+          },
+          {
+            "name": "minimum_locked_shares",
+            "type": "u64"
+          },
+          {
+            "name": "accounted_amounts",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "bootstrap_reserve",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "bounty_liabilities",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
