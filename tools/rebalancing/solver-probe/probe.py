@@ -300,6 +300,9 @@ def simulate(args: argparse.Namespace) -> dict[str, Any]:
         ])["value"]
         if not isinstance(simulation, dict) or "err" not in simulation:
             raise ProbeError("RPC simulateTransaction malformed response: expected value object with err field")
+        units_consumed = simulation.get("unitsConsumed")
+        if units_consumed is not None and (type(units_consumed) is not int or units_consumed < 0):
+            raise ProbeError("RPC simulateTransaction malformed response: unitsConsumed must be a non-negative integer")
         result["simulation"] = {
             "err": simulation.get("err"),
             "unitsConsumed": simulation.get("unitsConsumed"),

@@ -27,7 +27,7 @@ def sv(value: int) -> bytes:
     return bytes(out)
 
 
-def fixture(*, versioned: bool = False, lookup: bool = False) -> bytes:
+def fixture(*, versioned: bool = False, lookup: bool = False, compute_price: bool = False) -> bytes:
     compute_budget = b58decode("ComputeBudget111111111111111111111111111111")
     key0, key1 = b"\x11" * 32, compute_budget
     msg = bytearray()
@@ -40,7 +40,10 @@ def fixture(*, versioned: bool = False, lookup: bool = False) -> bytes:
     msg.extend(sv(1))
     msg.extend([1])  # program index: Compute Budget
     msg.extend(sv(0))
-    instruction = b"\x02" + (1_000_000).to_bytes(4, "little")
+    if compute_price:
+        instruction = b"\x03" + (10_000).to_bytes(8, "little")
+    else:
+        instruction = b"\x02" + (1_000_000).to_bytes(4, "little")
     msg.extend(sv(len(instruction)) + instruction)
     if versioned:
         msg.extend(sv(1 if lookup else 0))
@@ -174,6 +177,26 @@ class TransactionParsingTests(unittest.TestCase):
                 with self.subTest(simulation_value=simulation_value):
                     with patch("probe.Rpc", return_value=FakeRpc(simulation_value)):
                         self.assertEqual(simulate(args)["status"], expected_status)
+
+    def test_simulation_rejects_malformed_consumed_units_before_fee_estimation(self):
+        class FakeRpc:
+            def call(self, method, params):
+                if method == "getFeeForMessage":
+                    return {"value": 5_000}
+                return {"value": {"err": None, "unitsConsumed": "123"}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            transaction_path = Path(directory) / "unsigned.txt"
+            transaction_path.write_text(base64.b64encode(fixture(compute_price=True)).decode())
+            args = SimpleNamespace(
+                transaction=str(transaction_path),
+                rpc_url="https://rpc.invalid",
+                timeout=1,
+            )
+            with patch("probe.Rpc", return_value=FakeRpc()):
+                result = simulate(args)
+            self.assertEqual(result["status"], "BLOCKED")
+            self.assertIn("unitsConsumed", result["blocker"])
 
 
 if __name__ == "__main__":
