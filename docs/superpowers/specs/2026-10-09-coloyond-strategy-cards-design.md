@@ -1,12 +1,14 @@
 # coloyond generative strategy cards
 
-Managed-strategy revision · 9 October 2026 · Runtime revision · 10 October 2026
+Managed-strategy revision · 9 October 2026 · Runtime revision · 10 October 2026 · Hackathon scope revision · 10 October 2026
 
 > **Runtime revision (10 October 2026).** The hackathon app is a native Kotlin + Jetpack Compose Android app in `apps/android`. It replaces the React Native/Expo runtime that earlier revisions named. Product rules, schemas, identity domains, limits and launch gates are unchanged. Sections that named React Native, Expo, shared TypeScript packages, Skia or react-native-share now name the Kotlin equivalents.
 
+> **Hackathon scope revision (10 October 2026).** The Task 1 probe ([evidence](../../integrations/2026-10-09-symmetry-jupiter-probe.md)) found that Jupiter has no route for any of the 40 Symmetry V3 share tokens, and that no funded 1–2-asset vault has keeper automation enabled. Launch gates 3 and 4 fail, so purchase and sale stay disabled for the hackathon. The shareable allocation is now the primary record: a card carries target weights, and a recipient can remix them. Symmetry vaults appear as labeled read-only facts. A manual "Follow with Glider" handoff (see [Follow with Glider](#follow-with-glider)) lets a person set up the allocation in Glider themselves; coloyond sends Glider nothing. One-tap enrollment through Glider's partner API is the planned next step after the hackathon, not part of this release. Schemas, identity domains, limits and gates are unchanged.
+
 coloyond gives a DeFi strategy an abstract visual expression that people can save, share, and remix. Each expression may carry a short caption. The strategy has a stable content hash; the artwork leaves its meaning open to the viewer. This specification covers the mobile card experience, generation, identity, sharing, and the boundary with atomic execution.
 
-The hackathon success case is a person selecting an existing tokenized strategy, generating an expression, and sharing it. Another person opens the card, makes another expression or selects a different existing strategy, then optionally buys its share token. The underlying protocol manages the holdings after purchase. Each person supplies their own inference credentials for live generation; viewing, importing, and saving drafts work without them. Buying or selling requires a fresh amount, quote, review, and wallet approval.
+The hackathon success case is a person choosing an allocation (their own weights, or an existing vault's target weights shown read-only), generating an expression, and sharing it. Another person opens the card, makes another expression or remixes the weights, then optionally opens Glider to set up that allocation themselves. Buying a managed share token in the app is a later feature that needs a passing financial integration. Each person supplies their own inference credentials for live generation; viewing, importing, and saving drafts work without them. Buying or selling requires a fresh amount, quote, review, and wallet approval.
 
 ## Agreed direction
 
@@ -24,6 +26,8 @@ The visual reference is the user-supplied coloyond image. The companion [design 
 The first release is a client for existing Solana managed vaults whose SPL share tokens represent proportional ownership of underlying assets. A 60% A / 40% B strategy is displayed as one position with a share price. The weights are the protocol's target composition, not an input-budget split and not a promise that actual holdings always equal the targets. Market movements, fees, auctions, and rebalance thresholds can cause drift.
 
 Symmetry is the first integration candidate, because its deployed program exposes weighted vaults, share tokens, valuation, and permissionless keepers. This is a candidate, not a verified launch integration. The launch probe must find a specific existing vault, verify its configuration and operating history, and establish a viable purchase and exit route. No vault address, keeper coverage, SDK compatibility, or Jupiter route has been verified in this documentation change. [Symmetry documentation](https://docs.symmetry.fi/)
+
+Probe result (10 October 2026): the Symmetry decoder and configuration reads work, but no share token has a Jupiter route and no funded 1–2-asset vault has keeper automation enabled. Symmetry is therefore a read-only data source for the hackathon release.
 
 coloyond does not deploy a program, create a synthetic receipt token, custody funds, run a keeper, or implement routing, auction settlement, or automatic rebalancing. The app uses existing protocol SDKs for reads and Jupiter's managed swap service for supported market purchases and sales. Its client integration validates transactions, obtains wallet approval, and records receipts; this is not a new execution service.
 
@@ -80,6 +84,22 @@ Enter a funding amount and review a fresh Jupiter order to exchange a supported 
 When no market route exists, V1 does not substitute protocol deposits/redemptions. Those can involve multiple transactions, deposits locked pending keeper processing, and auctions. They are a possible later adapter with an explicit intent lifecycle and exit disclosure, not an atomic fallback. A card can still be saved/shared when purchase is unavailable. [Symmetry deposit/withdraw overview](https://docs.symmetry.fi/llms.txt)
 
 Confirmed purchase and sale receipts are separate from the expression. A signed transaction or an API response alone is not displayed as independently verified on-chain confirmation.
+
+This section stays normative for a later release. In the hackathon release every purchase and sale control reads "Purchase unavailable" or "Sale unavailable", because gates 3 and 4 fail.
+
+### Follow with Glider
+
+[Glider](https://glider.fi) is a separate automated-portfolio service that supports Solana. It rebalances a user's own smart account under the user's authorization. coloyond does not integrate with Glider in this release and must not imply a partnership or endorsement.
+
+Any saved allocation draft or managed revision offers "Open Glider to set up this allocation". The action:
+
+1. Shows the target weights as a list: asset symbol where known, full mint address, and percentage with exactly two decimals (basis points ÷ 100, which Glider's allocation format accepts).
+2. Copies the same list as plain text to the clipboard after an explicit tap.
+3. Opens `https://glider.fi` with `Intent.ACTION_VIEW`. The URL carries no allocation, address, or identifier, so coloyond sends Glider nothing.
+
+Before opening, show: "Glider is a separate service. coloyond is not affiliated with it. You set up, fund, and approve the portfolio in Glider. Glider may not support every asset." The action never changes the card, the strategy record, or its identity, and it records no outcome, because coloyond cannot observe what the user does in Glider.
+
+Glider's B2B API can create a strategy from CAIP-19 assets and percentages and enroll a Solana wallet with a user-signed payload. It needs a partner API key with Solana entitlement. A key in the app would be a shared private key, which this specification forbids, so API enrollment needs a later decision about where the key lives. [Glider API overview](https://docs.glider.fi/api-reference/v2-overview)
 
 ## Visual design
 
@@ -302,7 +322,8 @@ Product code, dependencies, native scaffolding, live vault probes, and deploymen
 | Sharing | PNG and strategy file export work without a backend; import recomputes IDs; strategy-only links do not pretend to recover the original art |
 | Remix | Parent remains immutable; selecting a different vault changes the ID; draft weights cannot mutate a live vault |
 | Client boundary | No bundled shared private key; private wallet data is absent from generation requests and portable files |
-| Execution | Every enabled purchase/sale uses a validated Jupiter order and wallet review; unsupported routes stay disabled; no fabricated NAV, keeper evidence, signatures, or confirmations |
+| Execution | Every enabled purchase/sale uses a validated Jupiter order and wallet review; unsupported routes stay disabled; no fabricated NAV, keeper evidence, signatures, or confirmations. Hackathon release: all purchase/sale controls disabled |
+| Glider handoff | Listed percentages equal the record's basis points ÷ 100 and total 100.00; the opened URL carries no allocation or identifier; the disclaimer appears before Glider opens; the card and its ID are unchanged afterwards |
 | Recovery | Cancelled generation, unavailable inference, dropped share attachments, expired quotes, denied signatures, and ambiguous RPC responses have truthful states |
 | Mobile | Core controls work at 360–430 px widths; touch targets, screen-reader labels, contrast, and reduced-motion behavior are checked |
 
@@ -310,9 +331,9 @@ Verify strategy hashing, import validation, generation concurrency, and Jupiter 
 
 ## Delivery order
 
-1. Verify the existing protocol/vault, configuration projection, pricing, keeper coverage, Jupiter routes/recovery, and native wallet/intent feasibility.
-2. Ship shared identity/import contracts and a native client that selects verified strategies or saves explicit drafts, with local persistence.
-3. Add live scene generation, optional diverse captions, deterministic rendering, saved expressions, PNG sharing, and immutable remix provenance.
-4. Enable one validated market purchase and sale only after all financial gates and recovery checks pass. Observe protocol-managed rebalancing separately from purchase receipts.
+1. Verify the existing protocol/vault, configuration projection, pricing, keeper coverage, Jupiter routes/recovery, and native wallet/intent feasibility. (Done for Symmetry and Jupiter: gates 3 and 4 fail.)
+2. Ship shared identity/import contracts and a native client that shows read-only vaults or saves explicit drafts, with local persistence.
+3. Add live scene generation, optional diverse captions, deterministic rendering, saved expressions, PNG sharing, immutable remix provenance, and the manual "Follow with Glider" handoff. This is the hackathon release.
+4. After the hackathon: decide how to hold a Glider partner key, then add one-tap Glider enrollment, or enable a validated market purchase and sale if a protocol later passes all financial gates.
 
-The first release expresses existing managed strategies and uses existing services to acquire their tokens. Further protocol adapters and primary deposit/redemption flows follow only after the core experience works end to end.
+The hackathon release expresses and shares allocations. Execution through Glider's API, further protocol adapters, and primary deposit/redemption flows follow only after the core experience works end to end.
