@@ -421,7 +421,7 @@
       "name": "saved-caption",
       "expression": {
         "schemaVersion": 1,
-        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "strategyId": "cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4",
         "scene": {
           "schemaVersion": 1,
           "rendererVersion": 1,
@@ -457,7 +457,7 @@
           },
           "inheritedFeature": null
         },
-        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "sceneHash": "9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c",
         "rendererVersion": 1,
         "layoutVersion": 1,
         "caption": "Held, lightly",
@@ -472,7 +472,7 @@
       "name": "changed-caption",
       "expression": {
         "schemaVersion": 1,
-        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "strategyId": "cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4",
         "scene": {
           "schemaVersion": 1,
           "rendererVersion": 1,
@@ -508,7 +508,7 @@
           },
           "inheritedFeature": null
         },
-        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "sceneHash": "9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c",
         "rendererVersion": 1,
         "layoutVersion": 1,
         "caption": "Almost a circle",
@@ -523,7 +523,7 @@
       "name": "unicode-and-escaped-caption-exact-storage",
       "expression": {
         "schemaVersion": 1,
-        "strategyId": "cb2:17bf082e468af7041bfc5c3fa26ffc9e150da437e58c335fab959972f8598589",
+        "strategyId": "cb2:1ba29cfe02920529f61d845c53617b5b2a378128bdeb45203122acfc2d9548c4",
         "scene": {
           "schemaVersion": 1,
           "rendererVersion": 1,
@@ -559,7 +559,7 @@
           },
           "inheritedFeature": null
         },
-        "sceneHash": "9990f6c4af47bcaadcf837f5f75b1837738ce15bcd587e41747048821c1fdb86",
+        "sceneHash": "9af5c984aa0583633b7d2cea22843ce7613e10c2860ffcfb8427d3ad47c0712c",
         "rendererVersion": 1,
         "layoutVersion": 1,
         "caption": "Unspent light · \"almost\" \\ café",
