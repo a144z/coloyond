@@ -6,7 +6,7 @@
 
 `tools/rebalancing/solver-probe/probe.py` has two explicit operations:
 
-- `status` reads the genesis hash first and requires it to match the selected mainnet/devnet cluster before reading finalized slot/health and canonical WSOL/USDC mint account owner, decimals and supply. The expected hashes are from the upstream Solana SDK's [`ClusterType::get_genesis_hash`](https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs); an endpoint with the wrong hash fails closed.
+- `status` reads the genesis hash first and requires it to match the selected mainnet/devnet cluster before reading finalized slot/health and canonical WSOL/USDC mint account owner, decimals and supply. On 10 October 2026, the official Solana [`getGenesisHash` RPC reference](https://solana.com/docs/rpc/http/getgenesishash) returned Devnet genesis `GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC`; that current RPC value differs from reset-era Devnet constants still present in older SDK source. A mismatch fails closed.
 - `simulate` accepts an unsigned base64 transaction, refuses any non-zero signature byte, reads the base fee, and calls `simulateTransaction` with signature verification off and recent blockhash replacement on. It reports bytes, transaction version, static/lookup key slots, compute-budget settings, simulated CU, logs, and RPC error.
 
 This is transaction-shape tooling, not a route finder or an auction executor. The simulator does not resolve address lookup table pubkeys, and RPC simulation is not a landed transaction or proof of token deltas/depth. The generic probe makes no Jupiter dependency. Any future venue adapter must produce both-direction, size-ladder quotes directly from verified pool state; a Router quote alone is not independent venue evidence.

@@ -19,7 +19,7 @@ const { SymmetryCore } = sdkPkg;
 
 const NETWORK = process.env.NET ?? "devnet";
 if (NETWORK !== "devnet") throw new Error("This rebalance loop is Devnet-only; refusing any other network.");
-const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+const DEVNET_GENESIS = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC";
 const RPC_NODES = (process.env.RPC_NODES ?? "https://api.devnet.solana.com")
   .split(",")
   .map((url) => url.trim())

@@ -78,7 +78,11 @@ class TransactionParsingTests(unittest.TestCase):
         self.assertEqual(redact_url("https://user:secret@example.invalid/token/abc?key=xyz"), "https://example.invalid/<redacted>?<redacted>")
 
     def test_expected_devnet_genesis_is_accepted(self):
-        verify_cluster_genesis("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG")
+        verify_cluster_genesis("devnet", "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC")
+
+    def test_reset_era_devnet_genesis_is_rejected(self):
+        with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
+            verify_cluster_genesis("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG")
 
     def test_mainnet_endpoint_labeled_devnet_is_rejected(self):
         with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
