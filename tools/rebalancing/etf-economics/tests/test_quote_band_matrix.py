@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from quote_band_matrix import evaluate, load_scenarios, quote_within_oracle_band
+from quote_band_matrix import (
+    evaluate,
+    load_near_u64_scenarios,
+    load_scenarios,
+    quote_within_oracle_band,
+)
 
 
 class QuoteBandMatrixTests(unittest.TestCase):
@@ -41,6 +46,30 @@ class QuoteBandMatrixTests(unittest.TestCase):
         self.assertEqual(result["examined"], 2)
         self.assertEqual(result["accepted_nav_losses"], 0)
         self.assertEqual(result["blocked_nav_losses"], 1)
+
+    def test_near_u64_band_matrix_keeps_its_separate_pinned_corpus(self):
+        digest, scenarios = load_near_u64_scenarios()
+        self.assertEqual(digest, "93de5c6d2dd345102c8b4ff7364bde812fb8d79825147f56f56f8e10f7370fb6")
+        results = evaluate(scenarios)
+        self.assertEqual(results[0]["examined"], 60)
+        expected = {
+            500: (0, 0, 0),
+            1_000: (1, 1, 82),
+            2_500: (60, 60, 108),
+        }
+        actual = {
+            row["price_band_bps"]: (
+                row["accepted"], row["accepted_nav_losses"], row["max_accepted_nav_loss_bps"]
+            )
+            for row in results
+            if row["price_band_bps"] in expected
+        }
+        self.assertEqual(actual, expected)
+        self.assertEqual(results[-1]["accepted_nonlosses"], 0)
+        for earlier, later in zip(results, results[1:]):
+            self.assertLessEqual(earlier["accepted"], later["accepted"])
+            self.assertLessEqual(earlier["accepted_nav_losses"], later["accepted_nav_losses"])
+            self.assertGreaterEqual(earlier["blocked_nav_losses"], later["blocked_nav_losses"])
 
     def test_generated_matrix_is_reproducible_and_monotonic_by_band(self):
         digest, scenarios = load_scenarios()

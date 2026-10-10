@@ -13,9 +13,12 @@ from pathlib import Path
 BPS = 10_000
 PRICE_BANDS_BPS = (0, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000)
 EXPECTED_SOURCE_SHA256 = "b2237b7004bab5f52fcc8d8471e6bf63d71a8ffc1a7101926e7bff4a34da0fc1"
+EXPECTED_NEAR_U64_SHA256 = "93de5c6d2dd345102c8b4ff7364bde812fb8d79825147f56f56f8e10f7370fb6"
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "crates/etf-math/tests/swap_state_vectors.csv"
+NEAR_U64_SOURCE = ROOT / "crates/etf-math/tests/swap_state_near_u64_vectors.csv"
 OUTPUT = Path(__file__).with_name("quote_band_matrix_results.csv")
+NEAR_U64_OUTPUT = Path(__file__).with_name("near_u64_quote_band_matrix_results.csv")
 
 
 def normalized_usd(amount: int, decimals: int, raw_price: int, exponent_magnitude: int) -> int:
@@ -36,15 +39,23 @@ def _ceil_bps(numerator: int, denominator: int) -> int:
     return (numerator * BPS + denominator - 1) // denominator
 
 
-def load_scenarios(path: Path = SOURCE) -> tuple[str, list[dict[str, int]]]:
+def _load_pinned_scenarios(path: Path, expected_hash: str, expected_rows: int, label: str):
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    if digest != EXPECTED_SOURCE_SHA256:
-        raise ValueError(f"unexpected S5B vector corpus SHA-256: {digest}")
+    if digest != expected_hash:
+        raise ValueError(f"unexpected {label} vector corpus SHA-256: {digest}")
     with path.open(newline="") as stream:
         rows = list(csv.DictReader(stream))
-    if len(rows) != 29_106:
-        raise ValueError(f"expected 29,106 S5B vectors, got {len(rows)}")
+    if len(rows) != expected_rows:
+        raise ValueError(f"expected {expected_rows:,} {label} vectors, got {len(rows)}")
     return digest, [{key: int(value) for key, value in row.items()} for row in rows]
+
+
+def load_scenarios(path: Path = SOURCE) -> tuple[str, list[dict[str, int]]]:
+    return _load_pinned_scenarios(path, EXPECTED_SOURCE_SHA256, 29_106, "S5B")
+
+
+def load_near_u64_scenarios():
+    return _load_pinned_scenarios(NEAR_U64_SOURCE, EXPECTED_NEAR_U64_SHA256, 60, "near-u64")
 
 
 def evaluate(rows: list[dict[str, int]], bands: tuple[int, ...] = PRICE_BANDS_BPS) -> list[dict[str, int]]:
@@ -88,21 +99,31 @@ def evaluate(rows: list[dict[str, int]], bands: tuple[int, ...] = PRICE_BANDS_BP
     return results
 
 
-def main() -> None:
-    source_hash, rows = load_scenarios()
-    results = evaluate(rows)
+def write_results(path: Path, results: list[dict[str, int]]) -> None:
     fields = tuple(results[0])
-    with OUTPUT.open("w", newline="") as stream:
+    with path.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(results)
-    print(f"source_rows={len(rows)} source_sha256={source_hash}")
-    print(f"wrote {len(results)} candidate-band rows to {OUTPUT.name}")
+
+
+def report(label: str, path: Path, source_hash: str, rows: list[dict[str, int]]) -> None:
+    results = evaluate(rows)
+    write_results(path, results)
+    print(f"{label}_rows={len(rows)} {label}_sha256={source_hash}")
+    print(f"wrote {len(results)} candidate-band rows to {path.name}")
     for row in results:
         print(
             "band={price_band_bps:5d} bps accepted={accepted:5d} "
             "nav_losses={accepted_nav_losses:5d} max_loss={max_accepted_nav_loss_bps:4d} bps".format(**row)
         )
+
+
+def main() -> None:
+    source_hash, rows = load_scenarios()
+    near_u64_hash, near_u64_rows = load_near_u64_scenarios()
+    report("moderate_reserve", OUTPUT, source_hash, rows)
+    report("near_u64", NEAR_U64_OUTPUT, near_u64_hash, near_u64_rows)
 
 
 if __name__ == "__main__":
