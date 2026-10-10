@@ -1,17 +1,24 @@
 # coloyond
 
-coloyond is being designed for the Solana mobile hackathon: select an existing managed strategy token, generate an abstract expression with an optional caption, and share or remix it. Existing protocols manage underlying holdings; supported purchases and sales use Jupiter's managed swap flow.
+coloyond is an Android app for the Solana mobile hackathon. You choose a token allocation, the app makes an abstract card with an optional caption, and you share or remix the card. To hold the allocation, you set it up yourself in Glider: the app copies the weights and opens glider.fi. coloyond is not affiliated with Glider. The app does not buy or sell anything.
 
 - [Reviewed product specification](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md)
 - [Implementation plan and launch gates](docs/superpowers/plans/2026-10-09-coloyond-managed-strategies.md)
 - [Offline interactive design preview](docs/design/coloyond-strategy-cards.html)
 - [Design image](docs/design/coloyond-strategy-cards.png)
 
-The product integration is planned, not implemented. No live vault, keeper coverage, Jupiter route, or native wallet flow is verified yet. The design preview uses illustrative artwork, IDs, and financial facts.
+Status on 10 October 2026:
+
+- The Symmetry and Jupiter probe is done. Symmetry share tokens have no Jupiter route, and the small vaults have no keeper automation, so in-app purchase and sale are deferred. The [probe report](docs/integrations/2026-10-09-symmetry-jupiter-probe.md) has the evidence.
+- The app decodes Symmetry V3 vault accounts. The decoder matches the SDK field by field.
+- The card drawing, PNG export, sharing and import paths work on an Android 15 emulator.
+- The strategy records, the card generator, the remix flow and the Glider handoff are not built yet.
+
+The design preview uses illustrative artwork, IDs and financial facts.
 
 ## Native Android build
 
-The Kotlin + Jetpack Compose scaffold is in [`apps/android`](apps/android/README.md), with a devnet Mobile Wallet Adapter connect/sign-message/disconnect demo. See its README for prerequisites, SDK paths, checks, and device installation.
+The Kotlin + Jetpack Compose app is in [`apps/android`](apps/android/README.md). It has a card probe screen and a devnet Mobile Wallet Adapter demo. See its README for prerequisites, SDK paths, checks, and device installation.
 
 From the repository root, with JDK 17 and Android SDK Platform 37/Build Tools 36.0.0 configured:
 
@@ -34,4 +41,4 @@ npm run typecheck
 npm run build
 ```
 
-The [design spec](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md) and [implementation plan](docs/superpowers/plans/2026-10-09-coloyond-managed-strategies.md) target this Kotlin app. They supersede the earlier React Native/Expo plan. The current Android starter does not embed the Vite app or execute the planned financial strategies.
+The [design spec](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md) and [implementation plan](docs/superpowers/plans/2026-10-09-coloyond-managed-strategies.md) target this Kotlin app. They supersede the earlier React Native/Expo plan. The Android app does not embed the Vite app.
