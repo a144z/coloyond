@@ -62,7 +62,7 @@ Do not spend hackathon time on the Glider API. The later goal is one-tap enrollm
 
 #7, #8 and #9 are small fixes outside the hackathon path. #19 (in-app buying) is deferred.
 
-## Draft email to Glider (optional)
+## Draft email to Glider (not sent, optional)
 
 **To:** developers@glider.fi
 **Subject:** Staging API access with Solana enrollment for coloyond
