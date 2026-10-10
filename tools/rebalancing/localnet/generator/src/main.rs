@@ -16,8 +16,8 @@ use coloyond_vault::{
     auction::{AuctionPolicy, AUCTION_POLICY_VERSION},
     instructions::{GovernanceAccount, ASSOCIATED_TOKEN_PROGRAM_ID, GOVERNANCE_SEED, VAULT_SEED},
     oracle::{
-        PYTH_RECEIVER_PROGRAM_ID, SOL_USD_FEED_ACCOUNT, SOL_USD_FEED_ID, USDC_USD_FEED_ACCOUNT,
-        USDC_USD_FEED_ID,
+        DEVNET_USDC_MINT, PYTH_RECEIVER_PROGRAM_ID, SOL_USD_FEED_ACCOUNT, SOL_USD_FEED_ID,
+        USDC_USD_FEED_ACCOUNT, USDC_USD_FEED_ID, WSOL_MINT,
     },
     state::{AssetConfig, Vault, ASSET_COUNT, VAULT_VERSION},
     ID as VAULT_PROGRAM_ID,
@@ -167,8 +167,11 @@ fn run() -> std::result::Result<(), String> {
         &[b"rebalance_intent", vault_key.as_ref()],
         &VAULT_PROGRAM_ID,
     );
-    let wsol_mint = Pubkey::find_program_address(&[b"localnet-wsol-mint"], &VAULT_PROGRAM_ID).0;
-    let usdc_mint = Pubkey::find_program_address(&[b"localnet-usdc-mint"], &VAULT_PROGRAM_ID).0;
+    // Localnet injects synthetic mint-account bytes at the protocol's admitted
+    // mint addresses so the SBF policy validator exercises the real asset map.
+    // These are not the real WSOL or Devnet USDC mint accounts.
+    let wsol_mint = WSOL_MINT;
+    let usdc_mint = DEVNET_USDC_MINT;
     let share_mint = Pubkey::find_program_address(
         &[b"localnet-share-mint", vault_key.as_ref()],
         &VAULT_PROGRAM_ID,
@@ -270,6 +273,9 @@ fn run() -> std::result::Result<(), String> {
         maximum_nav_loss_bps: 25,
         asset_feed_indices: [0, 1],
     };
+    policy
+        .validate(vault_key, &vault)
+        .map_err(|error| format!("generated Localnet policy is invalid: {error}"))?;
 
     write_anchor_account(
         &output_dir,

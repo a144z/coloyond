@@ -270,7 +270,7 @@ function priceUpdate(data: Buffer | Uint8Array, expectedFeed: string, label: str
 function decodeIntent(data: Buffer | Uint8Array, vaultKey: PublicKey): IntentSnapshot {
   const bytes = Buffer.from(data);
   if (bytes.length < 98) fail("Rebalance intent account is truncated or has an unsupported layout.");
-  if (bytes[8] !== 1) fail("Rebalance intent version is unsupported.");
+  if (bytes[8] !== 2) fail("Rebalance intent version is unsupported.");
   equalKey(new PublicKey(bytes.subarray(9, 41)), vaultKey, "intent vault");
   if (bytes[65] > 1) fail("Rebalance intent has an unsupported sell asset index.");
   return {
@@ -417,7 +417,7 @@ function fillInstruction(
     keys: [
       { pubkey: keys.vault, isSigner: false, isWritable: true },
       { pubkey: keys.governance, isSigner: false, isWritable: false },
-      { pubkey: keys.auctionPolicy, isSigner: false, isWritable: false },
+      { pubkey: keys.auctionPolicy, isSigner: false, isWritable: true },
       { pubkey: keys.intent, isSigner: false, isWritable: true },
       { pubkey: bountyClaim, isSigner: false, isWritable: true },
       { pubkey: keys.custodyWsol, isSigner: false, isWritable: true },

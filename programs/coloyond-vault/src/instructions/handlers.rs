@@ -450,6 +450,10 @@ pub fn resume_risk(ctx: Context<ResumeRisk>) -> Result<()> {
         vault,
     )?;
     let mut state = ctx.accounts.governance.state();
+    require!(
+        vault.status == 2,
+        crate::governance::GovernanceError::RiskNotPaused
+    );
     state.resume_risk(ctx.accounts.governance_authority.key())?;
     vault.status = 1;
     vault.sequence = vault

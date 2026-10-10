@@ -8,6 +8,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { exerciseGovernedPolicySequence } from "./policy-sequence.mjs";
 
 const require = createRequire(import.meta.url);
 const web3 = require("@solana/web3.js");
@@ -128,7 +129,7 @@ async function readMint(address) {
   };
 }
 
-function encodeInitializeVault({ governanceAuthority, emergencyAuthority, seedAmounts }) {
+function encodeInitializeVault({ governanceAuthority, emergencyAuthority, seedAmounts, minDelaySlots }) {
   return Buffer.concat([
     Buffer.from(DISCRIMINATOR),
     u64(1),
@@ -137,7 +138,7 @@ function encodeInitializeVault({ governanceAuthority, emergencyAuthority, seedAm
     u64(20_000_000), u64(2_000_000),
     u64(1_000_000),
     governanceAuthority.toBuffer(), emergencyAuthority.toBuffer(),
-    u64(10), u64(120), u16(1_000), u16(500),
+    u64(minDelaySlots), u64(120), u16(1_000), u16(500),
   ]);
 }
 
@@ -352,6 +353,8 @@ async function assertEmptyBootstrapState(vault, governance, custodyA, custodyB, 
 }
 
 async function run() {
+  const policyDelaySlots = BigInt(process.env.COLOYOND_BOOTSTRAP_POLICY_DELAY_SLOTS ?? "32");
+  assert(policyDelaySlots >= 10n && policyDelaySlots <= 1_024n, "policy delay must be between 10 and 1,024 slots");
   mkdirSync(runtime, { recursive: true, mode: 0o700 });
   chmodSync(runtime, 0o700);
   mkdirSync(fixtures, { recursive: true, mode: 0o700 });
@@ -382,6 +385,10 @@ async function run() {
     const validatorVersion = await connection.getVersion();
     const airdrop = await connection.requestAirdrop(seeder.publicKey, 25 * web3.LAMPORTS_PER_SOL);
     await waitForSignature(airdrop, Number.MAX_SAFE_INTEGER);
+    const governanceAirdrop = await connection.requestAirdrop(governanceAuthority.publicKey, 2 * web3.LAMPORTS_PER_SOL);
+    await waitForSignature(governanceAirdrop, Number.MAX_SAFE_INTEGER);
+    const emergencyAirdrop = await connection.requestAirdrop(emergencyAuthority.publicKey, web3.LAMPORTS_PER_SOL);
+    await waitForSignature(emergencyAirdrop, Number.MAX_SAFE_INTEGER);
 
     const programInfo = await connection.getAccountInfo(PROGRAM_ID);
     const programDataInfo = await connection.getAccountInfo(programData);
@@ -427,6 +434,8 @@ async function run() {
       vault,
       governance,
       shareMint,
+      mintA: WsolMint,
+      mintB: DevnetUsdcMint,
       seeder: seeder.publicKey,
       bootstrapAuthority: bootstrapAuthority.publicKey,
       governanceAuthority: governanceAuthority.publicKey,
@@ -442,6 +451,7 @@ async function run() {
       governanceAuthority: governanceAuthority.publicKey,
       emergencyAuthority: emergencyAuthority.publicKey,
       seedAmounts: [1_000_000_000n, 100_000_000n],
+      minDelaySlots: policyDelaySlots,
     };
 
     const wrongAuthorityEvidence = await expectFailure(
@@ -504,6 +514,19 @@ async function run() {
     assert(shareMintState.freezeAuthority === null, "share mint unexpectedly has a freeze authority");
     assert(shareMintState.mintAuthority.equals(vault), "share mint authority is not the vault PDA");
 
+    const governedPolicy = await exerciseGovernedPolicySequence({
+      connection,
+      programId: PROGRAM_ID,
+      accounts,
+      seeder,
+      governanceAuthority,
+      emergencyAuthority,
+      delaySlots: policyDelaySlots,
+      submitTransaction: submit,
+      expectFailedTransaction: expectFailure,
+      tokenAmount,
+    });
+
     const result = {
       cluster: "localnet",
       validatorVersion: validatorVersion["solana-core"],
@@ -526,7 +549,8 @@ async function run() {
       cpiRollback,
       successSignature,
       successSlot: successTransaction.slot,
-      status: "paused",
+      status: "active after delayed governed policy sequence",
+      configuredPolicyDelaySlots: policyDelaySlots.toString(),
       seedAmounts: ["1000000000", "100000000"],
       reserveContributions: ["20000000", "2000000"],
       conservativeNavQ9: expectedNavQ9.toString(),
@@ -534,9 +558,10 @@ async function run() {
       custodyBalances: [custodyAmountA.toString(), custodyAmountB.toString()],
       wrongAuthorityRejected: true,
       secondTransferRollbackVerified: true,
+      governedPolicy,
       oracleFixture: "synthetic Full-shaped PriceUpdateV2; not Pyth authenticated",
     };
-    console.log("PASS bootstrap transaction and all post-state/rollback assertions");
+    console.log("PASS bootstrap, governed policy delay, resume, and all post-state/rollback assertions");
     console.log(JSON.stringify(result, null, 2));
   } finally {
     await stopValidator();

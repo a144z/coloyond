@@ -15,12 +15,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +36,7 @@ import com.coloyond.di.AppContainer
 import com.coloyond.platform.ImportIntents
 import com.coloyond.platform.ValidatedImport
 import com.coloyond.ui.screens.CardJourneyScreen
+import com.coloyond.ui.rebalancing.PortfolioRoute
 import com.coloyond.ui.theme.ColoyondTheme
 import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
@@ -55,33 +59,43 @@ class MainActivity : ComponentActivity() {
                 val viewModel: MainViewModel = viewModel { MainViewModel(container) }
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-                var showCards by rememberSaveable { mutableStateOf(true) }
+                var destination by rememberSaveable { mutableStateOf("cards") }
+
+                LaunchedEffect(destination, state.address) {
+                    if (destination == "portfolio") viewModel.refreshPortfolio()
+                }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Column(modifier = Modifier.padding(innerPadding)) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            FilterChip(selected = showCards, onClick = { showCards = true }, label = { Text("Cards") })
-                            FilterChip(selected = !showCards, onClick = { showCards = false }, label = { Text("Wallet · Devnet") })
+                            FilterChip(selected = destination == "cards", onClick = { destination = "cards" }, label = { Text("Cards") })
+                            FilterChip(selected = destination == "portfolio", onClick = { destination = "portfolio" }, label = { Text("Portfolio · Devnet") })
+                            FilterChip(selected = destination == "wallet", onClick = { destination = "wallet" }, label = { Text("Wallet · Devnet") })
                         }
-                        if (showCards) {
-                            CardJourneyScreen(
-                                storage = container.cards,
-                                inference = container.inference,
-                                imported = lastImport,
-                                importVersion = importVersion,
-                                onImportConsumed = { lastImport = null },
+                        when (destination) {
+                            "portfolio" -> PortfolioRoute(
+                                state = state.portfolio,
+                                walletAddress = state.address,
+                                mockMode = state.mockMode,
+                                onRefresh = { viewModel.refreshPortfolio() },
                             )
-                        } else {
-                            WalletScreen(
+                            "wallet" -> WalletScreen(
                                 state = state,
                                 onConnect = { viewModel.connect(sender) },
                                 onSignMessage = { viewModel.signMessage(sender) },
                                 onSendMemoTest = { viewModel.sendDevnetMemoTest(sender) },
                                 onDisconnect = { viewModel.disconnect(sender) },
                                 onToggleMockMode = { viewModel.toggleMockMode() },
+                            )
+                            else -> CardJourneyScreen(
+                                storage = container.cards,
+                                inference = container.inference,
+                                imported = lastImport,
+                                importVersion = importVersion,
+                                onImportConsumed = { lastImport = null },
                             )
                         }
                     }

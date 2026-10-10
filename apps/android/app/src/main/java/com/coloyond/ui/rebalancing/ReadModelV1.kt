@@ -7,7 +7,9 @@ data class ReadModelV1(
     val source: Source,
     val program: Program,
     val vault: Vault,
+    val wallet: Wallet?,
     val oracle: List<OracleFeed>,
+    val riskBlockers: List<String>,
     val auction: Auction?,
     val reserve: Reserve?,
     val lastConfirmedTransition: ConfirmedTransition?,
@@ -35,6 +37,17 @@ data class ReadModelV1(
         val exit: Exit,
     )
 
+    data class Wallet(val address: String, val balances: List<WalletBalance>)
+
+    data class WalletBalance(
+        val mint: String,
+        val symbol: String,
+        val decimals: Int,
+        val amountBaseUnits: String?,
+        val tokenAccount: String,
+        val accountExists: Boolean?,
+    )
+
     data class Weight(val mint: String, val symbol: String, val weightBps: Int)
 
     data class Exit(val available: Boolean?, val mode: ExitMode)
@@ -51,7 +64,7 @@ data class ReadModelV1(
     data class Auction(
         val sequence: String?,
         val remaining: String?,
-        val expiresAt: String?,
+        val endSlot: String?,
         val feeBps: Int?,
     )
 
@@ -67,7 +80,7 @@ data class ReadModelV1(
     }
 
     enum class SourceKind(val wireValue: String) { RPC("rpc"), FIXTURE("fixture") }
-    enum class Phase(val wireValue: String) { UNAVAILABLE("unavailable"), ACTIVE("active"), PAUSED("paused"), AUCTION("auction"), UNKNOWN("unknown") }
+    enum class Phase(val wireValue: String) { UNAVAILABLE("unavailable"), ACTIVE("active"), PAUSED("paused"), AUCTION("auction"), FINALIZATION_REQUIRED("finalization_required"), UNKNOWN("unknown") }
     enum class ExitMode(val wireValue: String) { IN_KIND("in_kind"), UNKNOWN("unknown") }
     enum class OracleVerification(val wireValue: String) { FULL("full"), PARTIAL("partial"), UNKNOWN("unknown") }
     enum class OracleState(val wireValue: String) { FRESH("fresh"), STALE("stale"), DEPEGGED("depegged"), UNAVAILABLE("unavailable"), UNKNOWN("unknown") }
@@ -103,6 +116,7 @@ object PortfolioReadModelPresentation {
         ReadModelV1.Phase.ACTIVE -> "Active"
         ReadModelV1.Phase.PAUSED -> "Paused"
         ReadModelV1.Phase.AUCTION -> "Auction"
+        ReadModelV1.Phase.FINALIZATION_REQUIRED -> "Auction · finalization required"
         ReadModelV1.Phase.UNKNOWN -> "Unknown"
     }
 

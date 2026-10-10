@@ -1,0 +1,5 @@
+# ETF v1 fee and depth scenario model
+
+Run `python3 tools/rebalancing/etf-economics/run.py` from the repository root. The generated `results.csv` is a reproducible **hypothetical** sensitivity table for a two-asset 50/50 weighted-mean pool at $1 oracle marks. It varies assumed pool depth, trade size, fixed fee, external price move, uncertainty haircut and transaction cost.
+
+The model answers a narrow question: under those assumptions, when is a trader still paid enough to arbitrage the pool, and how does that profit correspond to the pool's mark-to-market loss? It is not a market forecast, a live depth observation, a fee recommendation, an LVR guarantee, or evidence of Devnet liquidity. It assumes the selected trade direction and does not model gas sponsorship, latency distributions, multi-hop routing, oracle update availability, competing trades, withdrawals, token depegs, or three-asset cross-pool effects. Final fee selection remains blocked on accepted S5B math, S5C oracle limits and real executable-depth evidence.

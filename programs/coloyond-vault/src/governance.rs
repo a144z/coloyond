@@ -180,6 +180,7 @@ impl GovernanceState {
             self.governance_authority,
             GovernanceError::UnauthorizedGovernance
         );
+        require!(self.risk_paused, GovernanceError::RiskNotPaused);
         self.risk_paused = false;
         Ok(())
     }
@@ -242,6 +243,8 @@ pub enum GovernanceError {
     ProposalReplay,
     #[msg("Governance arithmetic overflow")]
     ArithmeticOverflow,
+    #[msg("Risk is already resumed")]
+    RiskNotPaused,
 }
 
 #[cfg(test)]
