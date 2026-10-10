@@ -82,6 +82,10 @@ test("scheduler fails closed for pause, stale revisions, missing condition state
   const noFeeds = activeSnapshot();
   noFeeds.oracleAccountsReady = false;
   assert.equal(selectConditionActions(noFeeds).actions.length, 0);
+  const readyWithoutFeeds = activeSnapshot();
+  readyWithoutFeeds.condition!.activeRule!.pendingActivation = true;
+  readyWithoutFeeds.oracleAccountsReady = false;
+  assert.equal(selectConditionActions(readyWithoutFeeds).actions.length, 0);
   const noCondition = activeSnapshot();
   noCondition.condition = null;
   assert.equal(selectConditionActions(noCondition).actions.length, 0);

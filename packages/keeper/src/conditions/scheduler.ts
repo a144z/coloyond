@@ -52,7 +52,7 @@ export function selectConditionActions(snapshot: ConditionSnapshot): ConditionSe
   if (snapshot.intent) return { actions: [], reason: "An active rebalance auction prevents condition activation" };
 
   const actions: ConditionAction[] = [];
-  if (rule.pendingActivation) actions.push({ kind: "activate", stateSequence: condition.sequence, ruleNonce: rule.nonce });
+  if (rule.pendingActivation && snapshot.oracleAccountsReady) actions.push({ kind: "activate", stateSequence: condition.sequence, ruleNonce: rule.nonce });
   if (snapshot.oracleAccountsReady && observationGapElapsed(rule.lastObservation, bounds, snapshot)) {
     actions.push({ kind: "observe", stateSequence: condition.sequence, ruleNonce: rule.nonce });
   }
