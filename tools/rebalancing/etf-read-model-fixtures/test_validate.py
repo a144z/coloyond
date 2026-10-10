@@ -17,6 +17,30 @@ def load_fixture():
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def apply_mutation(document, case):
+    operation = case["operation"]
+    if operation == "none":
+        return
+    if operation not in {"set", "delete", "append-copy-first"}:
+        raise ValueError(f"unknown mutation operation: {operation}")
+
+    fixture = next(
+        item for item in document["fixtures"]
+        if item["id"] == case["fixtureId"]
+    )
+    path = case["path"]
+    parent = fixture
+    for component in path[:-1]:
+        parent = parent[component]
+    key = path[-1]
+    if operation == "set":
+        parent[key] = case["value"]
+    elif operation == "delete":
+        parent.pop(key, None)
+    else:
+        parent[key].append(copy.deepcopy(parent[key][0]))
+
+
 class ReadModelFixtureValidatorTests(unittest.TestCase):
     def test_shared_mutation_corpus_matches_expected_acceptance(self):
         document = load_fixture()
@@ -28,28 +52,14 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         for case in cases:
             with self.subTest(case=case["id"]):
                 candidate = copy.deepcopy(document)
-                operation = case["operation"]
-                if operation != "none":
-                    fixture = next(
-                        item for item in candidate["fixtures"]
-                        if item["id"] == case["fixtureId"]
-                    )
-                    path = case["path"]
-                    parent = fixture
-                    for component in path[:-1]:
-                        parent = parent[component]
-                    key = path[-1]
-                    if operation == "set":
-                        parent[key] = case["value"]
-                    elif operation == "delete":
-                        parent.pop(key, None)
-                    elif operation == "append-copy-first":
-                        parent[key].append(copy.deepcopy(parent[key][0]))
-                    else:
-                        self.fail(f"unknown mutation operation: {operation}")
+                apply_mutation(candidate, case)
 
                 is_valid = not validate_document(candidate)
                 self.assertEqual(is_valid, case["expectedValid"])
+
+    def test_shared_mutation_harness_rejects_unknown_operations(self):
+        with self.assertRaisesRegex(ValueError, "unknown mutation operation: append-copy-frist"):
+            apply_mutation(load_fixture(), {"operation": "append-copy-frist"})
 
     def test_checked_in_language_neutral_fixture_document_is_valid(self):
         self.assertEqual(validate_document(load_fixture()), [])

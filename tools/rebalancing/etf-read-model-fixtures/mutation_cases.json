@@ -7,6 +7,14 @@
       "operation": "none"
     },
     {
+      "id": "stale-oracle-retains-diagnostic-age",
+      "expectedValid": true,
+      "operation": "set",
+      "fixtureId": "oracle-stale",
+      "path": ["ageSeconds"],
+      "value": "62"
+    },
+    {
       "id": "snapshot-missing-genesis-hash",
       "expectedValid": false,
       "operation": "delete",

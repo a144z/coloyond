@@ -19,6 +19,10 @@ const mutationCorpus = JSON.parse(readFileSync(mutationPath, "utf8")) as {
 };
 
 function applySharedMutation(candidate: unknown, mutation: (typeof mutationCorpus.cases)[number]): void {
+  const operation = mutation.operation as string;
+  if (!new Set(["none", "set", "delete", "append-copy-first"]).has(operation)) {
+    assert.fail(`unknown mutation operation: ${operation}`);
+  }
   if (mutation.operation === "none") return;
   assert.ok(candidate && typeof candidate === "object" && "fixtures" in candidate);
   const fixtures = (candidate as { fixtures: Array<Record<string, unknown>> }).fixtures;
@@ -37,10 +41,12 @@ function applySharedMutation(candidate: unknown, mutation: (typeof mutationCorpu
     parent[key] = mutation.value;
   } else if (mutation.operation === "delete") {
     delete parent[key];
-  } else {
+  } else if (mutation.operation === "append-copy-first") {
     const values = parent[key];
     assert.ok(Array.isArray(values) && values.length > 0);
     values.push(structuredClone(values[0]));
+  } else {
+    assert.fail(`unknown mutation operation: ${String(mutation.operation)}`);
   }
 }
 
@@ -58,6 +64,17 @@ test("Python and TypeScript share the same fixture-mutation acceptance corpus", 
       `fixture mutation ${mutation.id} disagrees with the shared expected acceptance`,
     );
   }
+});
+
+test("shared fixture mutation harness rejects unknown operations", () => {
+  const invalidMutation = {
+    ...mutationCorpus.cases[0]!,
+    operation: "append-copy-frist",
+  } as unknown as (typeof mutationCorpus.cases)[number];
+  assert.throws(
+    () => applySharedMutation(structuredClone(document), invalidMutation),
+    /unknown mutation operation: append-copy-frist/,
+  );
 });
 
 test("shared read-model fixtures pass the TypeScript validator", () => {
