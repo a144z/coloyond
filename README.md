@@ -31,7 +31,9 @@ cd apps/android
 
 APK: `apps/android/app/build/outputs/apk/debug/app-debug.apk`. Open `apps/android` directly in Android Studio.
 
-The current browser application is the earlier **coloyond** React/Vite routing prototype. LI.FI and deBridge provide quotes; the execution view uses simulated steps. It does not establish real signing, on-chain settlement, or atomic cross-chain rollback. Its sample balances and signatures are presentation data.
+The current browser application is the earlier **coloyond** React/Vite routing prototype. LI.FI and deBridge provide quotes; the execution view uses simulated steps. It does not establish real signing, on-chain settlement, or atomic cross-chain rollback. Its sample balances and signatures are presentation data. Since 10 October 2026 the Portfolio tab also runs the rebalance desk: drift is live arithmetic over sample values, targets can be edited and normalized to a 100% total, and a simulated run reweighs the basket onto target with a fee share kept in a sample reserve (the YieldBasis reflow idea from [the Solana vault SDK survey](docs/integrations/2026-10-10-solana-vault-sdk-survey.md)). The desk stores nothing but the demo profile in local storage, and the same no-backend, no-new-contract, no-shared-key rules apply.
+
+Since 10 October 2026 the Portfolio tab also has a **live Symmetry vault** section. It reads real devnet vaults through `@symmetry-hq/sdk` and the Symmetry V3 program (`BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate`): the vault list, each vault's oracle-priced composition, live drift, automation settings and reserve, and the last keeper execution. Funding the automation reserve and nudging the keeper build real devnet transactions that the wallet signs; the rebalances themselves are executed by Symmetry's permissionless keeper network, not by coloyond, so the holder pays no gas per rebalance. Devnet is the default (test funds only); the mainnet toggle is present but the public mainnet RPC rate-limits this prototype. This is prototype code with no backend, no new contracts and no shared keys, and the actions are demonstrated, not audited.
 
 ## Prototype commands
 
