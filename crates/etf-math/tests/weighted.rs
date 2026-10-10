@@ -340,6 +340,46 @@ fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
 }
 
 #[test]
+fn extreme_weight_quotes_never_exceed_an_exact_integer_invariant_safe_output() {
+    // The Python reference uses 180-digit Decimal quotes and checks each
+    // reference floor against arbitrary-precision integer reserve powers.
+    let mut tested = 0usize;
+    let mut maximum_shortfall = 0_u64;
+    for line in include_str!("invariant_boundary_vectors.csv")
+        .lines()
+        .skip(1)
+    {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated numeric field"))
+            .collect();
+        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, reference_floor] =
+            <[u64; 7]>::try_from(fields).expect("seven vector fields");
+        let quote = quote_exact_in(
+            &[balance_in, balance_out],
+            &[weight_in as u16, weight_out as u16],
+            0,
+            1,
+            amount_in,
+            fee_bps as u16,
+        )
+        .unwrap();
+        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
+        let shortfall = reference_floor - quote.amount_out;
+        assert!(
+            shortfall <= 1,
+            "unexpected quote shortfall {shortfall}: {line}"
+        );
+        maximum_shortfall = maximum_shortfall.max(shortfall);
+        tested += 1;
+    }
+    assert_eq!(tested, 240, "regenerate and review invariant vectors");
+    eprintln!(
+        "checked {tested} extreme-weight quotes; max shortfall {maximum_shortfall} base units"
+    );
+}
+
+#[test]
 fn quotes_are_monotonic_in_input_and_fee_at_weight_boundaries() {
     let weight_profiles = [
         [100_u16, 100, 9_800],
