@@ -230,4 +230,11 @@ def validate_compiled_requeue(
             raise ValueError("returned task crank reward must be None or queue minimum")
         if task.free_tasks + 1 > queue_capacity:
             raise ValueError("returned task free_tasks plus itself exceeds queue capacity")
+        if sum(task.signer_counts) > len(task.accounts):
+            raise ValueError("compiled signer/account header exceeds its account vector")
+        for instruction in task.instructions:
+            if instruction.program_id_index >= len(task.accounts):
+                raise ValueError("compiled program index is outside its account vector")
+            if any(index >= len(task.accounts) for index in instruction.account_indexes):
+                raise ValueError("compiled instruction account index is outside its account vector")
     return True

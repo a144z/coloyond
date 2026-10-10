@@ -37,6 +37,16 @@ def compiled_transaction(*, rich=False):
     )
 
 
+def compiled_transaction_with_indexes(program_index, account_indexes):
+    instruction = bytes((program_index,)) + vector(account_indexes) + vector(b"")
+    return (
+        b"\0\0\0"
+        + items([b"a" * 32])
+        + items([instruction])
+        + items([])
+    )
+
+
 def task(
     *,
     trigger=b"\0",
@@ -169,6 +179,15 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
     def test_rejects_overlong_utf8_description(self):
         with self.assertRaisesRegex(ValueError, "40 UTF-8 bytes"):
             self.validate(returned(task(description="界" * 14)))
+
+    def test_rejects_compiled_instruction_indexes_outside_the_child_account_vector(self):
+        for program_index, account_indexes in ((1, b""), (0, b"\1")):
+            with self.subTest(program_index=program_index, account_indexes=account_indexes):
+                child_source = b"\0" + compiled_transaction_with_indexes(
+                    program_index, account_indexes
+                )
+                with self.assertRaises(ValueError):
+                    self.validate(returned(task(source=child_source)))
 
 
 if __name__ == "__main__":
