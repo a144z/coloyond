@@ -268,7 +268,8 @@
                 "path": "vault"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
           "name": "rebalance_intent",
@@ -399,6 +400,105 @@
         },
         {
           "name": "bounty_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_bounty",
+      "discriminator": [
+        225,
+        157,
+        163,
+        238,
+        239,
+        169,
+        75,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty_claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121,
+                  95,
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "expected_intent_sequence"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_a",
+          "writable": true
+        },
+        {
+          "name": "custody_b",
+          "writable": true
+        },
+        {
+          "name": "mint_a"
+        },
+        {
+          "name": "mint_b"
+        },
+        {
+          "name": "executor_asset",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_intent_sequence",
           "type": "u64"
         }
       ]
@@ -1969,7 +2069,27 @@
             "type": "u64"
           },
           {
+            "name": "reserve_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "holder_fee_amount",
+            "type": "u64"
+          },
+          {
             "name": "bounty_amount",
+            "type": "u64"
+          },
+          {
+            "name": "reserve_after",
+            "type": "u64"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_bounty_spent",
             "type": "u64"
           },
           {
@@ -2046,6 +2166,38 @@
       }
     },
     {
+      "name": "BountyClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent_sequence",
+            "type": "u64"
+          },
+          {
+            "name": "asset_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "AuctionPolicy",
       "type": {
         "kind": "struct",
@@ -2113,6 +2265,41 @@
             "type": "u16"
           },
           {
+            "name": "fee_reserve_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "reserve_floor",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "epoch_bounty_budget",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "bounty_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "bounty_epoch_spent",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
             "name": "maximum_bounty_per_fill",
             "type": "u64"
           },
@@ -2164,6 +2351,10 @@
           {
             "name": "amount",
             "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
           }
         ]
       }
@@ -2481,6 +2672,28 @@
           {
             "name": "maximum_fee_bps",
             "type": "u16"
+          },
+          {
+            "name": "fee_reserve_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "reserve_floor",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "epoch_bounty_budget",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
           },
           {
             "name": "maximum_bounty_per_fill",
@@ -3275,6 +3488,19 @@
         80,
         59,
         60
+      ]
+    },
+    {
+      "name": "BountyClaimed",
+      "discriminator": [
+        140,
+        202,
+        21,
+        51,
+        211,
+        65,
+        142,
+        21
       ]
     },
     {

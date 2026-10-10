@@ -4,6 +4,7 @@ pub mod accounting;
 pub mod auction;
 pub mod auction_math;
 pub mod condition;
+pub mod fees;
 pub mod governance;
 pub mod instructions;
 pub mod oracle;
@@ -80,6 +81,10 @@ pub mod coloyond_vault {
             gross_buy_amount,
             bounty_amount,
         )
+    }
+
+    pub fn claim_bounty(ctx: Context<ClaimBounty>, expected_intent_sequence: u64) -> Result<()> {
+        instructions::auction_handlers::claim_bounty(ctx, expected_intent_sequence)
     }
 
     pub fn finish_or_expire(

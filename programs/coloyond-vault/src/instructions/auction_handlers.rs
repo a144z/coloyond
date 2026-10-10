@@ -10,6 +10,7 @@ use crate::{
         BOUNTY_CLAIM_VERSION, REBALANCE_INTENT_VERSION,
     },
     auction_math::{self, MathError},
+    fees::{self, FeeTerms},
     instructions::{self, FillAuction, FinishOrExpire, StartRebalance, VAULT_SEED},
     oracle::{self, PinnedFeed, ValidatedPrice},
     state::{Vault, VaultError, ASSET_COUNT},
@@ -138,6 +139,9 @@ pub fn start_rebalance(
     intent.curve_end_rate_bps = ctx.accounts.auction_policy.curve_end_rate_bps;
     intent.fee_bps = ctx.accounts.auction_policy.fee_bps;
     intent.maximum_fee_bps = ctx.accounts.auction_policy.maximum_fee_bps;
+    intent.fee_reserve_share_bps = ctx.accounts.auction_policy.fee_reserve_share_bps;
+    intent.reserve_floor = ctx.accounts.auction_policy.reserve_floor;
+    intent.epoch_bounty_budget = ctx.accounts.auction_policy.epoch_bounty_budget;
     intent.maximum_bounty_per_fill = ctx.accounts.auction_policy.maximum_bounty_per_fill;
     intent.maximum_cumulative_nav_loss_bps =
         ctx.accounts.auction_policy.maximum_cumulative_nav_loss_bps;
@@ -253,17 +257,6 @@ pub fn fill_auction(
         bounty_amount,
     )?;
 
-    // The quote's post-balances exclude the earned bounty liability from
-    // holder backing. Actual token movement only transfers gross input and
-    // vault output; S4 owns the separate permissionless claim payout.
-    require!(
-        auction::bounty_reserve_covers(
-            vault.bootstrap_reserve[buy_index],
-            vault.bounty_liabilities[buy_index],
-            bounty_amount,
-        ),
-        AuctionError::InsufficientBountyReserve
-    );
     transfer_taker_input(
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.taker_in.to_account_info(),
@@ -291,12 +284,22 @@ pub fn fill_auction(
     vault.accounted_amounts[sell_index] = vault.accounted_amounts[sell_index]
         .checked_sub(sell_amount)
         .ok_or(VaultError::BalanceDeficit)?;
-    vault.accounted_amounts[buy_index] = vault.accounted_amounts[buy_index]
-        .checked_add(gross_buy_amount)
-        .ok_or(VaultError::ArithmeticOverflow)?;
-    vault.bounty_liabilities[buy_index] = vault.bounty_liabilities[buy_index]
-        .checked_add(bounty_amount)
-        .ok_or(AuctionError::ArithmeticOverflow)?;
+    let fee_settlement = fees::book_fill(
+        vault,
+        &mut ctx.accounts.auction_policy,
+        buy_index,
+        gross_buy_amount,
+        quote.fee_amount,
+        bounty_amount,
+        FeeTerms {
+            reserve_share_bps: intent.fee_reserve_share_bps,
+            reserve_floor: intent.reserve_floor,
+            epoch_bounty_budget: intent.epoch_bounty_budget,
+            maximum_bounty_per_fill: intent.maximum_bounty_per_fill,
+        },
+        clock.epoch,
+        ctx.accounts.governance.risk_paused,
+    )?;
     vault.sequence = vault
         .sequence
         .checked_add(1)
@@ -309,6 +312,7 @@ pub fn fill_auction(
     claim.sequence = expected_intent_sequence;
     claim.asset_index = buy_index as u8;
     claim.amount = bounty_amount;
+    claim.claimed = false;
 
     intent.remaining_sell_amount = quote.remaining_size;
     intent.cumulative_nav_loss_q9 = cumulative_nav_loss_q9;
@@ -324,11 +328,83 @@ pub fn fill_auction(
         sell_amount,
         gross_buy_amount,
         fee_amount: quote.fee_amount,
+        reserve_fee_amount: fee_settlement.reserve_fee_amount,
+        holder_fee_amount: fee_settlement.holder_fee_amount,
         bounty_amount,
+        reserve_after: fee_settlement.reserve_after,
+        epoch: fee_settlement.epoch,
+        epoch_bounty_spent: fee_settlement.epoch_spent_after[buy_index],
         cumulative_nav_loss_q9,
         remaining_sell_amount: quote.remaining_size,
         bounty_claim: claim.key(),
         publish_times,
+        sequence: vault.sequence,
+    });
+    Ok(())
+}
+
+pub fn claim_bounty(
+    ctx: Context<instructions::ClaimBounty>,
+    expected_intent_sequence: u64,
+) -> Result<()> {
+    let vault = &mut ctx.accounts.vault;
+    let vault_key = vault.key();
+    require!(
+        vault.version == crate::state::VAULT_VERSION,
+        VaultError::InvalidConfiguration
+    );
+    instructions::check_custody(
+        vault,
+        vault_key,
+        &ctx.accounts.custody_a,
+        &ctx.accounts.custody_b,
+        &ctx.accounts.mint_a,
+        &ctx.accounts.mint_b,
+    )?;
+    let actual = [ctx.accounts.custody_a.amount, ctx.accounts.custody_b.amount];
+    crate::accounting::sync_donation(vault, actual)?;
+
+    let claim = &mut ctx.accounts.bounty_claim;
+    require!(
+        claim.sequence == expected_intent_sequence,
+        AuctionError::InvalidBountyClaim
+    );
+    let asset_index = usize::from(claim.asset_index);
+    require!(asset_index < ASSET_COUNT, AuctionError::InvalidBountyClaim);
+    let expected_mint = vault.assets[asset_index].mint;
+    require_keys_eq!(
+        ctx.accounts.executor_asset.mint,
+        expected_mint,
+        AuctionError::InvalidBountyClaim
+    );
+    require_keys_eq!(
+        ctx.accounts.executor_asset.owner,
+        ctx.accounts.executor.key(),
+        AuctionError::InvalidBountyClaim
+    );
+    let amount = fees::claim_bounty(vault, vault_key, claim, ctx.accounts.executor.key())?;
+
+    if amount > 0 {
+        let source = if asset_index == 0 {
+            ctx.accounts.custody_a.to_account_info()
+        } else {
+            ctx.accounts.custody_b.to_account_info()
+        };
+        transfer_vault_output(
+            ctx.accounts.token_program.to_account_info(),
+            source,
+            ctx.accounts.executor_asset.to_account_info(),
+            vault.to_account_info(),
+            vault.bump,
+            amount,
+        )?;
+    }
+    emit!(BountyClaimed {
+        vault: vault_key,
+        executor: ctx.accounts.executor.key(),
+        intent_sequence: expected_intent_sequence,
+        asset_index: asset_index as u8,
+        amount,
         sequence: vault.sequence,
     });
     Ok(())
@@ -678,11 +754,26 @@ pub struct AuctionFillRecorded {
     pub sell_amount: u64,
     pub gross_buy_amount: u64,
     pub fee_amount: u64,
+    pub reserve_fee_amount: u64,
+    pub holder_fee_amount: u64,
     pub bounty_amount: u64,
+    pub reserve_after: u64,
+    pub epoch: u64,
+    pub epoch_bounty_spent: u64,
     pub cumulative_nav_loss_q9: u128,
     pub remaining_sell_amount: u64,
     pub bounty_claim: Pubkey,
     pub publish_times: [i64; 2],
+    pub sequence: u64,
+}
+
+#[event]
+pub struct BountyClaimed {
+    pub vault: Pubkey,
+    pub executor: Pubkey,
+    pub intent_sequence: u64,
+    pub asset_index: u8,
+    pub amount: u64,
     pub sequence: u64,
 }
 

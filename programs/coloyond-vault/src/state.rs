@@ -32,8 +32,9 @@ pub struct Vault {
     pub total_shares: u64,
     pub minimum_locked_shares: u64,
     pub accounted_amounts: [u64; ASSET_COUNT],
-    /// Disclosed seed contribution retained in the holder-owned automation
-    /// reserve. It remains part of share backing until a bounty is booked.
+    /// Holder-owned reserve subledger seeded at initialization and thereafter
+    /// updated by explicit fee allocation and bounty claims. It is a subset
+    /// of accounted_amounts, never additional NAV.
     pub bootstrap_reserve: [u64; ASSET_COUNT],
     /// Amount already owed to executors; excluded from redeemable backing.
     pub bounty_liabilities: [u64; ASSET_COUNT],
@@ -127,6 +128,8 @@ pub enum VaultError {
     BalanceDeficit,
     #[msg("Recorded bounty liability exceeds vault assets")]
     LiabilityExceedsAssets,
+    #[msg("Reserve subledger exceeds accounted vault assets")]
+    ReserveExceedsAssets,
     #[msg("Deposit is not proportional to current share backing")]
     NonProportionalDeposit,
     #[msg("Deposit exceeds the caller's maximum input")]
