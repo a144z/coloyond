@@ -745,6 +745,31 @@ mod tests {
     }
 
     #[test]
+    fn decoder_rejects_unsupported_verification_level_variant_tag() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let mut bytes = Vec::new();
+        value.try_serialize(&mut bytes).unwrap();
+        let verification_level_offset = 8 + 32;
+        assert_eq!(bytes.len(), PriceUpdateV2::LEN - 1);
+        assert_eq!(bytes[verification_level_offset], 1);
+        bytes[verification_level_offset] = u8::MAX;
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes,
+        )
+        .is_err());
+    }
+
+    #[test]
     fn exponent_policy_is_inclusive_and_rejects_each_outside_boundary() {
         let policy = OracleLimits {
             minimum_exponent: -17,
