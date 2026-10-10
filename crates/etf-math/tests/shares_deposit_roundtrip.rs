@@ -42,6 +42,12 @@ fn deposit_minted_shares_cannot_redeem_more_than_each_asset_contribution() {
                         .expect("newly minted shares can be redeemed against post-deposit state");
 
                         for index in 0..2 {
+                            assert!(
+                                u128::from(post_reserves[index]) * u128::from(share_supply)
+                                    >= u128::from(reserves[index]) * u128::from(post_supply),
+                                "deposit diluted existing holder backing for asset {index}: reserves={reserves:?}, supply={share_supply}, inputs={max_inputs:?}, consumed={}",
+                                deposit.consumed[index]
+                            );
                             assert_eq!(
                                 deposit.consumed[index] + deposit.refund[index],
                                 max_inputs[index],
@@ -113,6 +119,14 @@ fn three_asset_deposit_minted_shares_cannot_extract_contributed_assets() {
                                 .expect("newly minted shares redeem against post-deposit state");
 
                                 for index in 0..3 {
+                                    assert!(
+                                        u128::from(post_reserves[index])
+                                            * u128::from(share_supply)
+                                            >= u128::from(reserves[index])
+                                                * u128::from(post_supply),
+                                        "three-asset deposit diluted existing holder backing for asset {index}: reserves={reserves:?}, supply={share_supply}, inputs={max_inputs:?}, consumed={}",
+                                        deposit.consumed[index]
+                                    );
                                     assert_eq!(
                                         deposit.consumed[index] + deposit.refund[index],
                                         max_inputs[index],
