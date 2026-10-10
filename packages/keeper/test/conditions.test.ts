@@ -125,6 +125,23 @@ test("uncertain submission rereads chain and accepts an already-applied transiti
   assert.equal(runtime.state.condition?.activeRule?.nonce, 5n);
 });
 
+test("a pre-send drop is reconciled before the still-eligible action is retried", async () => {
+  const runtime = new FakeConditionRuntime(pendingSnapshot(900n));
+  runtime.dropBeforeSendOnce = true;
+  const results: Array<{ status: string }> = [];
+  const service = new ConditionScheduler({ dryRun: false, maxFeeLamports: 1_000n }, runtime, (result) => results.push(result));
+
+  await service.reconcile();
+  assert.equal(runtime.submissions, 1);
+  assert.equal(runtime.state.condition?.pending?.rule.nonce, 5n);
+  assert.equal(results.at(-1)?.status, "error");
+
+  await service.reconcile();
+  assert.equal(runtime.submissions, 2);
+  assert.equal(runtime.state.condition?.pending, null);
+  assert.equal(results.at(-1)?.status, "confirmed");
+});
+
 test("duplicate notifications do not submit a second action while first signature is uncertain", async () => {
   const runtime = new FakeConditionRuntime(pendingSnapshot(900n));
   runtime.confirmations = [{ status: "unknown" }, { status: "unknown" }];
@@ -150,6 +167,7 @@ class FakeConditionRuntime implements ConditionRuntime {
   submissions = 0;
   reads = 0;
   submitErrorAfterApply = false;
+  dropBeforeSendOnce = false;
   subscriptionError: Error | null = null;
   confirmations: ConditionConfirmation[] = [{ status: "confirmed" }];
   constructor(public state: ConditionSnapshot) {}
@@ -158,6 +176,10 @@ class FakeConditionRuntime implements ConditionRuntime {
   async simulate(): Promise<ConditionSimulation> { this.simulations++; return { ok: true, feeLamports: 50n }; }
   async submit(action: ConditionAction): Promise<string> {
     this.submissions++;
+    if (this.dropBeforeSendOnce) {
+      this.dropBeforeSendOnce = false;
+      throw new Error("injected send drop before transaction submission");
+    }
     if (this.submitErrorAfterApply) {
       apply(this.state, action);
       throw new UncertainConditionSubmissionError("uncertain-signature", "RPC response lost");
