@@ -34,6 +34,9 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        getByName("main").assets.srcDir(rootProject.file("../../idl"))
+    }
 }
 
 dependencies {
