@@ -10,9 +10,9 @@ use crate::state::{Vault, ASSET_COUNT};
 pub const AUCTION_POLICY_SEED: &[u8] = b"auction_policy";
 pub const REBALANCE_INTENT_SEED: &[u8] = b"rebalance_intent";
 pub const BOUNTY_CLAIM_SEED: &[u8] = b"bounty_claim";
-pub const AUCTION_POLICY_VERSION: u8 = 1;
-pub const REBALANCE_INTENT_VERSION: u8 = 1;
-pub const BOUNTY_CLAIM_VERSION: u8 = 1;
+pub const AUCTION_POLICY_VERSION: u8 = 2;
+pub const REBALANCE_INTENT_VERSION: u8 = 2;
+pub const BOUNTY_CLAIM_VERSION: u8 = 2;
 
 /// Explicit on-chain risk parameters. Every value is stored, versioned and
 /// copied into an intent at start; this account has no initializer in S2D.
@@ -34,6 +34,16 @@ pub struct AuctionPolicy {
     pub duration_slots: u64,
     pub fee_bps: u16,
     pub maximum_fee_bps: u16,
+    /// Share of the charged fill fee assigned to the holder-owned reserve.
+    /// No policy initializer or default exists; governance must supply it.
+    pub fee_reserve_share_bps: u16,
+    /// Minimum free reserve balance that must remain after a bounty is booked.
+    pub reserve_floor: [u64; ASSET_COUNT],
+    /// Maximum bounty booking per Solana epoch and incoming asset.
+    pub epoch_bounty_budget: [u64; ASSET_COUNT],
+    /// Mutable budget accounting is colocated with the versioned policy.
+    pub bounty_epoch: u64,
+    pub bounty_epoch_spent: [u64; ASSET_COUNT],
     pub maximum_bounty_per_fill: u64,
     pub maximum_cumulative_nav_loss_bps: u16,
     pub maximum_nav_loss_bps: u16,
@@ -68,6 +78,7 @@ impl AuctionPolicy {
                 && self.duration_slots > 0
                 && self.fee_bps <= self.maximum_fee_bps
                 && self.maximum_fee_bps <= 10_000
+                && self.fee_reserve_share_bps <= 10_000
                 && self.maximum_nav_loss_bps <= 10_000
                 && self.maximum_cumulative_nav_loss_bps <= 10_000,
             AuctionError::InvalidPolicy
@@ -174,6 +185,9 @@ pub struct RebalanceIntent {
     pub curve_end_rate_bps: u16,
     pub fee_bps: u16,
     pub maximum_fee_bps: u16,
+    pub fee_reserve_share_bps: u16,
+    pub reserve_floor: [u64; ASSET_COUNT],
+    pub epoch_bounty_budget: [u64; ASSET_COUNT],
     pub maximum_bounty_per_fill: u64,
     pub maximum_cumulative_nav_loss_bps: u16,
     pub maximum_nav_loss_bps: u16,
@@ -193,6 +207,10 @@ pub struct BountyClaim {
     pub sequence: u64,
     pub asset_index: u8,
     pub amount: u64,
+    /// A claim receipt can transition only once. The on-chain instruction
+    /// closes it after payout, while this bit also makes the pure ledger
+    /// transition directly testable for replay rejection.
+    pub claimed: bool,
 }
 
 impl BountyClaim {
@@ -225,6 +243,18 @@ pub enum AuctionError {
     InvalidFill,
     #[msg("Auction arithmetic overflow")]
     ArithmeticOverflow,
+    #[msg("Fee or reserve policy is invalid")]
+    InvalidFeePolicy,
+    #[msg("Bounty booking would violate the configured reserve floor")]
+    ReserveFloorViolation,
+    #[msg("Bounty booking exceeds the configured epoch budget")]
+    BountyBudgetExceeded,
+    #[msg("The fee ledger epoch cannot move backwards")]
+    EpochRegression,
+    #[msg("Bounty claim is invalid or does not belong to the executor")]
+    InvalidBountyClaim,
+    #[msg("Bounty claim has already been consumed")]
+    BountyClaimReplay,
 }
 
 #[cfg(test)]

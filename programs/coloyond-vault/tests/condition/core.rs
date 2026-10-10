@@ -170,6 +170,46 @@ fn price_cross_requires_two_fresh_distinct_pyth_observations_and_both_gaps() {
 }
 
 #[test]
+fn activation_rejects_a_newer_verified_price_that_reverses_the_crossing() {
+    let mut rule = above_rule();
+    observe_condition(
+        &mut rule,
+        observation(90, 990, 1_000, 30),
+        now(1_000, 30),
+        bounds(),
+    )
+    .unwrap();
+    assert_eq!(
+        observe_condition(
+            &mut rule,
+            observation(101, 1_005, 1_005, 35),
+            now(1_005, 35),
+            bounds(),
+        ),
+        Ok(ObservationStatus::Ready)
+    );
+
+    assert_eq!(
+        validate_current_condition(
+            &rule,
+            observation(99, 1_010, 1_010, 40),
+            now(1_010, 40),
+            bounds(),
+        ),
+        Err(ConditionError::NotTriggered)
+    );
+    assert_eq!(
+        validate_current_condition(
+            &rule,
+            observation(102, 1_010, 1_010, 40),
+            now(1_010, 40),
+            bounds(),
+        ),
+        Ok(())
+    );
+}
+
+#[test]
 fn replayed_or_stale_pyth_publish_times_are_rejected() {
     let mut rule = above_rule();
     observe_condition(

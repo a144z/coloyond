@@ -72,7 +72,7 @@ Delete the generated wallet only when you explicitly want a different test walle
 ## Fixture state
 
 - Two-asset vault: 20 test wSOL and 500 test USDC, target weights 50/50, revision 1, active state.
-- Policy: explicit Localnet-only oracle age/confidence/depeg limits, 5% drift trigger, $500 trade ceiling, 100-slot auction duration (or a short override for expiry), 101% to 100% Dutch curve, 20 bps fee with a 50 bps maximum, and local bounty/loss caps.
+- Policy: explicit Localnet-only oracle age/confidence/depeg limits, 5% drift trigger, $500 trade ceiling, 100-slot auction duration (or a short override for expiry), 101% to 100% Dutch curve, 20 bps fee with a 50 bps maximum, half of each fee assigned to the reserve, a 1 USDC reserve floor, a 1 USDC per-epoch bounty budget, and local bounty/loss caps. All reserve and bounty terms are fixture data only, not production economics or defaults.
 - Taker: 250 test USDC and an initialized zero-balance wSOL token account.
 - Oracle: exact fixed receiver-owned `PriceUpdateV2` layout and feed IDs; SOL/USD=$100, USDC/USD=$1, publication time generated at fixture creation.
 - The starter transaction sells 1 test wSOL; two fill transactions each sell 0.5 test wSOL for 51 test USDC with a 0.01 USDC bounty, so the workbench can demonstrate partial-to-complete execution.

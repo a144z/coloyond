@@ -15,6 +15,9 @@ pub struct DepositQuote {
 pub struct RedemptionQuote {
     pub amounts_out: [u64; ASSET_COUNT],
     pub remaining_supply: u64,
+    /// Reserve after pro-rata withdrawal of the free holder-owned reserve.
+    /// Outstanding bounty liability is senior and is kept in the reserve.
+    pub reserve_after: [u64; ASSET_COUNT],
 }
 
 fn checked_backing(vault: &Vault) -> Result<[u64; ASSET_COUNT]> {
@@ -23,6 +26,14 @@ fn checked_backing(vault: &Vault) -> Result<[u64; ASSET_COUNT]> {
         *out = vault.accounted_amounts[i]
             .checked_sub(vault.bounty_liabilities[i])
             .ok_or(VaultError::LiabilityExceedsAssets)?;
+        require!(
+            vault.bootstrap_reserve[i] <= vault.accounted_amounts[i],
+            VaultError::ReserveExceedsAssets
+        );
+        require!(
+            vault.bootstrap_reserve[i] >= vault.bounty_liabilities[i],
+            VaultError::LiabilityExceedsAssets
+        );
     }
     Ok(backing)
 }
@@ -124,9 +135,21 @@ pub fn quote_redemption(vault: &Vault, shares_to_burn: u64) -> Result<Redemption
         mul_div_floor(backing[0], shares_to_burn, supply)?,
         mul_div_floor(backing[1], shares_to_burn, supply)?,
     ];
+    let remaining_supply = supply - shares_to_burn;
+    let mut reserve_after = [0; ASSET_COUNT];
+    for (i, reserve) in reserve_after.iter_mut().enumerate() {
+        let free_reserve = vault.bootstrap_reserve[i]
+            .checked_sub(vault.bounty_liabilities[i])
+            .ok_or(VaultError::LiabilityExceedsAssets)?;
+        let remaining_free_reserve = mul_div_floor(free_reserve, remaining_supply, supply)?;
+        *reserve = vault.bounty_liabilities[i]
+            .checked_add(remaining_free_reserve)
+            .ok_or(VaultError::ArithmeticOverflow)?;
+    }
     Ok(RedemptionQuote {
         amounts_out,
-        remaining_supply: supply - shares_to_burn,
+        remaining_supply,
+        reserve_after,
     })
 }
 
@@ -143,6 +166,7 @@ pub fn apply_redemption(
         vault.accounted_amounts[i] = vault.accounted_amounts[i]
             .checked_sub(quote.amounts_out[i])
             .ok_or(VaultError::BalanceDeficit)?;
+        vault.bootstrap_reserve[i] = quote.reserve_after[i];
     }
     vault.total_shares = quote.remaining_supply;
     vault.sequence = vault

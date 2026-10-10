@@ -18,10 +18,13 @@ import sdkPkg from "@symmetry-hq/sdk";
 const { SymmetryCore } = sdkPkg;
 
 const NETWORK = process.env.NET ?? "devnet";
-const RPC_NODES = (process.env.RPC_NODES ?? "https://api.devnet.solana.com,https://api.mainnet-beta.solana.com")
+if (NETWORK !== "devnet") throw new Error("This rebalance loop is Devnet-only; refusing any other network.");
+const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+const RPC_NODES = (process.env.RPC_NODES ?? "https://api.devnet.solana.com")
   .split(",")
   .map((url) => url.trim())
   .filter((url) => url !== "");
+if (RPC_NODES.length === 0) throw new Error("At least one Devnet RPC endpoint is required.");
 const VAULT = process.env.VAULT;
 const FORCE = process.env.FORCE === "1";
 const MAX_ROUNDS = Number(process.env.MAX_ROUNDS ?? 1);
@@ -96,7 +99,11 @@ async function fire(sdk, mint, keeper) {
 
 async function once(round) {
   const node = round % RPC_NODES.length;
-  const { sdk, node: url } = sdkFor(node);
+  const { connection, sdk, node: url } = sdkFor(node);
+  const genesis = await connection.getGenesisHash();
+  if (genesis !== DEVNET_GENESIS) {
+    throw new Error(`Refusing non-Devnet RPC ${url}: genesis ${genesis} does not match Devnet.`);
+  }
   const vaultState = await measure(sdk);
   const keeper = KEYS.length > 0 ? KEYS[round % KEYS.length] : null;
   const past = vaultState.driftPp !== null && vaultState.driftPp >= vaultState.triggerPp;
@@ -124,6 +131,11 @@ async function main() {
     try {
       await once(round);
     } catch (err) {
+      if (err instanceof Error && err.message.startsWith("Refusing non-Devnet RPC")) {
+        console.error(`Safety stop: ${err.message}`);
+        process.exitCode = 1;
+        return;
+      }
       console.log(`Network congestion or rate limit hit (${err.message}). Rolling to next RPC node...`);
     }
     round++;

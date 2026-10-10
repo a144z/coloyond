@@ -12,6 +12,7 @@
   min-width: 0;
   font-family: Arial, Helvetica, sans-serif;
   font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
 .root * { box-sizing: border-box; }
@@ -26,7 +27,7 @@
 }
 
 .kicker, .index, .sourceBadge, .sourceFacts dt, .panelHeading > span,
-.keyFacts dt, .reserveGroup h4 {
+.keyFacts dt, .reserveGroup h4, .oracleFacts dt, .transitionFacts dt {
   font: 10px/1.5 monospace;
   letter-spacing: .7px;
   text-transform: uppercase;
@@ -41,7 +42,7 @@
 }
 .lede { max-width: 570px; margin: 12px 0 0; color: var(--status-muted); font-size: 12px; line-height: 1.55; }
 .sourceBadge { flex: none; padding: 8px 11px; border: 1px solid #8f8b7e; white-space: nowrap; }
-.rpcBadge { color: #285842; border-color: #7e9d87; background: #e5eee6; }
+.rpcBadge { color: var(--status-ink); background: #e8e3d7; }
 .fixtureBadge { color: #5c4710; border-color: #b6a976; background: #fff3c7; }
 .fixtureNotice { margin: 0; padding: 13px 16px; border: 1px solid #a78212; background: #fff3c7; color: #5c4710; font: 10px/1.55 monospace; letter-spacing: .35px; }
 
@@ -55,14 +56,21 @@
 .sourceFacts > div { min-width: 0; display: grid; align-content: start; gap: 8px; padding: 14px 16px; border-right: 1px solid var(--status-line); }
 .sourceFacts > div:first-child { padding-left: 0; }
 .sourceFacts > div:nth-child(4) { border-right: 0; }
-.sourceFacts dt, .keyFacts dt { color: var(--status-muted); }
+.sourceFacts dt, .keyFacts dt, .oracleFacts dt, .transitionFacts dt { color: var(--status-muted); }
 .sourceFacts dd, .keyFacts dd { min-width: 0; margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.sourceFacts dd time { display: block; }
+.age { display: block; margin-top: 4px; color: var(--status-muted); font: 10px/1.4 monospace; }
 .genesisFact { grid-column: 1 / -1; border-top: 1px solid var(--status-line); border-right: 0 !important; padding-left: 0 !important; }
 .genesisFact dd { font: 10px/1.5 monospace; }
+.identityFacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: -22px 0 0; border-bottom: 1px solid var(--status-line); }
+.identityFacts > div { min-width: 0; display: grid; align-content: start; gap: 7px; padding: 12px 16px; border-right: 1px solid var(--status-line); }
+.identityFacts > div:nth-child(3n) { border-right: 0; }
+.identityFacts dt { color: var(--status-muted); font: 10px/1.5 monospace; letter-spacing: .7px; text-transform: uppercase; }
+.identityFacts dd { min-width: 0; margin: 0; color: var(--status-ink); font: 10px/1.5 monospace; overflow-wrap: anywhere; }
 
 .compositionGrid, .factsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.composition, .factPanel, .settlementPanel { min-width: 0; padding: 22px 24px; background: var(--status-paper); border: 1px solid #c7c1b1; }
-.composition { border-radius: 14px; }
+.composition, .factPanel, .oraclePanel, .settlementPanel, .transitionPanel { min-width: 0; padding: 22px 24px; background: var(--status-paper); border: 1px solid #c7c1b1; }
+.composition, .oraclePanel, .settlementPanel, .transitionPanel { border-radius: 14px; }
 .panelHeading { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
 .index { margin: 0; color: var(--status-blue); }
 .panelHeading h3, .factPanel h3 { margin: 7px 0 0; font-size: clamp(22px, 2.7vw, 31px); line-height: 1.05; letter-spacing: -.055em; }
@@ -78,6 +86,7 @@
 .targetFill { background: var(--status-coral); }
 .actualFill { background: var(--status-blue); }
 .mint { display: block; color: var(--status-muted); font: 9px/1.5 monospace; overflow-wrap: anywhere; }
+.invalidWeight { margin: 8px 0 7px; color: var(--status-muted); font-size: 10px; line-height: 1.45; }
 .empty { margin: 0; padding: 16px 0; color: var(--status-muted); font-size: 11px; line-height: 1.6; }
 
 .factPanel { display: flex; flex-direction: column; min-height: 250px; }
@@ -86,9 +95,21 @@
 .keyFacts > div { display: grid; grid-template-columns: minmax(115px, .8fr) minmax(0, 1.2fr); gap: 15px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--status-rule); }
 .keyFacts dd { text-align: right; font-size: 12px; overflow-wrap: anywhere; }
 .keyFacts dd small { display: block; margin-top: 3px; color: var(--status-muted); font: 9px/1.4 monospace; }
-.note { max-width: 560px; margin: auto 0 0; padding-top: 17px; color: var(--status-muted); font-size: 10px; line-height: 1.6; }
+.note { max-width: 650px; margin: auto 0 0; padding-top: 17px; color: var(--status-muted); font-size: 10px; line-height: 1.6; }
 
-.settlementPanel { border-radius: 14px; }
+.oraclePanel > .panelHeading { margin-bottom: 16px; }
+.oracleList { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--status-rule); }
+.oracleRow { min-width: 0; padding: 13px 0; border-bottom: 1px solid var(--status-rule); }
+.oracleHeading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.oracleHeading code { min-width: 0; color: var(--status-muted); font: 10px/1.5 monospace; overflow-wrap: anywhere; }
+.oracleHeading strong { flex: none; font: 10px/1.5 monospace; letter-spacing: .5px; text-transform: uppercase; }
+.oracleNeutral { color: var(--status-ink); }
+.oracleAttention { color: #9a3025; }
+.oracleFacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 0; }
+.oracleFacts > div { min-width: 0; }
+.oracleFacts dt { font-size: 9px; }
+.oracleFacts dd { margin: 4px 0 0; font-size: 11px; overflow-wrap: anywhere; }
+
 .settlementPanel > .keyFacts { margin: 18px 0 0; }
 .reserveGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--status-rule); }
 .reserveGroup { min-width: 0; }
@@ -98,14 +119,23 @@
 .rawAmounts code { min-width: 0; color: var(--status-muted); font: 9px/1.45 monospace; overflow-wrap: anywhere; }
 .rawAmounts strong { font: 11px/1.45 monospace; text-align: right; overflow-wrap: anywhere; }
 
+.transitionFacts { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, .7fr) minmax(0, 2fr); gap: 16px; margin: 16px 0 0; padding-top: 15px; border-top: 1px solid var(--status-rule); }
+.transitionFacts > div { min-width: 0; }
+.transitionFacts dd { margin: 6px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.signatureFact dd code { color: var(--status-muted); font: 10px/1.5 monospace; overflow-wrap: anywhere; }
+
 @media (max-width: 760px) {
   .sourceFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sourceFacts > div:nth-child(2) { border-right: 0; }
   .sourceFacts > div:nth-child(3), .sourceFacts > div:nth-child(4) { border-top: 1px solid var(--status-line); }
   .sourceFacts > div:nth-child(3) { padding-left: 0; }
   .sourceFacts > div:nth-child(4) { border-right: 0; }
+  .identityFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .identityFacts > div:nth-child(3n) { border-right: 1px solid var(--status-line); }
+  .identityFacts > div:nth-child(2n) { border-right: 0; }
   .compositionGrid, .factsGrid { grid-template-columns: 1fr; }
   .factPanel { min-height: 0; }
+  .oracleFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 520px) {
@@ -113,12 +143,19 @@
   .header { flex-direction: column; align-items: flex-start; gap: 15px; }
   .sourceBadge { white-space: normal; }
   .sourceFacts > div { padding: 12px; }
-  .composition, .factPanel, .settlementPanel { padding: 18px 16px; }
+  .sourceFacts > div:first-child, .sourceFacts > div:nth-child(3), .genesisFact { padding-left: 12px !important; }
+  .identityFacts { grid-template-columns: 1fr; margin-top: -17px; }
+  .identityFacts > div, .identityFacts > div:nth-child(2n), .identityFacts > div:nth-child(3n) { padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--status-line); }
+  .composition, .factPanel, .oraclePanel, .settlementPanel, .transitionPanel { padding: 18px 16px; }
   .panelCopy { min-height: 0; }
   .panelHeading { gap: 8px; }
   .panelHeading > span { max-width: 110px; font-size: 9px; }
   .keyFacts > div { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 10px; }
   .reserveGrid { grid-template-columns: 1fr; gap: 18px; }
+  .oracleHeading { gap: 10px; }
+  .oracleHeading strong { max-width: 92px; text-align: right; }
+  .transitionFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signatureFact { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

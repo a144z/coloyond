@@ -38,6 +38,16 @@ class SceneRendererTest {
     }
 
     @Test
+    fun coloyondStrategyAndExpressionAreSupportedByRendererBoundary() {
+        val strategy = coloyondStrategy()
+        val expression = expression(strategy, rendererVersion = 1)
+
+        assertTrue(strategy.id.startsWith("cb3:"))
+        assertTrue(expression.id.startsWith("cbe2:"))
+        assertEquals(SceneRenderer.Support.Supported, SceneRenderer.support(expression, strategy))
+    }
+
+    @Test
     fun expressionCannotRenderAgainstAnotherStrategy() {
         val original = draftStrategy()
         val other = managedStrategy()
@@ -68,13 +78,20 @@ class SceneRendererTest {
         return StrategyRecords.validateStrategy(row.getValue("input"))
     }
 
+    private fun coloyondStrategy(): ValidatedRecord = StrategyRecords.validateStrategy(
+        StrategyRecords.parse(
+            """{"schema":"coloyond/ColoyondManagedStrategy/v1","cluster":"mainnet-beta","genesisHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","programId":"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate","vaultAddress":"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW","shareMint":"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv","configurationRevision":"18446744073709551615","tokens":[{"mint":"So11111111111111111111111111111111111111112","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":9,"targetBps":6000},{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":6,"targetBps":4000}],"policyDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceManifestRevision":"1"}""",
+        ),
+    )
+
     private fun expression(strategy: ValidatedRecord, rendererVersion: Long): ValidatedRecord {
+        val coloyond = strategy.id.startsWith("cb3:")
         val sceneValue = vectors().fields.getValue("sceneVectors").asArray("sceneVectors").single().asObject("scene vector").getValue("scene")
         val sceneFields = sceneValue.asObject("scene").toMutableMap()
         sceneFields["rendererVersion"] = JsonValue.Num(rendererVersion.toString())
         val scene = StrategyRecords.validateScene(JsonValue.Obj(sceneFields))
         val payload = JsonValue.Obj(mapOf(
-            "schemaVersion" to JsonValue.Num("1"),
+            "schemaVersion" to JsonValue.Num(if (coloyond) "2" else "1"),
             "strategyId" to JsonValue.Str(strategy.id),
             "scene" to scene.value,
             "sceneHash" to JsonValue.Str(scene.id),
@@ -85,7 +102,7 @@ class SceneRendererTest {
             "generationOrigin" to JsonValue.Str("local-preview"),
             "parentExpressionId" to JsonValue.Null,
         ))
-        return StrategyRecords.validateExpression(payload)
+        return StrategyRecords.validateExpression(payload, coloyond = coloyond)
     }
 
     private fun vectors(): JsonValue.Obj {
