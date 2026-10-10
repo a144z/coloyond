@@ -3,7 +3,14 @@
 import base64
 import unittest
 
-from probe import RECEIVER, validate_account_batch_result, validate_block_time, validate_rpc_response
+from probe import (
+    DEVNET_GENESIS_HASH,
+    RECEIVER,
+    validate_account_batch_result,
+    validate_block_time,
+    validate_devnet_genesis,
+    validate_rpc_response,
+)
 
 
 EXPECTED = (("sol", "Sol111"), ("btc", "Btc111"))
@@ -23,6 +30,19 @@ def result(values, *, slot=42):
 
 
 class OracleProbeResponseTests(unittest.TestCase):
+    def test_accepts_pinned_devnet_genesis(self):
+        self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
+
+    def test_rejects_non_devnet_or_malformed_genesis(self):
+        for value in (
+            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+            None,
+            1,
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "cluster mismatch"):
+                validate_devnet_genesis(value)
+
     def test_block_time_requires_signed_64_bit_json_integer(self):
         for value in (0, -1, (1 << 63) - 1, -(1 << 63)):
             with self.subTest(value=value):

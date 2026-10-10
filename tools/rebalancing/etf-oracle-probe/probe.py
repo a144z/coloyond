@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 RPC = "https://api.devnet.solana.com"
+DEVNET_GENESIS_HASH = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
 RECEIVER = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
 FEEDS = {
     "sol": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
@@ -107,6 +108,15 @@ def validate_block_time(value):
     return value
 
 
+def validate_devnet_genesis(value):
+    """Fail closed unless the RPC reports the currently pinned Devnet genesis."""
+    if not isinstance(value, str) or value != DEVNET_GENESIS_HASH:
+        raise RuntimeError(
+            f"cluster mismatch: expected Devnet genesis {DEVNET_GENESIS_HASH}, got {value!r}"
+        )
+    return value
+
+
 def rpc(method, params=None):
     request_id = 1
     request = urllib.request.Request(
@@ -120,7 +130,7 @@ def rpc(method, params=None):
 
 
 def main():
-    genesis = rpc("getGenesisHash")
+    genesis = validate_devnet_genesis(rpc("getGenesisHash"))
     accounts = rpc("getMultipleAccounts", [list(FEEDS.values()), {"encoding": "base64", "commitment": "confirmed"}])
     slot, decoded_accounts = validate_account_batch_result(accounts, FEEDS.items())
     cluster_time = validate_block_time(rpc("getBlockTime", [slot]))
