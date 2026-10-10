@@ -4,4 +4,6 @@ Run `python3 tools/rebalancing/etf-scheduler-probe/probe.py` to read the current
 
 Run local decoder tests with `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/rebalancing/etf-scheduler-probe -p 'test_*.py' -v`.
 
+`payload_size.py` provides a separate, offline Borsh size estimate for hypothetical `CompiledV0` tasks from the maintained TukTuk field definitions. It validates `u8` account-index bounds and reports serialized `TaskV0` account-data bytes, including a one-shot trigger, description, instruction data and optional signer-seed vectors. Its 40-byte description and `Now`/`Timestamp(i64)` trigger rules mirror current source. The estimate does not choose ETF accounts, predict full Solana transaction size/compute/rent, prove scheduler compatibility, or model recurring requeue. Four boundary tests cover size prefixes and rejection cases.
+
 Queue registration and automated invocation require a separately reviewed wallet-signed Devnet flow. Do not interpret this program-account probe as proof that a queue is funded, a task is valid, or any third party will execute it.

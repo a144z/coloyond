@@ -14,20 +14,28 @@ DOMAIN = b"coloyond:etf:config:v1"
 ORACLE_TAGS = {"push_feed": 0, "receiver_full": 1}
 
 
+def _uint(value, bits, label):
+    if type(value) is not int:
+        raise ValueError(f"{label}: expected an integer, not a boolean or non-integer")
+    if not 0 <= value < (1 << bits):
+        raise ValueError(f"{label}: outside u{bits} range")
+    return value
+
+
 def _u8(value):
-    return struct.pack("<B", value)
+    return struct.pack("<B", _uint(value, 8, "u8"))
 
 
 def _u16(value):
-    return struct.pack("<H", value)
+    return struct.pack("<H", _uint(value, 16, "u16"))
 
 
 def _u32(value):
-    return struct.pack("<I", value)
+    return struct.pack("<I", _uint(value, 32, "u32"))
 
 
 def _u64(value):
-    return struct.pack("<Q", value)
+    return struct.pack("<Q", _uint(value, 64, "u64"))
 
 
 def _fixed_hex(value, length, label):
@@ -60,7 +68,7 @@ def encode_asset(asset):
 
 
 def encode_config(inputs):
-    if inputs["protocolVersion"] != 1:
+    if type(inputs["protocolVersion"]) is not int or inputs["protocolVersion"] != 1:
         raise ValueError("protocolVersion: unsupported version")
     assets = inputs["assets"]
     if not isinstance(assets, list) or not 2 <= len(assets) <= 3:
@@ -68,8 +76,9 @@ def encode_config(inputs):
     mint_keys = [_fixed_hex(asset.get("mintBytesHex"), 32, "mint") for asset in assets]
     if len(set(mint_keys)) != len(assets):
         raise ValueError("assets: duplicate mint")
-    if any(asset["targetWeightBps"] < 100 for asset in assets):
-        raise ValueError("assets: each target weight must be at least 100 bps")
+    for asset in assets:
+        _u8(asset["decimals"])
+        _u16(asset["targetWeightBps"])
     if sum(asset["targetWeightBps"] for asset in assets) != 10_000:
         raise ValueError("assets: target weights must sum to 10000 bps")
 

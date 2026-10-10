@@ -30,7 +30,7 @@ Each `EtfAssetConfigV1` is encoded in the following order:
 | `feed_id` | `[u8; 32]` | Raw Pyth feed ID bytes, not hexadecimal text. |
 | `target_weight_bps` | `u16` | Little-endian basis points. |
 
-Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. Decoders must reject unsupported versions, invalid asset count/weight constraints, malformed enum tags, truncation, and trailing bytes. Authority keys are pool-state governance fields and are intentionally outside the economic config hash.
+Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. The identity baseline enforces v1, two or three assets, unique mints, and a 10,000-bps weight sum. It deliberately imposes no per-asset minimum weight; the separate S5B math candidate's 100-bps floor remains subject to review. Decoders must reject unsupported versions, invalid asset count/weight constraints, malformed enum tags, truncation, and trailing bytes. The Rust decoder requires each caller to supply an explicit input-size ceiling; S5A has not selected the production account/config size limit. Authority keys are pool-state governance fields and are intentionally outside the economic config hash.
 
 ## Content identity
 

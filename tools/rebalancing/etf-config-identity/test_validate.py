@@ -2,7 +2,7 @@ import copy
 import json
 import unittest
 
-from validate import FIXTURE, validate_document
+from validate import FIXTURE, encode_config, validate_document
 
 
 class EtfConfigIdentityTests(unittest.TestCase):
@@ -54,6 +54,22 @@ class EtfConfigIdentityTests(unittest.TestCase):
         document["inputs"]["assets"][0]["mintBytesHex"] = "00"
         with self.assertRaisesRegex(ValueError, "mint: expected exactly 32 bytes"):
             validate_document(document)
+
+    def test_boolean_is_not_accepted_as_an_integer_and_no_weight_floor_is_frozen(self):
+        document = copy.deepcopy(self.document)
+        document["inputs"]["protocolVersion"] = True
+        with self.assertRaisesRegex(ValueError, "unsupported version"):
+            encode_config(document["inputs"])
+
+        document = copy.deepcopy(self.document)
+        document["inputs"]["assets"][0]["targetWeightBps"] = True
+        with self.assertRaisesRegex(ValueError, "expected an integer"):
+            encode_config(document["inputs"])
+
+        document = copy.deepcopy(self.document)
+        document["inputs"]["assets"][0]["targetWeightBps"] = 1
+        document["inputs"]["assets"][1]["targetWeightBps"] = 9_999
+        self.assertEqual(len(encode_config(document["inputs"])), 422)
 
 
 if __name__ == "__main__":

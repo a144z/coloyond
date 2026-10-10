@@ -75,22 +75,23 @@ impl EtfPoolConfigV1 {
                 sum.checked_add(u32::from(asset.target_weight_bps))
             })
             .ok_or(IdentityError::InvalidWeights)?;
-        if weight_sum != 10_000
-            || self
-                .assets
-                .iter()
-                .any(|asset| asset.target_weight_bps < 100)
-        {
+        if weight_sum != 10_000 {
             return Err(IdentityError::InvalidWeights);
         }
         Ok(())
     }
 
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, IdentityError> {
+        self.validate()?;
         borsh::to_vec(self).map_err(|_| IdentityError::Serialization)
     }
 
-    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, IdentityError> {
+    /// `maximum_bytes` must come from the caller's reviewed account/input-size
+    /// limit. S5A has not frozen a production config-size ceiling.
+    pub fn from_canonical_bytes(bytes: &[u8], maximum_bytes: usize) -> Result<Self, IdentityError> {
+        if bytes.len() > maximum_bytes {
+            return Err(IdentityError::Serialization);
+        }
         preflight_vector_lengths(bytes)?;
         let config = Self::try_from_slice(bytes).map_err(|_| IdentityError::Serialization)?;
         config.validate()?;
@@ -98,10 +99,10 @@ impl EtfPoolConfigV1 {
     }
 
     pub fn config_hash(&self) -> Result<[u8; CONFIG_HASH_BYTES], IdentityError> {
-        self.validate()?;
+        let bytes = self.canonical_bytes()?;
         let mut hasher = Sha256::new();
         hasher.update(CONFIG_DOMAIN);
-        hasher.update(self.canonical_bytes()?);
+        hasher.update(bytes);
         Ok(hasher.finalize().into())
     }
 
@@ -142,7 +143,10 @@ fn preflight_vector_lengths(bytes: &[u8]) -> Result<(), IdentityError> {
     advance(bytes, &mut offset, fee_length)?;
     advance(bytes, &mut offset, 32)?;
     let risk_length = read_u32(bytes, &mut offset)? as usize;
-    advance(bytes, &mut offset, risk_length + 8)?;
+    let risk_section_length = risk_length
+        .checked_add(8)
+        .ok_or(IdentityError::Serialization)?;
+    advance(bytes, &mut offset, risk_section_length)?;
     if offset != bytes.len() {
         return Err(IdentityError::Serialization);
     }
@@ -216,7 +220,7 @@ mod tests {
             format!("etf1:{GOLDEN_CONFIG_HASH_HEX}")
         );
         assert_eq!(
-            EtfPoolConfigV1::from_canonical_bytes(&bytes).unwrap(),
+            EtfPoolConfigV1::from_canonical_bytes(&bytes, 1_024).unwrap(),
             config
         );
     }
@@ -227,7 +231,7 @@ mod tests {
         let mut bytes = config.canonical_bytes().unwrap();
         bytes.push(0);
         assert_eq!(
-            EtfPoolConfigV1::from_canonical_bytes(&bytes),
+            EtfPoolConfigV1::from_canonical_bytes(&bytes, 1_024),
             Err(IdentityError::Serialization)
         );
 
@@ -248,7 +252,7 @@ mod tests {
         let mut bytes = sample_config().canonical_bytes().unwrap();
         bytes[70] = 2;
         assert_eq!(
-            EtfPoolConfigV1::from_canonical_bytes(&bytes),
+            EtfPoolConfigV1::from_canonical_bytes(&bytes, 1_024),
             Err(IdentityError::Serialization)
         );
 
@@ -256,9 +260,22 @@ mod tests {
         let fee_length_offset = 5 + 2 * 164 + 2 + 32;
         bytes[fee_length_offset..fee_length_offset + 4].copy_from_slice(&u32::MAX.to_le_bytes());
         assert_eq!(
-            EtfPoolConfigV1::from_canonical_bytes(&bytes),
+            EtfPoolConfigV1::from_canonical_bytes(&bytes, 1_024),
             Err(IdentityError::Serialization)
         );
+    }
+
+    #[test]
+    fn decoder_requires_an_explicit_size_ceiling_and_does_not_freeze_minimum_weight() {
+        let bytes = sample_config().canonical_bytes().unwrap();
+        assert_eq!(
+            EtfPoolConfigV1::from_canonical_bytes(&bytes, bytes.len() - 1),
+            Err(IdentityError::Serialization)
+        );
+        let mut small_weight = sample_config();
+        small_weight.assets[0].target_weight_bps = 1;
+        small_weight.assets[1].target_weight_bps = 9_999;
+        assert!(small_weight.canonical_bytes().is_ok());
     }
 
     #[test]
