@@ -126,6 +126,38 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
             )["profitable"]
         )
 
+    def test_break_even_is_monotonic_in_fee_haircut_and_transaction_cost_both_directions(self):
+        depth, amount = Decimal("100000"), Decimal("100")
+
+        def assert_minimal_threshold(threshold, fee, haircut, cost, direction):
+            self.assertTrue(
+                arbitrage_scenario(
+                    depth, amount, fee, threshold, haircut, cost, direction
+                )["profitable"]
+            )
+            if threshold:
+                self.assertFalse(
+                    arbitrage_scenario(
+                        depth, amount, fee, threshold - 1, haircut, cost, direction
+                    )["profitable"]
+                )
+
+        for direction in ("output_appreciates", "input_depreciates"):
+            series = (
+                ((fee, 25, Decimal("0.10")) for fee in (5, 30, 100, 500)),
+                ((30, haircut, Decimal("0.10")) for haircut in (0, 25, 100)),
+                ((30, 25, cost) for cost in (Decimal("0"), Decimal("0.10"), Decimal("1.00"))),
+            )
+            for scenarios in series:
+                thresholds = []
+                for fee, haircut, cost in scenarios:
+                    threshold = break_even_move_bps(
+                        depth, amount, fee, haircut, cost, direction
+                    )
+                    assert_minimal_threshold(threshold, fee, haircut, cost, direction)
+                    thresholds.append(threshold)
+                self.assertEqual(thresholds, sorted(thresholds))
+
     def test_move_below_haircut_has_no_conservative_price_signal(self):
         result = arbitrage_scenario(
             Decimal("100000"), Decimal("100"), 30, 10, 25, Decimal("0")
