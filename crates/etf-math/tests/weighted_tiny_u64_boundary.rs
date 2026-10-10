@@ -31,3 +31,44 @@ fn one_unit_output_dust_fails_closed_without_overpaying() {
         Err(MathError::NoOutput)
     );
 }
+
+#[test]
+fn all_weight_steps_match_exact_tiny_input_boundaries_without_overpaying() {
+    let mut tested = 0;
+    for line in include_str!("weighted_tiny_u64_boundary_vectors.csv")
+        .lines()
+        .skip(1)
+    {
+        let values: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid integer vector"))
+            .collect();
+        let [balance_in, balance_out, weight_in, weight_out, amount_in, exact_floor] =
+            <[u64; 6]>::try_from(values).expect("six vector columns");
+        let quote = quote_exact_in(
+            &[balance_in, balance_out],
+            &[weight_in as u16, weight_out as u16],
+            0,
+            1,
+            amount_in,
+            0,
+        );
+
+        match quote {
+            Ok(quote) => {
+                assert!(quote.amount_out <= exact_floor, "quote overpays: {line}");
+                assert!(
+                    exact_floor - quote.amount_out <= 1,
+                    "shortfall exceeds one base unit: {line}"
+                );
+            }
+            Err(MathError::NoOutput) if exact_floor <= 1 => {}
+            Err(error) => panic!("unexpected quote failure ({error:?}): {line}"),
+        }
+        tested += 1;
+    }
+    assert_eq!(
+        tested, 594,
+        "regenerate the exact-invariant boundary corpus"
+    );
+}
