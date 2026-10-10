@@ -1,6 +1,6 @@
 # ETF AMM v1 contract baseline
 
-**Status:** S5A design baseline, not yet frozen for implementation. The existing S4 sprint/gates remain ahead of S5 code. Freeze this contract only after S5C verifies the Pyth account mode and S5D2 returns fee bounds against the accepted S5B math revision. No deployment or Devnet admission is implied.
+**Status:** S5A design baseline, not yet frozen for implementation. S5A freezes the stable protocol and client interfaces first; independent math, oracle, scheduler, and economics evidence then returns reviewed amendments. S5E must not freeze the implementation contract or start program code until the accepted S5B math, S5C oracle-mode proof, and S5D2 fee bounds are incorporated. S5 work may progress alongside independent S3/S4 implementation, but it does not waive their gates or admit either protocol to funded use. No deployment or Devnet admission is implied.
 
 ## 1. Protocol boundary
 
@@ -31,6 +31,7 @@ The repository boundary is:
 programs/coloyond-etf/       Anchor accounts, instruction validation, custody, shares,
                              oracle adapter, AMM instruction orchestration, events
 crates/etf-math/             pure checked fixed-point value-weight and weighted-mean math
+crates/etf-oracle/           mode-specific Pyth account parsing and validation
 packages/etf-client/         manifest checks, PDA helpers, read/transaction builders,
                              wallet receipt reconciliation
 packages/etf-scheduler/      optional scheduler SDK adapter; no protocol authority
@@ -38,7 +39,7 @@ apps/android/.../protocols/etf/  isolated ETF route and presentation model
 docs/rebalancing/contracts/  versioned contract/read model/deployment manifest
 ```
 
-`crates/etf-math` has no Anchor, RPC, wallet, token or scheduler dependency. The Pyth adapter does not own swap math. The scheduler adapter only builds registration and invocation transactions for public pool instructions. The program's `lib.rs` and generated IDL have one owner (S5E); S5H consumes them and owns final app composition/evidence, not program entry-point generation.
+`crates/etf-math` and `crates/etf-oracle` have no dependency on the ETF Anchor program; math has no oracle/RPC/wallet/token/scheduler dependency, and the oracle adapter does not own swap math. S5A-W registers these two pure crates in the root Cargo workspace and creates their minimal manifests before parallel implementation, then relinquishes those files. S5E alone owns `programs/coloyond-etf`, Anchor workspace registration, its `lib.rs`, and generated IDL. The scheduler adapter only builds registration and invocation transactions for public pool instructions. S5H consumes the generated program interface and owns final app composition/evidence, not program entry-point generation.
 
 ### Canonical pool and strategy identity
 

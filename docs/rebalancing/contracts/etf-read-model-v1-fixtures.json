@@ -1,0 +1,95 @@
+{
+  "schema": "etf-read-model-v1",
+  "fixtureOnly": true,
+  "fixtures": [
+    {
+      "id": "snapshot-available-receiver-full",
+      "kind": "observation",
+      "status": "available",
+      "network": {
+        "cluster": "devnet",
+        "genesisHash": "fixture-genesis-hash",
+        "rpcLabel": "fixture-rpc",
+        "commitment": "confirmed",
+        "contextSlot": "9007199254740993"
+      },
+      "protocolRevision": "etf-v1-fixture",
+      "oracle": {
+        "mode": "receiver_full",
+        "account": "11111111111111111111111111111111",
+        "owner": "11111111111111111111111111111111",
+        "feedId": "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+        "rawPrice": "123456789",
+        "confidence": "1000",
+        "exponent": -6,
+        "publishTime": "1791648000",
+        "ageSeconds": "2",
+        "verification": "full"
+      },
+      "balances": [
+        {
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "rawAmount": "18446744073709551615",
+          "contextSlot": "9007199254740993"
+        }
+      ]
+    },
+    {
+      "id": "oracle-available-push-feed",
+      "kind": "oracle-observation",
+      "status": "available",
+      "mode": "push_feed",
+      "account": "11111111111111111111111111111111",
+      "owner": "11111111111111111111111111111111",
+      "feedId": "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+      "rawPrice": "123456789",
+      "confidence": "2500",
+      "exponent": -6,
+      "publishTime": "1791648000",
+      "ageSeconds": "3",
+      "accountStatus": "fixture-authenticated-by-mode-specific-checks"
+    },
+    {
+      "id": "oracle-stale",
+      "kind": "oracle-observation",
+      "status": "stale",
+      "reason": "publish_time_too_old",
+      "account": "11111111111111111111111111111111",
+      "feedId": "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+      "ageSeconds": "61"
+    },
+    {
+      "id": "snapshot-unavailable",
+      "kind": "observation",
+      "status": "unavailable",
+      "reason": "rpc_timeout",
+      "value": null
+    },
+    {
+      "id": "receipt-confirmed-with-token-deltas",
+      "kind": "wallet-action",
+      "status": "confirmed",
+      "signature": "fixture-signature",
+      "messageHash": "fixture-message-hash",
+      "genesisHash": "fixture-genesis-hash",
+      "confirmationSlot": "9007199254740994",
+      "tokenDeltas": [
+        {
+          "mint": "So11111111111111111111111111111111111111112",
+          "rawDelta": "-500000000"
+        }
+      ],
+      "shareDelta": "250000"
+    },
+    {
+      "id": "receipt-unknown-must-not-resend",
+      "kind": "wallet-action",
+      "status": "unknown",
+      "signature": "fixture-signature",
+      "messageHash": "fixture-message-hash",
+      "reason": "confirmation_unavailable",
+      "automaticResendAllowed": false
+    }
+  ]
+}
