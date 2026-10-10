@@ -34,6 +34,8 @@ No vault in the V1 scope has keeper rebalancing to observe, so the "protocol kee
 
 ### Decision (10 October 2026)
 
+Option 2, buying through Symmetry's own deposit flow, was rejected. A deposit takes several transactions and waits for keeper auctions, and the in-scope vaults have no active keepers to run them. It would also need a new recovery design and a change to the spec's no-primary-deposit rule. The funded in-scope vaults hold about $100 each, so the change would not buy a usable product.
+
 Option 1: keep the V1 spec. Financial actions stay disabled. The app shows Symmetry vaults as labeled read-only facts, including whether automation is on, and the full creative, share and remix flow ships. The Kotlin decoder and device probes continue.
 
 ## Still to do
