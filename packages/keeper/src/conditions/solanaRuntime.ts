@@ -8,11 +8,9 @@ import { ConditionScheduler, UncertainConditionSubmissionError } from "./service
 import type { ConditionConfirmation, ConditionRuntime, ConditionSchedulerObserver, ConditionSimulation } from "./service.js";
 import { decodeConditionState } from "./state.js";
 import type { ConditionAction, ConditionSnapshot } from "./scheduler.js";
+import { assertClusterGenesisConfiguration, assertClusterRpcUrl, assertRpcClusterGenesis } from "../networkIdentity.js";
 
 const PYTH_RECEIVER_PROGRAM = new PublicKey("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
-const MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-
 export type SolanaConditionOptions = KeeperConfig & { rpcUrl: string; signer?: Keypair };
 type Prepared = { transaction: Transaction; lastValidBlockHeight: number };
 
@@ -27,9 +25,8 @@ export class SolanaConditionRuntime implements ConditionRuntime {
 
   constructor(private readonly options: SolanaConditionOptions) {
     if (options.cluster !== "localnet" && options.cluster !== "devnet") throw new Error("Condition scheduler accepts Localnet or Devnet only");
-    if (!options.expectedGenesisHash || options.expectedGenesisHash === MAINNET_GENESIS) throw new Error("An explicit non-Mainnet genesis hash is required");
-    if (options.cluster === "devnet" && options.expectedGenesisHash !== DEVNET_GENESIS) throw new Error("Devnet must use the pinned Solana Devnet genesis hash");
-    if (options.cluster === "localnet" && options.expectedGenesisHash === DEVNET_GENESIS) throw new Error("A Devnet genesis hash cannot be labeled Localnet");
+    assertClusterGenesisConfiguration(options.cluster, options.expectedGenesisHash);
+    assertClusterRpcUrl(options.cluster, options.rpcUrl);
     if (!options.signer && !options.callerPublicKey) throw new Error("Dry-run requires an explicit caller public key");
     if (!(options.dryRun ?? true) && !options.signer) throw new Error("Submission requires a runtime caller keypair");
     this.connection = new Connection(options.rpcUrl, { commitment: "confirmed", confirmTransactionInitialTimeout: 30_000 });
@@ -163,7 +160,7 @@ export class SolanaConditionRuntime implements ConditionRuntime {
   private async ensureNetwork(): Promise<void> {
     if (this.genesisVerified) return;
     const actual = await this.connection.getGenesisHash();
-    if (actual === MAINNET_GENESIS || actual !== this.options.expectedGenesisHash) throw new Error("RPC genesis hash does not match the explicitly configured Localnet/Devnet cluster");
+    assertRpcClusterGenesis(this.options.cluster, this.options.expectedGenesisHash, actual);
     this.genesisVerified = true;
   }
 }

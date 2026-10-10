@@ -3,6 +3,7 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction, Transaction
 import { decodeAuctionPolicy, decodeGovernance, decodeIntent, decodeVault } from "./codec.js";
 import type { ChainSnapshot, KeeperAction, KeeperConfig } from "./types.js";
 import type { ConfirmationResult, KeeperRuntime, SimulationResult } from "./keeper.js";
+import { assertClusterGenesisConfiguration, assertClusterRpcUrl, assertRpcClusterGenesis } from "./networkIdentity.js";
 
 export const PROGRAM_ID = new PublicKey("FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6");
 export const SOL_USD_FEED = new PublicKey("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
@@ -10,8 +11,6 @@ export const USDC_USD_FEED = new PublicKey("Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4Sg
 export const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const PYTH_RECEIVER_PROGRAM = new PublicKey("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 const ASSOCIATED_TOKEN_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-const MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const DISCRIMINATOR = {
   start: Uint8Array.of(61, 251, 146, 164, 48, 29, 208, 170),
   fill: Uint8Array.of(51, 225, 89, 197, 65, 5, 178, 250),
@@ -33,10 +32,8 @@ export class SolanaKeeperRuntime implements KeeperRuntime {
 
   constructor(private readonly options: SolanaKeeperOptions) {
     if (options.cluster !== "localnet" && options.cluster !== "devnet") throw new Error("Keeper runtime only accepts Localnet or Devnet");
-    if (options.expectedGenesisHash === MAINNET_GENESIS) throw new Error("Mainnet genesis is forbidden");
-    if (options.cluster === "localnet" && options.expectedGenesisHash === DEVNET_GENESIS) throw new Error("A Devnet genesis hash cannot be labeled Localnet");
-    if (options.cluster === "devnet" && options.expectedGenesisHash !== DEVNET_GENESIS) throw new Error("Devnet must use the pinned Solana Devnet genesis hash");
-    if (!options.expectedGenesisHash || options.expectedGenesisHash === MAINNET_GENESIS) throw new Error("Expected non-Mainnet genesis hash is required");
+    assertClusterGenesisConfiguration(options.cluster, options.expectedGenesisHash);
+    assertClusterRpcUrl(options.cluster, options.rpcUrl);
     this.connection = new Connection(options.rpcUrl, { commitment: "confirmed", confirmTransactionInitialTimeout: 30_000 });
     if (!options.signer && !options.callerPublicKey) throw new Error("Dry-run requires COLOYOND_KEEPER_PUBLIC_KEY; signing material is not loaded");
     if (!(options.dryRun ?? true) && !options.signer) throw new Error("Submitting requires a runtime signer");
@@ -55,7 +52,7 @@ export class SolanaKeeperRuntime implements KeeperRuntime {
 
   async verifyNetwork(): Promise<void> {
     const actual = await this.connection.getGenesisHash();
-    if (actual === MAINNET_GENESIS || actual !== this.options.expectedGenesisHash) throw new Error("RPC genesis hash does not match the explicitly configured Localnet/Devnet cluster");
+    assertRpcClusterGenesis(this.options.cluster, this.options.expectedGenesisHash, actual);
     this.genesisVerified = true;
   }
 
