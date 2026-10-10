@@ -227,7 +227,7 @@ fun CardCreationScreen(
                     sceneContext,
                     userCredentials,
                 )
-                if (!isCurrent(ticket, requestToken.intValue, revision, latestSelectionId, scene)) return@launch
+                if (!CardCreationRecords.isCurrentGeneration(ticket, requestToken.intValue, revision, latestSelectionId, scene)) return@launch
                 generatedScene = scene
                 captionEnabled = false
                 captionText = ""
@@ -737,9 +737,6 @@ private fun shortId(value: String): String {
     val digest = value.substringAfter(':')
     return if (digest.length <= 14) value else "$prefix${digest.take(6)}…${digest.takeLast(6)}"
 }
-
-private fun isCurrent(ticket: Int, currentTicket: Int, revision: String, currentRevision: String?, result: GeneratedScene): Boolean =
-    ticket == currentTicket && currentRevision == revision && result.configurationRevision == revision
 
 private fun com.coloyond.strategy.JsonValue.asObjectOrNull(): Map<String, com.coloyond.strategy.JsonValue>? =
     runCatching { asObject("strategy") }.getOrNull()

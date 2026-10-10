@@ -1,5 +1,7 @@
 package com.coloyond.ui.cards.create
 
+import com.coloyond.generation.GeneratedScene
+import com.coloyond.generation.GenerationOrigin
 import com.coloyond.strategy.JsonValue
 import com.coloyond.strategy.StrategyRecords
 import com.coloyond.strategy.asArray
@@ -94,6 +96,8 @@ class CardCreationRecordsTest {
         assertEquals(strategy.id, option.strategy.id)
         assertEquals(2, CardCreationRecords.targetWeights(strategy).size)
         assertTrue(runCatching { PublishedVaultCard("", strategy) }.isFailure)
+        val draft = CardCreationRecords.allocationDraft(listOf(CardTargetWeight("So11111111111111111111111111111111111111112", 10_000)))
+        assertTrue(runCatching { PublishedVaultCard("Draft", draft) }.isFailure)
     }
 
     @Test fun actualCompositionRequiresCompleteProvenanceAndAFullDistribution() {
@@ -105,6 +109,26 @@ class CardCreationRecordsTest {
         assertFalse(CardActualComposition(weights, CardObservationSource.RPC, "Localnet RPC", null, "42").isComplete)
         assertTrue(CardActualComposition(weights, CardObservationSource.FIXTURE, null, "sample", "42").isComplete)
         assertFalse(CardActualComposition(weights.dropLast(1), CardObservationSource.RPC, "RPC", "2026-10-10T12:00:00Z", "42").isComplete)
+        assertFalse(CardActualComposition(weights, CardObservationSource.RPC, "RPC", "2026-10-10T12:00:00Z", "01").isComplete)
+        assertFalse(CardActualComposition(weights, CardObservationSource.RPC, "RPC", "2026-10-10T12:00:00Z", "18446744073709551616").isComplete)
+        assertFalse(CardActualComposition(
+            listOf(weights.first().copy(weightBps = 0), weights.last().copy(weightBps = 10_000)),
+            CardObservationSource.RPC,
+            "RPC",
+            "2026-10-10T12:00:00Z",
+            "42",
+        ).isComplete)
+    }
+
+    @Test fun lateGenerationResultMustMatchRequestAndStrategyRevision() {
+        val scene = sceneFixture()
+        val sceneHash = StrategyRecords.validateScene(scene).id
+        val result = GeneratedScene(scene, sceneHash, 7L, GenerationOrigin.MODEL, "request-1", "revision-1")
+
+        assertTrue(CardCreationRecords.isCurrentGeneration(3, 3, "revision-1", "revision-1", result))
+        assertFalse(CardCreationRecords.isCurrentGeneration(2, 3, "revision-1", "revision-1", result))
+        assertFalse(CardCreationRecords.isCurrentGeneration(3, 3, "revision-1", "revision-2", result))
+        assertFalse(CardCreationRecords.isCurrentGeneration(3, 3, "revision-2", "revision-2", result))
     }
 
     private fun sceneFixture(): JsonValue {

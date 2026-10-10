@@ -1,6 +1,7 @@
 package com.coloyond.ui.cards.create
 
 import com.coloyond.generation.Captions
+import com.coloyond.generation.GeneratedScene
 import com.coloyond.generation.GenerationOrigin
 import com.coloyond.generation.Scene
 import com.coloyond.strategy.JsonValue
@@ -11,6 +12,7 @@ import com.coloyond.strategy.asLong
 import com.coloyond.strategy.asObject
 import com.coloyond.strategy.asString
 import java.math.BigDecimal
+import java.math.BigInteger
 
 data class CardTargetWeight(val mint: String, val weightBps: Int)
 
@@ -25,9 +27,18 @@ data class CardActualComposition(
     val slot: String?,
 ) {
     val isComplete: Boolean
-        get() = weights.isNotEmpty() && weights.all { it.weightBps in 0..10_000 } &&
+        get() = weights.isNotEmpty() && weights.all { it.weightBps in 1..10_000 } &&
             weights.sumOf { it.weightBps } == 10_000 && weights.map { it.mint }.distinct().size == weights.size &&
-            !observedAt.isNullOrBlank() && !slot.isNullOrBlank()
+            !observedAt.isNullOrBlank() && isCanonicalSlot(slot)
+
+    private fun isCanonicalSlot(value: String?): Boolean {
+        if (value == null || !value.matches(Regex("(?:0|[1-9][0-9]*)"))) return false
+        return runCatching { BigInteger(value) <= MAX_U64 }.getOrDefault(false)
+    }
+
+    private companion object {
+        val MAX_U64 = BigInteger("18446744073709551615")
+    }
 }
 
 /** Supplied by the verified published-vault catalog; an identity hash alone is not publication proof. */
@@ -53,6 +64,15 @@ enum class CardCaptionOrigin(val recordValue: String) { MODEL("model"), USER("us
 
 /** Pure card record construction; artwork and captions never enter the strategy identity. */
 object CardCreationRecords {
+    /** Late inference results attach only to the request and strategy revision that started them. */
+    fun isCurrentGeneration(
+        ticket: Int,
+        currentTicket: Int,
+        revision: String,
+        currentRevision: String?,
+        result: GeneratedScene,
+    ): Boolean = ticket == currentTicket && currentRevision == revision && result.configurationRevision == revision
+
     fun percentToBasisPoints(input: String): Int? {
         if (!input.matches(Regex("(?:0|[1-9][0-9]{0,2})(?:\\.[0-9]{1,2})?"))) return null
         return runCatching { BigDecimal(input).movePointRight(2).intValueExact() }
