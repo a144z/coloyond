@@ -1,6 +1,7 @@
 package com.coloyond.platform
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -27,7 +28,9 @@ object Sharing {
         Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = "*/*"
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(png, strategy))
-            clipData = ClipData.newUri(null, "card", png).apply { addItem(ClipData.Item(strategy)) }
+            // newUri(null, …) crashes: it asks a ContentResolver for the MIME type.
+            clipData = ClipData(ClipDescription("card", arrayOf("image/png", JSON_MIME)), ClipData.Item(png))
+                .apply { addItem(ClipData.Item(strategy)) }
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
