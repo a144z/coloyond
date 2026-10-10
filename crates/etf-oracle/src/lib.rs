@@ -206,12 +206,10 @@ pub fn validate_fixed_feed(
         publish_time: price.publish_time,
         confidence_bps,
     };
-    validated.to_usd_fixed()?;
-    ValidatedPrice {
-        mantissa: validated.confidence,
-        ..validated
-    }
-    .to_usd_fixed()?;
+    // Keep a validated observation safe to consume as an executable interval:
+    // a positive midpoint is insufficient when its lower confidence bound is
+    // zero or negative, or when any endpoint cannot be represented exactly.
+    validated.confidence_interval(USD_FIXED_DECIMALS)?;
     Ok(validated)
 }
 
@@ -478,6 +476,89 @@ mod tests {
             NOW,
         );
         assert!(check(&wide, 100).is_err());
+    }
+
+    #[test]
+    fn configured_age_and_rounded_confidence_limits_are_inclusive() {
+        let at_age_limit = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_000,
+            NOW - 60,
+        );
+        let limits_at_boundary = OracleLimits {
+            maximum_age_seconds: 60,
+            maximum_confidence_bps: 100,
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &at_age_limit,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_ok());
+
+        let one_second_too_old = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_000,
+            NOW - 61,
+        );
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &one_second_too_old,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_err());
+
+        // 100 bps is accepted; 100.0001 bps rounds upward to 101 and fails.
+        let just_over_confidence_limit = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_001,
+            NOW,
+        );
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &just_over_confidence_limit,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_positive_midpoint_with_nonpositive_confidence_lower_bound() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            100_000_000,
+            NOW,
+        );
+        let permissive_diagnostic_limit = OracleLimits {
+            maximum_age_seconds: 60,
+            maximum_confidence_bps: 10_000,
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            permissive_diagnostic_limit,
+        )
+        .is_err());
     }
 
     #[test]
