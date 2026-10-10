@@ -66,6 +66,12 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         self.assertTrue(any("contextSlot: integer string is outside" in error for error in errors))
         self.assertTrue(any("publishTime: integer string is outside" in error for error in errors))
 
+    def test_integer_strings_reject_final_line_terminators(self):
+        document = load_fixture()
+        document["fixtures"][0]["network"]["contextSlot"] = "1\n"
+        errors = validate_document(document)
+        self.assertTrue(any("contextSlot: expected base-10 integer string" in error for error in errors))
+
     def test_malformed_balances_return_validation_errors_without_raising(self):
         document = load_fixture()
         document["fixtures"][0]["balances"] = None

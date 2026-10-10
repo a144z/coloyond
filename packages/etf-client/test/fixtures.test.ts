@@ -46,6 +46,9 @@ test("integer string extremes pass and oversized decimals are rejected", () => {
   oracle.rawPrice = ((1n << 63n) - 1n).toString();
   assert.deepEqual(validateReadModelDocument(boundary), []);
 
+  network.contextSlot = "1\n";
+  assert.ok(validateReadModelDocument(boundary).some((error) => error.includes("contextSlot: expected base-10 integer string")));
+
   network.contextSlot = "9".repeat(10_000);
   oracle.publishTime = `-${"9".repeat(10_000)}`;
   const errors = validateReadModelDocument(boundary);
