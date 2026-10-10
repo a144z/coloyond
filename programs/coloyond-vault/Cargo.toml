@@ -22,6 +22,11 @@ custom-panic = []
 [dependencies]
 anchor-lang = "=0.32.1"
 anchor-spl = { version = "=0.32.1", default-features = false, features = ["token"] }
+pyth-solana-receiver-sdk = "=1.2.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+[[test]]
+name = "oracle"
+path = "tests/oracle/mod.rs"
