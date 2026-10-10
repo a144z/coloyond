@@ -46,6 +46,26 @@ class TukTukPayloadSizeTests(unittest.TestCase):
                 instructions=[InstructionShape(2, (), 0)],
             )
 
+    def test_account_class_counts_cannot_exceed_key_count(self):
+        self.assertGreater(
+            compiled_task_account_size(
+                account_key_count=3,
+                instructions=[],
+                num_rw_signers=1,
+                num_ro_signers=1,
+                num_rw=1,
+            ),
+            0,
+        )
+        with self.assertRaisesRegex(ValueError, "account class counts exceed account key count"):
+            compiled_task_account_size(
+                account_key_count=3,
+                instructions=[],
+                num_rw_signers=1,
+                num_ro_signers=1,
+                num_rw=2,
+            )
+
     def test_signer_seed_count_and_length_match_compiled_task_decoder_limits(self):
         maximum = compiled_task_account_size(
             account_key_count=0,

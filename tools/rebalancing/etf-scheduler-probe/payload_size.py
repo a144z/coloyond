@@ -75,6 +75,8 @@ def compiled_task_account_size(
         ("num_rw", num_rw),
     ):
         _u8(value, label)
+    if num_rw_signers + num_ro_signers + num_rw > account_key_count:
+        raise ValueError("account class counts exceed account key count")
     if not isinstance(instructions, (list, tuple)):
         raise ValueError("instructions: expected a sequence")
     if not isinstance(description, str):
