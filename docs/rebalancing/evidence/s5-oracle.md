@@ -96,12 +96,24 @@ The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `Pric
 
 The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. The direct observation asserts Full verification in the actual decoded account. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; native tests and the live account probe compile with the pinned versions, but an ETF SBF consumer transaction remains for S5H after S5E.
 
-No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and both fresh and stale fail-closed behavior across several point-in-time Devnet reads. The refreshed slot `509642309` had SOL/BTC fresh at 22 seconds and USDC stale at 338 seconds under the diagnostic 60-second age ceiling. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
+No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and both fresh and stale fail-closed behavior across several point-in-time Devnet reads. The latest confirmed slot `509680211` had only SOL fresh (11 seconds); BTC and USDC were stale at 309 seconds under the diagnostic 60-second age ceiling. The earlier slot `509642309` had SOL/BTC fresh at 22 seconds and USDC stale at 338 seconds. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
 
 ## Probe response integrity — offline checks
 
 The read-only RPC probe now validates JSON-RPC 2.0 response version, matching request ID, and an exclusive `result` or `error` field before using a result. It also rejects malformed context, short or long account arrays, missing account values, invalid base64, and any mismatch between decoded account bytes and the RPC `space` field. Eleven standard-library tests cover valid envelopes, JSON-RPC error-object code/message validation, signed 64-bit `getBlockTime` values, batch decoding and malformed response failure cases. This prevents malformed timestamps, envelopes and incomplete account batches from being silently accepted; it is offline parser evidence only and records no new Devnet observation.
+
+## Refreshed read-only Devnet observation — 11 October 2026
+
+The probe fetched the three manifest-pinned accounts at confirmed slot `509680211`, block time `1791668727` (2026-10-10 21:45:27 UTC), on the expected Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. Each account retained the expected Receiver owner, 134-byte allocation, embedded feed ID and `Full` verification. Under the diagnostic 60-second freshness ceiling, SOL/USD passed at 11 seconds old; BTC/USD and USDC/USD were 309 seconds old and rejected as stale. This is another partial snapshot, not a usable three-feed basket or freshness guarantee.
+
+| Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Adapter at 60 seconds | Data SHA-256 |
+|---|---:|---:|---:|---|---|
+| SOL/USD | `11019105874 ± 4371049`, exponent `-8` | 11 seconds | 4 bps | accepted | `0f32544ce8c4aa0e8516707b0d25b2b439d44f4bf487842e871227e254e32cd8` |
+| BTC/USD | `8300890000000 ± 6641379484`, exponent `-8` | 309 seconds | 9 bps | rejected: stale | `f53a7faad6cbdfc29de9e8212814ade28caedf8c414f2d7d4ea5f431f17eb26b` |
+| USDC/USD | `99986315 ± 87184`, exponent `-8` | 309 seconds | 9 bps | rejected: stale | `574454832623d7361bcb554820772c129a288e3c1f53864d33493278a31b1373` |
+
+The confidence ceiling remained `u16::MAX` and is diagnostic only. No transaction was sent. The observation reinforces that a same-transaction basket must fail closed unless every configured feed meets the eventually reviewed policy.
 
 ## Primary sources
 
