@@ -34,7 +34,7 @@ def compiled_transaction(*, rich=False):
     instruction = b"\0" + vector(b"\0") + vector(b"\x01\x02")
     signer = items([vector(b"seed"), vector(b"bump")])
     return (
-        bytes((1, 2, 3))
+        bytes((1, 0, 0))
         + items([b"a" * 32])
         + items([instruction])
         + items([signer])
@@ -47,6 +47,15 @@ def compiled_transaction_with_indexes(program_index, account_indexes):
         b"\0\0\0"
         + items([b"a" * 32])
         + items([instruction])
+        + items([])
+    )
+
+
+def compiled_transaction_with_header(header, account_count):
+    return (
+        bytes(header)
+        + items([bytes((index,)) * 32 for index in range(account_count)])
+        + items([])
         + items([])
     )
 
@@ -93,7 +102,7 @@ class ReturnedTaskWireTests(unittest.TestCase):
         self.assertEqual((child.trigger, child.timestamp), ("timestamp", 1_800_000_000))
         self.assertEqual(child.transaction_kind, "compiled")
         self.assertEqual(child.crank_reward, 7)
-        self.assertEqual(child.signer_counts, (1, 2, 3))
+        self.assertEqual(child.signer_counts, (1, 0, 0))
         self.assertEqual(child.accounts, (b"a" * 32,))
         self.assertEqual(child.instructions[0].account_indexes, b"\0")
         self.assertEqual(child.instructions[0].data, b"\x01\x02")
@@ -224,6 +233,26 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     self.validate(returned(task(source=child_source)))
+
+    def test_validates_compiled_message_header_account_classes(self):
+        for header, account_count in (
+            ((0, 0, 0), 0),
+            ((2, 2, 2), 4),
+            ((1, 0, 0), 1),
+        ):
+            with self.subTest(header=header, account_count=account_count):
+                source = b"\0" + compiled_transaction_with_header(header, account_count)
+                self.assertTrue(self.validate(returned(task(source=source))))
+
+        for header, account_count in (
+            ((0, 1, 0), 1),
+            ((1, 0, 1), 1),
+            ((2, 0, 0), 1),
+        ):
+            with self.subTest(header=header, account_count=account_count):
+                source = b"\0" + compiled_transaction_with_header(header, account_count)
+                with self.assertRaisesRegex(ValueError, "header counts exceed"):
+                    self.validate(returned(task(source=source)))
 
     def test_accepts_maximum_returned_signer_seed_bounds_for_multiple_groups(self):
         groups = ((b"a" * 32,) * 16, (b"b",))
