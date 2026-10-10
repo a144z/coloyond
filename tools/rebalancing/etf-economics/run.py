@@ -11,7 +11,9 @@ DEPTHS_USD = (10_000, 100_000, 1_000_000)
 TRADE_DEPTH_BPS = (10, 50, 100, 500)
 FEE_BPS = (5, 10, 30, 50, 100, 500, 1_000)
 EXTERNAL_MOVES_BPS = (10, 30, 100, 500)
-UNCERTAINTY_HAIRCUT_BPS = (5, 25, 100)
+# 3/4/10 bps match one recent Devnet observation only; the rest are synthetic
+# sensitivity points. None is a production oracle policy.
+UNCERTAINTY_HAIRCUT_BPS = (3, 4, 5, 10, 25, 100)
 TRANSACTION_COSTS_USD = (Decimal("0.01"), Decimal("0.10"), Decimal("1.00"))
 
 
@@ -47,7 +49,7 @@ def main():
                                 }
                             )
     with path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+        writer = csv.DictWriter(stream, fieldnames=rows[0].keys(), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {len(rows)} hypothetical scenarios to {path.name}")
@@ -92,7 +94,9 @@ def main():
                             ]
                         dynamic_rows.append(row)
     with dynamic_path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=dynamic_rows[0].keys())
+        writer = csv.DictWriter(
+            stream, fieldnames=dynamic_rows[0].keys(), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(dynamic_rows)
     print(f"wrote {len(dynamic_rows)} hypothetical bounded-dynamic comparisons to {dynamic_path.name}")

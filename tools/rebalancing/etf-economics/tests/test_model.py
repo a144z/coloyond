@@ -41,6 +41,16 @@ class WeightedAmmEconomicsTests(unittest.TestCase):
         )
         self.assertTrue(result["profitable"])
 
+    def test_observed_confidence_ratios_are_applied_as_conservative_haircuts(self):
+        for confidence_bps in (3, 4, 10):
+            result = arbitrage_scenario(
+                Decimal("100000"), Decimal("100"), 30, 10, confidence_bps, Decimal("0")
+            )
+            self.assertEqual(
+                result["conservative_external_price"],
+                Decimal(1) + Decimal(10 - confidence_bps) / Decimal(10_000),
+            )
+
     def test_invalid_fee_or_depth_is_rejected(self):
         with self.assertRaises(ValueError):
             quote_equal_weight_exact_in(Decimal("0"), Decimal("1"), 30)
