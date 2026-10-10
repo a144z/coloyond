@@ -187,6 +187,19 @@ class ReturnedTaskConstraintTests(unittest.TestCase):
         self.assertTrue(self.validate(returned(task(free_tasks=1))))
         self.assertTrue(self.validate(returned(task(reward=5, free_tasks=1))))
 
+    def test_zero_child_result_still_validates_task_queue_address(self):
+        empty = returned()
+        self.assertTrue(self.validate(empty, free_task_ids=[], free_task_accounts=[]))
+        with self.assertRaisesRegex(ValueError, "base58 address"):
+            self.validate(
+                empty,
+                free_task_ids=[],
+                free_task_accounts=[],
+                task_queue="not-a-pubkey",
+            )
+        with self.assertRaisesRegex(ValueError, "decode to 32 bytes"):
+            self.validate(empty, free_task_ids=[], free_task_accounts=[], task_queue="1")
+
     def test_rejects_reward_mismatch_and_child_capacity_overflow(self):
         with self.assertRaisesRegex(ValueError, "queue minimum"):
             self.validate(returned(task(reward=6)))

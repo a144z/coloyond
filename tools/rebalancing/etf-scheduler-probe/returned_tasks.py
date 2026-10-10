@@ -8,7 +8,7 @@ available. The alternate tasks_accounts storage path is intentionally excluded.
 from dataclasses import dataclass
 from typing import Optional
 
-from task_pda import MAX_SEED_LENGTH, MAX_SEEDS, derive_tuktuk_task_address
+from task_pda import MAX_SEED_LENGTH, MAX_SEEDS, base58_decode, derive_tuktuk_task_address
 
 
 MAX_DIRECT_RETURN_BYTES = 1_000
@@ -196,6 +196,8 @@ def validate_compiled_requeue(
     """
     if returned.tasks_accounts:
         raise ValueError("tasks_accounts path is not supported by this offline model")
+    if len(base58_decode(task_queue)) != 32:
+        raise ValueError("task queue address must decode to 32 bytes")
     if any(task.transaction_kind != "compiled" for task in returned.tasks):
         raise ValueError("RemoteV0 is incompatible with the no-backend scheduler candidate")
     if (
