@@ -1,5 +1,7 @@
 # coloyond
 
+**New to the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).** It lists what is done, what to build next for the hackathon, and in what order.
+
 coloyond is an Android app for the Solana mobile hackathon. You choose a token allocation, the app makes an abstract card with an optional caption, and you share or remix the card. To hold the allocation, you set it up yourself in Glider: the app copies the weights and opens glider.fi. coloyond is not affiliated with Glider. The app does not buy or sell anything.
 
 - [Reviewed product specification](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md)
