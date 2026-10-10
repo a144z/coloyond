@@ -206,7 +206,7 @@ export function validateReadModelDocument(input: unknown): string[] {
       validateObservation(fixture, path, errors);
       if (typeof fixture.status === "string") observationStates.add(fixture.status);
       const oracle = isRecord(fixture.oracle) ? fixture.oracle : undefined;
-      const mode = typeof fixture.mode === "string" ? fixture.mode : oracle?.mode;
+      const mode = fixture.kind === "oracle-observation" ? fixture.mode : oracle?.mode;
       if (typeof mode === "string" && (mode === "receiver_full" || mode === "push_feed")) oracleModes.add(mode);
       if (fixture.kind === "observation" && fixture.status === "available") {
         hasAvailableSnapshot = true;

@@ -246,7 +246,11 @@ def validate_document(document):
             if isinstance(fixture.get("status"), str):
                 statuses.add(fixture.get("status"))
             _validate_observation(fixture, path, errors)
-            mode = fixture.get("mode", (fixture.get("oracle") or {}).get("mode") if isinstance(fixture.get("oracle"), dict) else None)
+            if kind == "oracle-observation":
+                mode = fixture.get("mode")
+            else:
+                oracle = fixture.get("oracle")
+                mode = oracle.get("mode") if isinstance(oracle, dict) else None
             if isinstance(mode, str) and mode in {"receiver_full", "push_feed"}:
                 modes.add(mode)
             if kind == "observation" and fixture.get("status") == "available":

@@ -103,8 +103,8 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
     def test_oracle_null_is_rejected_but_omitted_oracle_is_allowed(self):
         document = load_fixture()
         del document["fixtures"][0]["oracle"]
-        document["fixtures"][0]["mode"] = "receiver_full"
-        self.assertEqual(validate_document(document), [])
+        omitted_errors = validate_document(document)
+        self.assertFalse(any("$.fixtures[0].oracle" in error for error in omitted_errors))
 
         document["fixtures"][0]["oracle"] = None
         errors = validate_document(document)
@@ -115,6 +115,12 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         snapshot = document["fixtures"][0]
         snapshot["protocolRevision"] = None
         snapshot["configRevision"] = "fallback-revision"
+        self.assertEqual(validate_document(document), [])
+
+    def test_snapshot_oracle_mode_comes_from_nested_oracle_object(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        snapshot["mode"] = []
         self.assertEqual(validate_document(document), [])
 
     def test_confirmed_receipt_requires_confirmed_identity_and_rpc_deltas(self):

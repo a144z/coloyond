@@ -56,8 +56,8 @@ test("oracle omission is allowed but explicit null is malformed", () => {
   const omitted = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = omitted.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
   delete snapshot.oracle;
-  snapshot.mode = "receiver_full";
-  assert.deepEqual(validateReadModelDocument(omitted), []);
+  const omittedErrors = validateReadModelDocument(omitted);
+  assert.ok(!omittedErrors.some((error) => error.includes("$.fixtures[0].oracle")));
 
   const explicitNull = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   explicitNull.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!.oracle = null;
@@ -69,6 +69,13 @@ test("null protocol revision falls back to config revision", () => {
   const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
   snapshot.protocolRevision = null;
   snapshot.configRevision = "fallback-revision";
+  assert.deepEqual(validateReadModelDocument(candidate), []);
+});
+
+test("snapshot oracle-mode coverage comes from the nested oracle source", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  snapshot.mode = [];
   assert.deepEqual(validateReadModelDocument(candidate), []);
 });
 
