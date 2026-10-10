@@ -75,6 +75,20 @@ class CardStorageTest {
     }
 
     @Test
+    fun savesAndLoadsColoyondStrategyWithCbe2Expression() {
+        val strategy = coloyondStrategy()
+        val expression = expression(strategy, renderer = 1)
+        val storage = CardStorage(temporary.newFolder())
+
+        assertTrue(strategy.id.startsWith("cb3:"))
+        assertTrue(expression.id.startsWith("cbe2:"))
+        val saved = storage.save(strategy, expression, cardPng())
+        assertTrue(saved.viewOnly)
+        assertEquals(strategy.id, storage.load(expression.id)?.strategy?.id)
+        assertEquals(expression.id, storage.load(expression.id)?.expression?.id)
+    }
+
+    @Test
     fun incompleteStoredExpressionIsNotListed() {
         val (strategy, expression) = records()
         val root = temporary.newFolder()
@@ -90,7 +104,14 @@ class CardStorageTest {
         return strategy to expression(strategy, renderer = 1)
     }
 
+    private fun coloyondStrategy(): ValidatedRecord = StrategyRecords.validateStrategy(
+        StrategyRecords.parse(
+            """{"schema":"coloyond/ColoyondManagedStrategy/v1","cluster":"mainnet-beta","genesisHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","programId":"BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate","vaultAddress":"CBmmqkqszmEzHJqRx6ExKqq6TWLaDg3wpFcGhVm63HGW","shareMint":"69F1mz9iPdTJwPX8aUmx94HeiTncVuzRue3C8FU6u3bv","configurationRevision":"18446744073709551615","tokens":[{"mint":"So11111111111111111111111111111111111111112","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":9,"targetBps":6000},{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","tokenProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","decimals":6,"targetBps":4000}],"policyDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceManifestRevision":"1"}""",
+        ),
+    )
+
     private fun expression(strategy: ValidatedRecord, renderer: Int): ValidatedRecord {
+        val coloyond = strategy.id.startsWith("cb3:")
         val vectorStream = requireNotNull(javaClass.classLoader?.getResourceAsStream("strategy-identity-vectors.json"))
         val vectors = StrategyRecords.parse(vectorStream.bufferedReader(Charsets.UTF_8).use { it.readText() }) as JsonValue.Obj
         val sceneValue = vectors.fields.getValue("sceneVectors").asArray("sceneVectors").single().asObject("scene vector").getValue("scene")
@@ -98,7 +119,7 @@ class CardStorageTest {
         sceneFields["rendererVersion"] = JsonValue.Num(renderer.toString())
         val scene = StrategyRecords.validateScene(JsonValue.Obj(sceneFields))
         val value = JsonValue.Obj(mapOf(
-            "schemaVersion" to JsonValue.Num("1"),
+            "schemaVersion" to JsonValue.Num(if (coloyond) "2" else "1"),
             "strategyId" to JsonValue.Str(strategy.id),
             "scene" to scene.value,
             "sceneHash" to JsonValue.Str(scene.id),
@@ -109,7 +130,7 @@ class CardStorageTest {
             "generationOrigin" to JsonValue.Str("local-preview"),
             "parentExpressionId" to JsonValue.Null,
         ))
-        return StrategyRecords.validateExpression(value)
+        return StrategyRecords.validateExpression(value, coloyond = coloyond)
     }
 
     private fun draftJson(firstWeight: String, secondWeight: String): String =
