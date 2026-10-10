@@ -3,6 +3,7 @@ package com.coloyond.core.storage
 import java.math.BigInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PendingActionRecordTest {
@@ -22,7 +23,7 @@ class PendingActionRecordTest {
         walletAddress = "wallet",
         programId = "program",
         vaultAddress = "vault",
-        configurationRevision = 3,
+        configurationRevision = BigInteger("18446744073709551615"),
         reviewedMessageDigest = "a".repeat(64),
         expectedEffects = listOf(expectedEffect),
     )
@@ -34,11 +35,14 @@ class PendingActionRecordTest {
                 signatureStatus = ObservedSignatureStatus.CONFIRMED,
                 signature = "sig",
                 accountEffects = listOf(ObservedAccountEffect(
-                    "token-account", "mint", BigInteger("905000000000000000000"), 88,
+                    "token-account", "mint", BigInteger("905000000000000000000"), BigInteger("18446744073709551615"),
                 )),
             ))
 
         assertEquals(reconciled, PendingActionCodec.decode(PendingActionCodec.encode(reconciled)))
+        val encoded = PendingActionCodec.encode(reconciled)
+        assertTrue(encoded.contains("\"configurationRevision\":\"18446744073709551615\""))
+        assertTrue(encoded.contains("\"slot\":\"18446744073709551615\""))
     }
 
     @Test
@@ -57,7 +61,7 @@ class PendingActionRecordTest {
             ReconciliationObservation(
                 ObservedSignatureStatus.CONFIRMED,
                 accountEffects = listOf(ObservedAccountEffect(
-                    "token-account", "mint", BigInteger("905000000000000000000"), 88,
+                    "token-account", "mint", BigInteger("905000000000000000000"), BigInteger("88"),
                 )),
             ),
         )
@@ -72,7 +76,9 @@ class PendingActionRecordTest {
             ReconciliationObservation(
                 ObservedSignatureStatus.FINALIZED,
                 "sig",
-                listOf(ObservedAccountEffect("token-account", "mint", BigInteger("999999999999999999999"), 88)),
+                listOf(ObservedAccountEffect(
+                    "token-account", "mint", BigInteger("999999999999999999999"), BigInteger("88"),
+                )),
             ),
         )
 
@@ -90,5 +96,19 @@ class PendingActionRecordTest {
     @Test(expected = IllegalArgumentException::class)
     fun cannotMarkWalletHandoffBeforeDurablePreparedState() {
         prepared.handedOff().handedOff()
+    }
+
+    @Test
+    fun corruptStoredRecordBecomesUnresolvedLegacyAction() {
+        val decoded = PendingActionCodec.decodeStored("{not-json", "recovery-id")
+
+        assertTrue(decoded.wasCorrupt)
+        assertEquals(PendingActionKind.UNKNOWN_LEGACY, decoded.record.kind)
+        assertEquals(PendingActionState.RECONCILIATION_REQUIRED, decoded.record.state)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun observedTokenBalanceCannotBeNegative() {
+        ObservedAccountEffect("token-account", "mint", BigInteger("-1"), BigInteger.ZERO)
     }
 }

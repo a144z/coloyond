@@ -228,18 +228,29 @@ class WalletRepository(
                         _feedback.value = "Signature $signature is only ${status.confirmationStatus}; kept for reconciliation."
                     }
                     else -> {
-                        pendingIntents.current()?.let { pending ->
-                            val commitment = if (status.confirmationStatus == "finalized") {
-                                ObservedSignatureStatus.FINALIZED
-                            } else {
-                                ObservedSignatureStatus.CONFIRMED
-                            }
-                            pendingIntents.save(pending.reconcile(
-                                ReconciliationObservation(commitment, signature),
-                            ))
+                        val pending = pendingIntents.current()
+                        val commitment = if (status.confirmationStatus == "finalized") {
+                            ObservedSignatureStatus.FINALIZED
+                        } else {
+                            ObservedSignatureStatus.CONFIRMED
                         }
-                        clearPending()
-                        _feedback.value = "Signature $signature ${status.confirmationStatus} on-chain"
+                        val reconciled = pending?.reconcile(
+                            ReconciliationObservation(commitment, signature),
+                        )
+                        if (reconciled?.state == PendingActionState.CONFIRMED) {
+                            clearPending()
+                            _feedback.value = "Signature $signature ${status.confirmationStatus} and expected effects confirmed"
+                        } else {
+                            reconciled?.let {
+                                pendingIntents.save(it)
+                                _pendingNotice.value = it.pendingDescription()
+                            }
+                            _feedback.value = if (reconciled == null) {
+                                "Signature $signature is ${status.confirmationStatus}, but its pending action is unavailable; effects are unconfirmed."
+                            } else {
+                                "Signature $signature is ${status.confirmationStatus}; account effects still need reconciliation. Kept as pending."
+                            }
+                        }
                     }
                 }
             },

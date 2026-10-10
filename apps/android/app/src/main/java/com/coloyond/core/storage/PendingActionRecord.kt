@@ -2,6 +2,8 @@ package com.coloyond.core.storage
 
 import java.math.BigInteger
 
+private val U64_MAX = BigInteger("18446744073709551615")
+
 /** A durable wallet handoff snapshot. Unknown fields are never inferred from an older record. */
 data class PendingActionRecord(
     val id: String,
@@ -12,7 +14,7 @@ data class PendingActionRecord(
     val walletAddress: String? = null,
     val programId: String? = null,
     val vaultAddress: String? = null,
-    val configurationRevision: Long? = null,
+    val configurationRevision: BigInteger? = null,
     val reviewedMessageDigest: String? = null,
     val signature: String? = null,
     val expectedEffects: List<ExpectedAccountEffect> = emptyList(),
@@ -25,7 +27,7 @@ data class PendingActionRecord(
         require(cluster.isNotBlank())
         require(programId == null || programId.isNotBlank())
         require(vaultAddress == null || vaultAddress.isNotBlank())
-        require(configurationRevision == null || configurationRevision >= 0)
+        require(configurationRevision == null || configurationRevision in BigInteger.ZERO..U64_MAX)
         require(signature == null || signature.isNotBlank())
         require(reviewedMessageDigest == null || reviewedMessageDigest.matches(Regex("[0-9a-f]{64}")))
         if (kind == PendingActionKind.VAULT_DEPOSIT || kind == PendingActionKind.VAULT_REDEEM) {
@@ -126,6 +128,8 @@ data class ExpectedAccountEffect(
 ) {
     init {
         require(account.isNotBlank() && mint.isNotBlank())
+        require(baselineAmountBaseUnits in BigInteger.ZERO..U64_MAX)
+        require(minimumDeltaBaseUnits >= U64_MAX.negate() && maximumDeltaBaseUnits <= U64_MAX)
         require(minimumDeltaBaseUnits <= maximumDeltaBaseUnits)
     }
 }
@@ -134,11 +138,12 @@ data class ObservedAccountEffect(
     val account: String,
     val mint: String,
     val amountBaseUnits: BigInteger,
-    val slot: Long,
+    val slot: BigInteger,
 ) {
     init {
         require(account.isNotBlank() && mint.isNotBlank())
-        require(slot >= 0)
+        require(amountBaseUnits in BigInteger.ZERO..U64_MAX)
+        require(slot in BigInteger.ZERO..U64_MAX)
     }
 }
 

@@ -13,7 +13,14 @@ class PendingIntentStore(context: Context) {
 
     fun current(): PendingActionRecord? {
         val encoded = prefs.getString(KEY_ACTION, null)
-        if (encoded != null) return PendingActionCodec.decode(encoded)
+        if (encoded != null) {
+            val decoded = PendingActionCodec.decodeStored(encoded, UUID.randomUUID().toString())
+            if (decoded.wasCorrupt) {
+                // If rewriting storage fails, keep returning the unresolved value for this session.
+                runCatching { save(decoded.record) }
+            }
+            return decoded.record
+        }
 
         // Older builds stored an untyped note. Preserve uncertainty, but never reinterpret or resend it.
         val legacy = prefs.getString(KEY_LEGACY_INTENT, null) ?: return null
@@ -54,6 +61,10 @@ class PendingIntentStore(context: Context) {
 
 /** Pure codec kept separately so schema validation and recovery can be covered by JVM tests. */
 internal object PendingActionCodec {
+    fun decodeStored(json: String, fallbackId: String): DecodedPendingAction =
+        runCatching { DecodedPendingAction(decode(json), wasCorrupt = false) }
+            .getOrElse { DecodedPendingAction(unresolvedCorruptRecord(fallbackId), wasCorrupt = true) }
+
     fun encode(record: PendingActionRecord): String = JSONObject()
         .put("version", VERSION)
         .put("id", record.id)
@@ -83,7 +94,7 @@ internal object PendingActionCodec {
                     .put("account", effect.account)
                     .put("mint", effect.mint)
                     .put("amountBaseUnits", effect.amountBaseUnits.toString())
-                    .put("slot", effect.slot))
+                    .put("slot", effect.slot.toString()))
             }
         })
         .putNullable("lastError", record.lastError)
@@ -98,9 +109,9 @@ internal object PendingActionCodec {
                 ExpectedAccountEffect(
                     account = item.getString("account"),
                     mint = item.getString("mint"),
-                    baselineAmountBaseUnits = BigInteger(item.getString("baselineAmountBaseUnits")),
-                    minimumDeltaBaseUnits = BigInteger(item.getString("minimumDeltaBaseUnits")),
-                    maximumDeltaBaseUnits = BigInteger(item.getString("maximumDeltaBaseUnits")),
+                    baselineAmountBaseUnits = item.getString("baselineAmountBaseUnits").toCanonicalBigInteger(),
+                    minimumDeltaBaseUnits = item.getString("minimumDeltaBaseUnits").toCanonicalBigInteger(),
+                    maximumDeltaBaseUnits = item.getString("maximumDeltaBaseUnits").toCanonicalBigInteger(),
                 )
             }
         }
@@ -110,8 +121,8 @@ internal object PendingActionCodec {
                 ObservedAccountEffect(
                     account = item.getString("account"),
                     mint = item.getString("mint"),
-                    amountBaseUnits = BigInteger(item.getString("amountBaseUnits")),
-                    slot = item.getLong("slot"),
+                    amountBaseUnits = item.getString("amountBaseUnits").toCanonicalBigInteger(),
+                    slot = item.getString("slot").toCanonicalBigInteger(),
                 )
             }
         }
@@ -124,7 +135,7 @@ internal object PendingActionCodec {
             walletAddress = obj.optNullableString("walletAddress"),
             programId = obj.optNullableString("programId"),
             vaultAddress = obj.optNullableString("vaultAddress"),
-            configurationRevision = obj.optNullableString("configurationRevision")?.toLong(),
+            configurationRevision = obj.optNullableString("configurationRevision")?.toCanonicalBigInteger(),
             reviewedMessageDigest = obj.optNullableString("reviewedMessageDigest"),
             signature = obj.optNullableString("signature"),
             expectedEffects = expected,
@@ -137,5 +148,20 @@ internal object PendingActionCodec {
     private fun JSONObject.optNullableString(key: String): String? =
         if (!has(key) || isNull(key)) null else getString(key)
 
+    private fun String.toCanonicalBigInteger(): BigInteger = BigInteger(this).also {
+        require(it.toString() == this) { "Expected canonical decimal integer" }
+    }
+
+    fun unresolvedCorruptRecord(id: String): PendingActionRecord = PendingActionRecord(
+        id = id,
+        kind = PendingActionKind.UNKNOWN_LEGACY,
+        state = PendingActionState.RECONCILIATION_REQUIRED,
+        createdAtMillis = 0,
+        cluster = "unknown",
+        lastError = "Stored pending action could not be decoded; manual reconciliation is required",
+    )
+
     private const val VERSION = 1
 }
+
+internal data class DecodedPendingAction(val record: PendingActionRecord, val wasCorrupt: Boolean)
