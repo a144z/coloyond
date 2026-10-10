@@ -48,7 +48,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun signMessage(sender: ActivityResultSender) =
         viewModelScope.launch { repository.signMessage(sender, AppConfig.sampleMessage) }
 
-    fun signTransaction(sender: ActivityResultSender) =
+    fun sendDevnetMemoTest(sender: ActivityResultSender) =
         viewModelScope.launch { repository.signTransaction(sender, AppConfig.sampleMemo) }
 
     fun disconnect(sender: ActivityResultSender) = viewModelScope.launch { repository.disconnect(sender) }

@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             FilterChip(selected = showCards, onClick = { showCards = true }, label = { Text("Cards") })
-                            FilterChip(selected = !showCards, onClick = { showCards = false }, label = { Text("Wallet") })
+                            FilterChip(selected = !showCards, onClick = { showCards = false }, label = { Text("Wallet · Devnet") })
                         }
                         if (showCards) {
                             CardJourneyScreen(
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                 state = state,
                                 onConnect = { viewModel.connect(sender) },
                                 onSignMessage = { viewModel.signMessage(sender) },
-                                onSignTransaction = { viewModel.signTransaction(sender) },
+                                onSendMemoTest = { viewModel.sendDevnetMemoTest(sender) },
                                 onDisconnect = { viewModel.disconnect(sender) },
                                 onToggleMockMode = { viewModel.toggleMockMode() },
                             )
@@ -109,11 +109,16 @@ fun WalletScreen(
     state: WalletUiState,
     onConnect: () -> Unit,
     onSignMessage: () -> Unit,
-    onSignTransaction: () -> Unit,
+    onSendMemoTest: () -> Unit,
     onDisconnect: () -> Unit,
     onToggleMockMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val walletModeDetails = if (state.mockMode) {
+        "Mock mode simulates wallet calls and sends no network transaction."
+    } else {
+        "The Memo test is a Devnet transaction and may use Devnet SOL for fees."
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -122,8 +127,13 @@ fun WalletScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Coloyond + Mobile Wallet Adapter",
+            text = "Devnet wallet test",
             style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "Solana ${com.coloyond.config.AppConfig.blockchainLabel} · ${if (state.mockMode) "mock wallet mode" else "real wallet mode"}\n$walletModeDetails No vault, rebalance, purchase or sale is available here.",
+            style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
         )
         if (state.address == null) {
@@ -138,8 +148,8 @@ fun WalletScreen(
             Button(onClick = onSignMessage, enabled = !state.busy) {
                 Text("Sign message")
             }
-            Button(onClick = onSignTransaction, enabled = !state.busy) {
-                Text("Sign transaction")
+            Button(onClick = onSendMemoTest, enabled = !state.busy) {
+                Text("Send Devnet Memo test")
             }
             OutlinedButton(onClick = onDisconnect, enabled = !state.busy) {
                 Text("Disconnect")
@@ -180,7 +190,7 @@ fun WalletScreenDisconnectedPreview() {
             state = WalletUiState(),
             onConnect = {},
             onSignMessage = {},
-            onSignTransaction = {},
+            onSendMemoTest = {},
             onDisconnect = {},
             onToggleMockMode = {},
         )
@@ -198,7 +208,7 @@ fun WalletScreenConnectedPreview() {
             ),
             onConnect = {},
             onSignMessage = {},
-            onSignTransaction = {},
+            onSendMemoTest = {},
             onDisconnect = {},
             onToggleMockMode = {},
         )
