@@ -17,20 +17,20 @@
 
 All projections keep **target weight**, **actual value weight**, **NAV estimate**, **share-token balance**, **AMM quote**, and **confirmed transaction result** as separate facts. The UI must show full mint/feed identifiers and explicit synthetic/unbacked labels for Devnet test mints. A ticker or image does not select an asset. No UI may infer a successful scheduler run from a cron timestamp or a task registration signature.
 
-## Frozen client boundary for parallel work
+## Provisional client boundary candidate
 
-S5A freezes this behavior-level port so S5F and S5G can be developed in parallel without either owning the other's implementation:
+S5A has not accepted or frozen this behavior-level port. It is a design candidate to guide fixture review; until the remaining required fields and account bindings are resolved, S5F is limited to fixture validation and S5G to synthetic presentation. Neither package may treat this text as authority to build production RPC or transaction behavior:
 
 - **Read:** load a pool snapshot and wallet balances with network genesis, RPC context slot, source freshness and explicit unknown/error states.
 - **Preview:** quote a seed, proportional deposit, in-kind redemption, swap or `poke` using a specific snapshot and return the account identities, limits, expiry and oracle evidence needed for wallet review.
 - **Build:** produce an unsigned, reviewable transaction message tied to that same snapshot and manifest. It does not submit or sign.
 - **Reconcile:** accept the wallet signature and report `submitted`, `confirmed`, `rejected` or `unknown` only after querying the pinned cluster and comparing confirmed token/share deltas.
 
-The TypeScript client and Android Kotlin adapter may implement this port independently from the same read-model and IDL vectors. The Android UI can develop against a contract-conforming fake port for presentation work, but S5H must replace it with the real adapter; fake-port activity never counts as a wallet, RPC or transaction proof.
+After S5A review, the TypeScript client and Android Kotlin adapter may implement the accepted port independently from the same read-model and IDL vectors. The Android UI can develop against a contract-conforming fake port for presentation work, but S5H must replace it with the real adapter; fake-port activity never counts as a wallet, RPC or transaction proof.
 
-### Cross-language DTO and fixture contract
+### Proposed cross-language DTO and fixture semantics
 
-S5A freezes the JSON-compatible DTO semantics below before S5F/S5G begin. Both clients implement the same meanings; language-specific wrappers are allowed, but neither may weaken validation or convert an unknown value into zero.
+The semantics below are proposed for S5A review. They are not yet a frozen schema, and current fixtures exercise only a subset of the complete snapshot/action model. Before S5F production work, S5A must add and validate complete deployment, pool configuration, custody identity, portfolio, share, oracle-source and wallet-action fields against the requirements above. Both clients must preserve these meanings after acceptance; language-specific wrappers are allowed, but neither may weaken validation or convert an unknown value into zero.
 
 - Addresses, hashes, signatures and feed IDs are base58/hex strings exactly as returned by the pinned protocol/manifest.
 - Every unsigned or signed integer that can exceed JavaScript's exact integer range (`u64`, `i64`, token amounts, slots, sequence numbers, lamports, raw prices and confidence) is a base-10 string. Bounded enum values and small exponents may be JSON numbers only where the contract gives an explicit range.
@@ -40,4 +40,4 @@ S5A freezes the JSON-compatible DTO semantics below before S5F/S5G begin. Both c
 - A wallet action is one of `draft`, `awaiting_signature`, `submitted`, `confirmed`, `rejected` or `unknown`. Only `confirmed` contains a confirmation slot and RPC-derived token/share deltas. `unknown` preserves the signature/message identity if known and cannot trigger an automatic resend.
 - Every read and preview includes cluster genesis, RPC context slot and protocol/config revision. A preview additionally binds expiry, exact account keys, limits and oracle evidence; a transaction builder must consume that same snapshot identity.
 
-S5A owns `docs/rebalancing/contracts/etf-read-model-v1-fixtures.json`, containing representative available, stale, unavailable, both oracle-mode, precision-boundary, and confirmed/unknown receipt examples. These fixtures are the language-neutral conformance source for S5F/S5G and are checked by the dependency-free [fixture validator](../../tools/rebalancing/etf-read-model-fixtures/README.md). It verifies tagged states, required available-snapshot identity, lossless integer strings, mode-specific oracle fields, and confirmed/unknown receipt invariants. The document remains `fixtureOnly`; validator success does not freeze any open production contract, risk, fee, authority or deployment choice. Do not add an extra schema/code-generation dependency for this contract.
+S5A owns `docs/rebalancing/contracts/etf-read-model-v1-fixtures.json`. The current corpus contains component-level examples for available, stale, unavailable, both oracle modes, integer precision and confirmed/unknown receipts; it is not a complete snapshot contract or a conformance source for production S5F/S5G. The dependency-free [fixture validator](../../tools/rebalancing/etf-read-model-fixtures/README.md) checks only those fixture-level tagged-state, integer-string, mode-specific oracle and receipt invariants. The document remains `fixtureOnly`; validator success does not freeze any open production contract, risk, fee, authority or deployment choice. Do not add an extra schema/code-generation dependency for this contract.
