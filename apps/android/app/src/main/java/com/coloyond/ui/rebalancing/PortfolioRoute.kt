@@ -79,7 +79,11 @@ fun PortfolioRoute(
         }
         val model = state.model
         if (model != null) {
-            PortfolioStatusScreen(model = model, modifier = Modifier.weight(1f))
+            PortfolioStatusScreen(
+                model = model,
+                clientRetrievedAt = state.clientRetrievedAt,
+                modifier = Modifier.weight(1f),
+            )
         } else if (!state.loading && state.error == null) {
             Text(
                 "No RPC snapshot loaded yet.",

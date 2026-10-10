@@ -1,8 +1,8 @@
 # Q96 weighted quote interval proof (review draft)
 
-**Status:** source-level interval derivation independently reviewed with no correctness defect found. This is not an external audit. S5B and S5E remain blocked on target-runtime compute and other product-level math/custody gates.
+**Status:** source-level interval derivation and the weighted-invariant consequence below were independently reviewed with no correctness defect found. This is not an external audit. Pure quote compute has an isolated SBF baseline; S5B and S5E remain blocked on integrated target-runtime, custody/CPI, broader boundary, and product-policy evidence.
 
-This note analyzes `crates/etf-math/src/weighted.rs` at the current revision. It proves a conservative interval for the implemented pairwise exact-in quote over that function's accepted input domain. It does not prove that the pairwise quote preserves a whole three-asset weighted geometric-mean invariant, nor does it establish oracle-price, value-drift, share-backing, SPL CPI, or SBF runtime properties.
+This note analyzes `crates/etf-math/src/weighted.rs` at the current revision. It proves a conservative interval for the implemented pairwise exact-in quote over that function's accepted input domain, then derives how a conservative pairwise quote preserves the multi-asset weighted geometric-mean reserve invariant under explicit custody-delta assumptions. It does not establish oracle-price, value-drift, share-backing, SPL CPI, or integrated SBF runtime properties.
 
 ## Domain and notation
 
@@ -100,12 +100,25 @@ Two real values less than one unit apart have floors that differ by at most one.
 - The final `c * (Q - power_upper)` product is below `2^160`; shifting by 96 yields a value below `u64::MAX`.
 - The low-level limb multiplication and carry bounds in `U256::mul_u128` are checked separately by the full-width big-integer vector suite. Those tests corroborate implementation behavior but are not a substitute for the algebra above.
 
+## Whole-pool weighted invariant consequence
+
+Let the pool invariant be `K = product(R_i ^ w_i)` for positive reserves `R_i` and positive target weights `w_i` (the weights sum to 10,000 bps). For a swap from input reserve `b` to output reserve `c`, let `g` be gross input, `d` the fee-adjusted curve input (`0 <= d <= g`), and `u` the quoted output. The pairwise exact-in curve bound proves
+
+```text
+(b + d)^w_in * (c - u)^w_out >= b^w_in * c^w_out
+```
+
+because `u` is no greater than the exact curve output. If the actual input token-account credit is `G >= d`, the actual output debit is no greater than `u`, and all other reserves and weights remain unchanged, positivity of both weights makes the actual pair product at least this bound. Every untouched asset factor cancels from the before/after comparison, so the full multi-asset `K` cannot decrease. This argument applies to a three-asset pool and, algebraically, to any asset count with exactly one input and one output reserve changed. Retaining the fee in the input reserve (`G >= d`) only strengthens the inequality.
+
+These are transaction-state assumptions, not facts established by the quote function. In particular, integrated SPL CPI must reconcile actual input credit and output debit with these bounds; this project currently supports classic SPL Token only and excludes Token-2022 transfer fees/hooks. The derivation does not prove that a swap improves oracle-marked USD target-weight deviation, that an oracle is authentic/fresh, or that share backing and program account updates are correct.
+
 ## Review checklist and limits
 
 - [x] Independently verify each derivative, tail, fixed-point rounding, and error-propagation inequality against the current implementation.
 - [x] Independently verify the strict integer comparisons for both series tails and all cited intermediate ranges.
 - [x] Reconcile the proof's accepted domain with the public function validation and all callers.
-- [ ] Build the program for Solana SBF and measure/record target-runtime compute; this document supplies no compute result.
-- [ ] Separately prove the product-level weighted invariant and three-asset swap behavior, or amend the contract to describe the supported pairwise invariant precisely.
+- [x] Independently review the whole-pool weighted-invariant derivation and its assumptions for multi-asset swaps.
+- [ ] Measure the integrated ETF instruction on SBF after S5E exists, including account/oracle/CPI work; the isolated quote baseline is recorded separately in `s5-sbf-math-bench.md`.
+- [ ] Reconcile the invariant assumptions against actual integrated SPL CPI deltas and program state updates.
 
-Until review and runtime evidence pass, treat Q96 as a tested candidate, not an accepted S5B implementation.
+Until integrated runtime, custody/CPI, broader-boundary, and policy evidence pass, treat Q96 as a reviewed and measured candidate, not an accepted S5B implementation.

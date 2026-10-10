@@ -16,11 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 data class PortfolioUiState(
     val loading: Boolean = false,
     val model: ReadModelV1? = null,
+    val clientRetrievedAt: Instant? = null,
     val error: String? = null,
     val pendingAction: PendingActionRecord? = null,
     val reconciliationNotice: String? = null,
@@ -96,6 +98,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             portfolioState.value = PortfolioUiState(
                 loading = false,
                 model = ReadModelV1Mapper.from(snapshot, container.coloyondDevnet, walletAddress),
+                clientRetrievedAt = snapshot.clientRetrievedAt,
                 pendingAction = pending,
                 reconciliationNotice = reconcileError,
             )

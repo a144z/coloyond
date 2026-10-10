@@ -17,11 +17,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 
 /** Read-only native presentation. It creates no wallet, transaction, or signing capability. */
 @Composable
 fun PortfolioStatusScreen(
     model: ReadModelV1,
+    clientRetrievedAt: Instant? = null,
     cardTarget: CardTargetSnapshot? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -41,6 +43,7 @@ fun PortfolioStatusScreen(
             Fact("Cluster", "Solana ${model.network.cluster.wireValue}")
             Fact("Genesis hash", PortfolioReadModelPresentation.optional(model.network.genesisHash), code = true)
             Fact("Snapshot slot block time", PortfolioReadModelPresentation.optional(model.source.observedAt))
+            Fact("Client fetched at", PortfolioReadModelPresentation.optional(clientRetrievedAt?.toString()))
             Fact("Observation slot", PortfolioReadModelPresentation.optional(model.source.slot), code = true)
         }
 
