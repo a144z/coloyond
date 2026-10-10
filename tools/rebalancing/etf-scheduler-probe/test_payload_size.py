@@ -1,6 +1,6 @@
 import unittest
 
-from payload_size import InstructionShape, compiled_task_account_size
+from payload_size import InstructionShape, compiled_task_account_size, requeue_account_growth
 
 
 class TukTukPayloadSizeTests(unittest.TestCase):
@@ -86,6 +86,17 @@ class TukTukPayloadSizeTests(unittest.TestCase):
                 instructions=[],
                 description="界" * 14,
             )
+
+    def test_returned_task_reallocation_accepts_exact_runtime_growth_limit(self):
+        self.assertEqual(requeue_account_growth(10_172), 10_240)
+        with self.assertRaisesRegex(ValueError, "growth limit"):
+            requeue_account_growth(10_173)
+
+    def test_returned_task_reallocation_rejects_invalid_body_sizes(self):
+        for value in (-1, True, 1.5, "100"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "non-negative integer"):
+                    requeue_account_growth(value)
 
 
 if __name__ == "__main__":

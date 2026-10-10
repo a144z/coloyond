@@ -13,6 +13,8 @@ I64_MIN = -(1 << 63)
 I64_MAX = (1 << 63) - 1
 TASK_DESCRIPTION_MAX_BYTES = 40
 ANCHOR_DISCRIMINATOR_BYTES = 8
+MAX_PERMITTED_DATA_INCREASE = 10_240
+TASK_REALLOC_OVERHEAD_BYTES = ANCHOR_DISCRIMINATOR_BYTES + 60
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,20 @@ class InstructionShape:
     program_id_index: int
     account_indexes: tuple[int, ...]
     data_length: int
+
+
+def requeue_account_growth(serialized_task_body_bytes):
+    """Return and bound TukTuk's growth for one empty returned-task PDA."""
+    if (
+        isinstance(serialized_task_body_bytes, bool)
+        or not isinstance(serialized_task_body_bytes, int)
+        or serialized_task_body_bytes < 0
+    ):
+        raise ValueError("serialized_task_body_bytes: expected non-negative integer")
+    growth = serialized_task_body_bytes + TASK_REALLOC_OVERHEAD_BYTES
+    if growth > MAX_PERMITTED_DATA_INCREASE:
+        raise ValueError("returned TaskV0 exceeds the single-instruction account growth limit")
+    return growth
 
 
 def _u8(value, label):
