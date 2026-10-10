@@ -73,7 +73,7 @@ function ModelView({ model }: { model: ConditionStatusReadModel }) {
         <div><dt>Condition sequence</dt><dd>{model.sequence ?? "Not initialized"}</dd></div>
         <div><dt>Last allocated nonce</dt><dd>{model.nextNonce ?? "Not initialized"}</dd></div>
         <div><dt>Configuration revision</dt><dd>{model.currentConfigurationRevision}</dd></div>
-        <div><dt>Risk</dt><dd>{model.riskPaused ? "Paused on chain" : "New risk enabled on chain"}</dd></div>
+        <div><dt>Risk</dt><dd>{model.riskPaused ? "Paused on chain" : "Not paused in governance"}</dd></div>
       </div>
       {model.accountState === "not-initialized" ? (
         <div className="condition-status-empty-block"><strong>No condition account is initialized.</strong><span>This confirmed Localnet snapshot contains no state at the condition PDA. It may mean no rule has been proposed; the page does not infer support from the deployed binary or the portfolio demo.</span></div>
