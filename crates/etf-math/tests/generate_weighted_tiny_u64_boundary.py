@@ -15,21 +15,17 @@ INPUTS = (1, 100, 1_000)
 def vectors():
     for weight_in in range(100, 10_000, 100):
         weight_out = 10_000 - weight_in
-        for reverse in (False, True):
-            pair = (weight_in, weight_out)
-            if reverse:
-                pair = pair[::-1]
-            for amount_in in INPUTS:
-                yield (
-                    INPUT_RESERVE,
-                    OUTPUT_RESERVE,
-                    pair[0],
-                    pair[1],
-                    amount_in,
-                    exact_curve_max_output(
-                        INPUT_RESERVE, OUTPUT_RESERVE, pair[0], pair[1], amount_in, 0
-                    ),
-                )
+        for amount_in in INPUTS:
+            yield (
+                INPUT_RESERVE,
+                OUTPUT_RESERVE,
+                weight_in,
+                weight_out,
+                amount_in,
+                exact_curve_max_output(
+                    INPUT_RESERVE, OUTPUT_RESERVE, weight_in, weight_out, amount_in, 0
+                ),
+            )
 
 
 def main():

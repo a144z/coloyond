@@ -68,7 +68,7 @@ fn all_weight_steps_match_exact_tiny_input_boundaries_without_overpaying() {
         tested += 1;
     }
     assert_eq!(
-        tested, 594,
+        tested, 297,
         "regenerate the exact-invariant boundary corpus"
     );
 }
