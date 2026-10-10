@@ -2,7 +2,7 @@
 
 This harness starts the repository's compiled `coloyond_vault` SBF program on a fresh Solana test validator and injects deterministic test state at genesis. The browser must use the emitted `/localnet-manifest.json` and the user's imported Localnet wallet to submit actual transactions.
 
-The vault, governance and auction policy are fixture accounts because the production program intentionally has no callable initializer for them yet. The two SPL mints and all token accounts are Localnet-only fixtures. The Pyth `PriceUpdateV2` bytes use the real SDK account format and the pinned feed IDs/addresses, but their prices are synthetic fixture values; they are not signed by Pyth or suitable for Devnet/Mainnet. The auction and SPL Token transfer instructions still execute in the actual deployed SBF program on this local validator.
+The vault, governance and auction policy are fixture accounts because the production program intentionally has no callable initializer for them yet. The two SPL mints and all token accounts are Localnet-only fixtures. The Pyth `PriceUpdateV2` bytes use the SDK's Borsh field layout and pinned feed IDs/addresses, but their prices are synthetic fixture values; they are not signed by Pyth or suitable for Devnet/Mainnet. The SDK's 134-byte `LEN` reserves space for the longer `Partial` verification variant; this fixture serializes `Full`, whose Borsh data is 133 bytes. The adapter accepts exactly those two lengths. The auction and SPL Token transfer instructions still execute in the actual deployed SBF program on this local validator.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ From the repository root:
 
 The first start creates a throwaway wallet file with mode `0600`, generates fixture account dumps outside Git, compiles the SBF program, starts a reset validator, funds the test wallet with local SOL, reads the validator's actual genesis hash, and writes `public/localnet-manifest.json`. Vite serves that file as `/localnet-manifest.json`. The manifest contains public addresses and test instruction values only; it never contains a secret key.
 
-Start or keep Vite running as usual. The app must use the manifest's RPC/genesis values and reject any wallet/provider connection that is not the expected Localnet endpoint. Import the dedicated wallet described below; do not point a funded wallet at this validator.
+Start or keep Vite running as usual. The app verifies its own RPC URL and genesis hash against the manifest and checks the connected public key against the designated test wallet. It does not inspect or verify the wallet extension's selected cluster. Signed transactions are submitted directly to `http://127.0.0.1:8899`. Import only the dedicated throwaway wallet described below; do not use a funded wallet.
 
 ### Wallet import
 
@@ -32,7 +32,7 @@ The test wallet path and public address are printed by `start.sh`. To import it 
 
 1. Run `./tools/rebalancing/localnet/copy-wallet-secret.sh` on macOS. This copies the base58 secret directly to the system clipboard and prints only a confirmation.
 2. In the wallet, choose **Add / Connect Wallet → Import Private Key**, select Solana, and paste the clipboard value.
-3. Set the wallet network to **Localnet/Custom RPC** at `http://127.0.0.1:8899` if the wallet supports custom Solana RPCs. If it cannot switch RPC, use the project UI's Localnet provider path where supported; the app must verify the provider's cluster before signing.
+3. If the wallet supports a **Localnet/Custom RPC** network, set it to `http://127.0.0.1:8899`. The app cannot read the extension's selected cluster, but it submits the signed transaction to its verified Localnet RPC. Use only this throwaway wallet and never approve a prompt from a funded wallet.
 4. Clear the clipboard after import. Never paste this local-only key into a Mainnet or Devnet wallet session.
 
 The generated keypair remains at `$COLOYOND_LOCALNET_HOME/wallet.json` (default `~/.local/state/coloyond/localnet/wallet.json`) across resets. Keep that file private and outside Git.
@@ -41,8 +41,8 @@ The generated keypair remains at `$COLOYOND_LOCALNET_HOME/wallet.json` (default 
 
 The generated manifest supplies the accounts and amounts for the browser workbench. It includes a partial fill and a second fill for the remaining amount, so the UI can show both state transitions.
 
-1. Open the rebalancing workbench and select **Localnet**. Confirm the displayed RPC is `http://127.0.0.1:8899`, the cluster is `localnet`, and the genesis hash matches the loaded manifest.
-2. Connect the dedicated imported wallet. The UI should show the test wallet address, local SOL balance, the test token balances, vault and policy addresses, and the Localnet-oracle fixture notice.
+1. Open the rebalancing workbench and select **Localnet**. Confirm the page reports `http://127.0.0.1:8899` and its RPC genesis hash matches the loaded manifest. The wallet extension's selected cluster is not inspected by the app.
+2. Connect the dedicated imported wallet. Confirm the test wallet address, test token balances, vault and policy addresses, and the Localnet-oracle fixture notice. The app checks that this wallet has a nonzero Localnet SOL balance for fees, but does not display that balance.
 3. Before starting, record the two custody token balances and the taker's USDC balance. Start the auction with `startSellAsset=0` and the manifest's `startAmount`.
 4. Confirm the wallet prompt, approve the transaction, and wait for a confirmed signature. The UI should show the transaction signature/confirmation, the initialized intent PDA, sequence 1, expiry slot and current custody balances.
 5. Fill sequence 1 with the manifest's first fill values. Confirm and compare the receipt with the live token accounts: vault wSOL decreases by the filled sell amount, vault USDC increases by gross buy amount, taker USDC decreases by that gross amount, taker wSOL increases by the sold amount. Read the intent back from RPC; `remainingSellAmount` must decrease and its compare-and-swap sequence advances.
