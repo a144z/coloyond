@@ -21,6 +21,9 @@ export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
   const atTarget = desk.plan.legs.length === 0;
   const targetsValid = desk.targetsTotal === 100;
   const driftBarWidth = Math.max(2, Math.min(100, desk.drift * 6));
+  const splitPair = desk.assets.length === 2 ? desk.assets : null;
+  const splitTotal = Math.max(1, desk.targetsTotal);
+  const splitShare = (targetPct: number) => (targetPct / splitTotal) * 100;
 
   return (
     <>
@@ -42,6 +45,36 @@ export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
           <p className="cr-desk-note">Basket at sample values: {fmtUsd(desk.totalUsd)}. The market-move button below moves the basket as prices would.</p>
         </DeskSection>
         <DeskSection area="cr-desk-targets-block" index="02" title="Target weights">
+          {splitPair !== null && (
+            <div className="cr-desk-split">
+              <div className="cr-desk-split-track" aria-hidden="true">
+                {splitPair.map((asset) => <span key={asset.symbol} title={`${asset.symbol} target ${asset.targetPct}%`} style={{ width: `${splitShare(asset.targetPct)}%`, background: asset.color }} />)}
+              </div>
+              <div className="cr-desk-split-legend" aria-hidden="true">
+                {splitPair.map((asset) => <span key={asset.symbol} style={{ color: asset.color }}>■ {asset.symbol} {Math.round(splitShare(asset.targetPct))}%</span>)}
+              </div>
+              <label className="cr-desk-slider">
+                <span>Slide to set the {splitPair[0].symbol} / {splitPair[1].symbol} split</span>
+                <input
+                  className="cr-desk-slider-input"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.min(100, Math.max(0, splitPair[0].targetPct))}
+                  style={{ "--cr-split-track": `linear-gradient(to right, ${splitPair[0].color} 0%, ${splitPair[0].color} ${splitPair[0].targetPct}%, ${splitPair[1].color} ${splitPair[0].targetPct}%, ${splitPair[1].color} 100%)` } as React.CSSProperties}
+                  aria-label={`Target split percent for ${splitPair[0].symbol}`}
+                  onChange={(event) => {
+                    const leftPct = Number(event.target.value);
+                    desk.setTarget(splitPair[0].symbol, leftPct);
+                    desk.setTarget(splitPair[1].symbol, 100 - leftPct);
+                  }}
+                />
+                <output>{splitPair[0].symbol} {splitPair[0].targetPct}% · {splitPair[1].symbol} {splitPair[1].targetPct}%</output>
+              </label>
+              {!targetsValid && <p className="cr-desk-note">The bar and the slider read your values as shares of a {desk.targetsTotal}% total, so they stay proportional until you normalize.</p>}
+            </div>
+          )}
           <div className="cr-desk-targets">
             {desk.assets.map((asset) => (
               <label className="cr-desk-target" key={asset.symbol}>

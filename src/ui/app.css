@@ -484,3 +484,18 @@ a { color: inherit; }
   .cr-topbar-right { gap: 12px; }
   .cr-wallet-btn { min-height: 34px; padding: 0 12px; }
 }
+
+/* Rebalance desk: the split slider and its one-bar target composition. */
+.cr-desk-split { display: grid; gap: 8px; margin: 0 0 14px; }
+.cr-desk-split-track { display: flex; height: 14px; border: 1px solid var(--rule); border-radius: 7px; background: var(--canvas); overflow: hidden; }
+.cr-desk-split-track span { height: 100%; }
+.cr-desk-split-track span + span { border-left: 1px solid var(--paper); }
+.cr-desk-split-legend { display: flex; flex-wrap: wrap; gap: 14px; font: 11px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; }
+.cr-desk-slider { display: grid; gap: 5px; }
+.cr-desk-slider > span, .cr-desk-slider output { font: 10px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; color: var(--muted); }
+.cr-desk-slider-input { appearance: none; width: 100%; min-height: 44px; margin: 0; background: transparent; cursor: pointer; }
+.cr-desk-slider-input::-webkit-slider-runnable-track { height: 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--cr-split-track, var(--field)); }
+.cr-desk-slider-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border: 1px solid var(--ink); border-radius: 50%; background: var(--paper); }
+.cr-desk-slider-input::-moz-range-track { height: 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--cr-split-track, var(--field)); }
+.cr-desk-slider-input::-moz-range-thumb { border: 1px solid var(--ink); border-radius: 50%; background: var(--paper); height: 20px; width: 20px; }
+.cr-desk-slider-input:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
