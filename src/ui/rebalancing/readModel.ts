@@ -12,7 +12,7 @@ const USDC_USD_FEED = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX";
 const VAULT_ACCOUNT_SIZE = 353;
 const CONDITION_STATE_ACCOUNT_SIZE = 453;
 const GOVERNANCE_ACCOUNT_SIZE = 267;
-const AUCTION_POLICY_ACCOUNT_SIZE = 118;
+const AUCTION_POLICY_ACCOUNT_SIZE = 176;
 const CONDITION_ACCOUNT_SEED = Buffer.from("condition_state");
 const HISTORY_LIMIT = 20;
 const SYSVAR_PROGRAM_ID = "Sysvar1111111111111111111111111111111111111";
@@ -293,11 +293,16 @@ export function decodeAuctionPolicy(data: Uint8Array, ownerProgramId: string, ex
   reader.u16(); reader.u16(); // auction curve rates
   reader.u64(); // duration
   reader.u16(); reader.u16(); // fee bounds
+  reader.u16(); // reserve fee share
+  for (let index = 0; index < 2; index++) reader.u64(); // reserve floor
+  for (let index = 0; index < 2; index++) reader.u64(); // epoch bounty budget
+  reader.u64(); // bounty epoch
+  for (let index = 0; index < 2; index++) reader.u64(); // bounty epoch spent
   reader.u64(); // maximum bounty
   reader.u16(); reader.u16(); // loss bounds
   const assetFeedIndices: [number, number] = [reader.u8(), reader.u8()];
   if (data.byteLength !== AUCTION_POLICY_ACCOUNT_SIZE) throw new Error(`Auction policy must contain exactly ${AUCTION_POLICY_ACCOUNT_SIZE} allocated bytes.`);
-  if (version !== 1) throw new Error(`Unsupported auction policy version ${version}.`);
+  if (version !== 2) throw new Error(`Unsupported auction policy version ${version}.`);
   if (vault !== expectedVault) throw new Error("Auction policy is bound to a different vault.");
   if (![0, 1].includes(assetFeedIndices[0]) || ![0, 1].includes(assetFeedIndices[1]) || assetFeedIndices[0] === assetFeedIndices[1]) {
     throw new Error("Auction policy has an invalid pinned-feed mapping.");
