@@ -1,0 +1,33 @@
+{
+  "fixtureOnly": true,
+  "programId": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+  "accountFixture": {
+    "path": "vault-account-v1.hex",
+    "length": 353,
+    "version": 1,
+    "status": "paused",
+    "configurationRevision": "7",
+    "targetBps": [5500, 4500],
+    "accountedAmounts": ["123456789", "987654321"],
+    "bountyLiabilities": ["3", "4"],
+    "sequence": "42"
+  },
+  "pdaSeedVectors": [
+    {
+      "name": "vault",
+      "programId": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+      "seedsHex": ["7661756c74"],
+      "address": "DVZ7tQAgko19RNUXKcMU1RXtcqff2kT415C6JA49NMMQ"
+    },
+    {
+      "name": "governance",
+      "programId": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+      "seedsHex": ["676f7665726e616e6365", "b99cd29169dc97664b4507e78853152431b18703b158555ef22ebb57d792e7d7"],
+      "address": "HVXEcSutFXZQoJSbefeRHWwdwas7HBMWMvZYvzctddiF"
+    }
+  ],
+  "u64LittleEndianVectors": [
+    { "decimal": "123456789", "littleEndianHex": "15cd5b0700000000" },
+    { "decimal": "987654321", "littleEndianHex": "b168de3a00000000" }
+  ]
+}

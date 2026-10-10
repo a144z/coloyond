@@ -1,2 +1,326 @@
-//! Instruction logic is wired to Anchor account contexts in the S1F IDL pass.
+//! Anchor account contexts and token-moving entry/exit instructions.
+
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Mint, Token, TokenAccount};
+
+use crate::{
+    governance::GovernanceState,
+    state::{AssetConfig, Vault, VaultError, ASSET_COUNT, VAULT_VERSION},
+};
+
 pub mod entry_exit;
+pub mod handlers;
+
+pub const VAULT_SEED: &[u8] = b"vault";
+pub const GOVERNANCE_SEED: &[u8] = b"governance";
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey =
+    pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+pub fn associated_token_address(authority: Pubkey, mint: Pubkey, token_program: Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[authority.as_ref(), token_program.as_ref(), mint.as_ref()],
+        &ASSOCIATED_TOKEN_PROGRAM_ID,
+    )
+    .0
+}
+
+/// Account wrapper for the frozen governance transition helper. Keeping this
+/// separate preserves its pure transition API while giving Anchor a stable PDA.
+#[account]
+#[derive(InitSpace)]
+pub struct GovernanceAccount {
+    pub version: u8,
+    pub vault: Pubkey,
+    pub share_mint: Pubkey,
+    pub allowed_mints: [Pubkey; ASSET_COUNT],
+    pub governance_authority: Pubkey,
+    pub emergency_authority: Pubkey,
+    pub min_delay_slots: u64,
+    pub configuration_revision: u64,
+    pub target_bps: [u16; ASSET_COUNT],
+    pub proposal_nonce: u64,
+    pub pending: Option<crate::governance::PolicyProposal>,
+    pub risk_paused: bool,
+}
+
+impl GovernanceAccount {
+    pub const SPACE: usize = 8 + Self::INIT_SPACE;
+
+    fn state(&self) -> GovernanceState {
+        GovernanceState {
+            version: self.version,
+            vault: self.vault,
+            share_mint: self.share_mint,
+            allowed_mints: self.allowed_mints,
+            governance_authority: self.governance_authority,
+            emergency_authority: self.emergency_authority,
+            min_delay_slots: self.min_delay_slots,
+            configuration_revision: self.configuration_revision,
+            target_bps: self.target_bps,
+            proposal_nonce: self.proposal_nonce,
+            pending: self.pending,
+            risk_paused: self.risk_paused,
+        }
+    }
+
+    fn store(&mut self, state: GovernanceState) {
+        self.version = state.version;
+        self.vault = state.vault;
+        self.share_mint = state.share_mint;
+        self.allowed_mints = state.allowed_mints;
+        self.governance_authority = state.governance_authority;
+        self.emergency_authority = state.emergency_authority;
+        self.min_delay_slots = state.min_delay_slots;
+        self.configuration_revision = state.configuration_revision;
+        self.target_bps = state.target_bps;
+        self.proposal_nonce = state.proposal_nonce;
+        self.pending = state.pending;
+        self.risk_paused = state.risk_paused;
+    }
+
+    fn validate_link(&self, vault: &Vault, vault_key: Pubkey) -> Result<()> {
+        require!(
+            self.vault == vault_key,
+            crate::governance::GovernanceError::InvalidVault
+        );
+        require!(
+            self.version == crate::governance::GOVERNANCE_VERSION,
+            crate::governance::GovernanceError::InvalidVault
+        );
+        require!(
+            vault.version == VAULT_VERSION,
+            VaultError::InvalidConfiguration
+        );
+        require!(
+            self.share_mint == vault.share_mint,
+            crate::governance::GovernanceError::InvalidAssetSet
+        );
+        require!(
+            self.allowed_mints == [vault.assets[0].mint, vault.assets[1].mint],
+            crate::governance::GovernanceError::InvalidAssetSet
+        );
+        require!(
+            self.configuration_revision == vault.configuration_revision,
+            crate::governance::GovernanceError::StaleRevision
+        );
+        require!(
+            self.target_bps == [vault.assets[0].target_bps, vault.assets[1].target_bps],
+            crate::governance::GovernanceError::StaleRevision
+        );
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct InitializeVault {}
+
+#[derive(Accounts)]
+pub struct DepositProportional<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump, has_one = share_mint)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(mut)]
+    pub share_mint: Account<'info, Mint>,
+    #[account(mut, token::mint = share_mint, token::authority = depositor)]
+    pub user_shares: Account<'info, TokenAccount>,
+    pub depositor: Signer<'info>,
+    #[account(mut, address = vault.assets[0].custody)]
+    pub custody_a: Account<'info, TokenAccount>,
+    #[account(mut, address = vault.assets[1].custody)]
+    pub custody_b: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_a, token::authority = depositor)]
+    pub user_asset_a: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_b, token::authority = depositor)]
+    pub user_asset_b: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[0].mint)]
+    pub mint_a: Account<'info, Mint>,
+    #[account(address = vault.assets[1].mint)]
+    pub mint_b: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct RedeemInKind<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump, has_one = share_mint)]
+    pub vault: Account<'info, Vault>,
+    #[account(seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    #[account(mut)]
+    pub share_mint: Account<'info, Mint>,
+    #[account(mut, token::mint = share_mint, token::authority = holder)]
+    pub user_shares: Account<'info, TokenAccount>,
+    pub holder: Signer<'info>,
+    #[account(mut, address = vault.assets[0].custody)]
+    pub custody_a: Account<'info, TokenAccount>,
+    #[account(mut, address = vault.assets[1].custody)]
+    pub custody_b: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_a, token::authority = holder)]
+    pub user_asset_a: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint_b, token::authority = holder)]
+    pub user_asset_b: Account<'info, TokenAccount>,
+    #[account(address = vault.assets[0].mint)]
+    pub mint_a: Account<'info, Mint>,
+    #[account(address = vault.assets[1].mint)]
+    pub mint_b: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeTargets<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    pub governance_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ActivateTargets<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+}
+
+#[derive(Accounts)]
+pub struct PauseRisk<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    pub emergency_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ResumeRisk<'info> {
+    #[account(mut, seeds = [VAULT_SEED], bump = vault.bump)]
+    pub vault: Account<'info, Vault>,
+    #[account(mut, seeds = [GOVERNANCE_SEED, vault.key().as_ref()], bump)]
+    pub governance: Account<'info, GovernanceAccount>,
+    pub governance_authority: Signer<'info>,
+}
+
+pub fn check_custody(
+    vault: &Vault,
+    vault_key: Pubkey,
+    custody_a: &Account<'_, TokenAccount>,
+    custody_b: &Account<'_, TokenAccount>,
+    mint_a: &Account<'_, Mint>,
+    mint_b: &Account<'_, Mint>,
+) -> Result<()> {
+    require_keys_eq!(vault.authority, vault_key, VaultError::InvalidConfiguration);
+    require_keys_eq!(
+        custody_a.mint,
+        vault.assets[0].mint,
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        custody_b.mint,
+        vault.assets[1].mint,
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        custody_a.key(),
+        associated_token_address(
+            vault_key,
+            vault.assets[0].mint,
+            vault.assets[0].token_program
+        ),
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        custody_b.key(),
+        associated_token_address(
+            vault_key,
+            vault.assets[1].mint,
+            vault.assets[1].token_program
+        ),
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        mint_a.key(),
+        vault.assets[0].mint,
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        mint_b.key(),
+        vault.assets[1].mint,
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(custody_a.owner, vault_key, VaultError::InvalidConfiguration);
+    require_keys_eq!(custody_b.owner, vault_key, VaultError::InvalidConfiguration);
+    require_keys_eq!(
+        vault.assets[0].token_program,
+        anchor_spl::token::ID,
+        VaultError::InvalidConfiguration
+    );
+    require_keys_eq!(
+        vault.assets[1].token_program,
+        anchor_spl::token::ID,
+        VaultError::InvalidConfiguration
+    );
+    require!(
+        mint_a.decimals == vault.assets[0].decimals && mint_b.decimals == vault.assets[1].decimals,
+        VaultError::InvalidConfiguration
+    );
+    Ok(())
+}
+
+pub fn validate_governance(
+    governance: &GovernanceAccount,
+    vault: &Vault,
+    vault_key: Pubkey,
+) -> Result<()> {
+    governance.validate_link(vault, vault_key)
+}
+
+pub fn asset_configs(
+    mints: [Pubkey; 2],
+    custody: [Pubkey; 2],
+    decimals: [u8; 2],
+    target_bps: [u16; 2],
+) -> [AssetConfig; 2] {
+    [
+        AssetConfig {
+            mint: mints[0],
+            token_program: anchor_spl::token::ID,
+            custody: custody[0],
+            decimals: decimals[0],
+            target_bps: target_bps[0],
+        },
+        AssetConfig {
+            mint: mints[1],
+            token_program: anchor_spl::token::ID,
+            custody: custody[1],
+            decimals: decimals[1],
+            target_bps: target_bps[1],
+        },
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pda_addresses_match_the_shared_seed_vectors() {
+        let (vault, _) = Pubkey::find_program_address(&[VAULT_SEED], &crate::ID);
+        assert_eq!(
+            vault,
+            pubkey!("DVZ7tQAgko19RNUXKcMU1RXtcqff2kT415C6JA49NMMQ")
+        );
+
+        let (governance, _) =
+            Pubkey::find_program_address(&[GOVERNANCE_SEED, vault.as_ref()], &crate::ID);
+        assert_eq!(
+            governance,
+            pubkey!("HVXEcSutFXZQoJSbefeRHWwdwas7HBMWMvZYvzctddiF")
+        );
+    }
+
+    #[test]
+    fn serialized_vault_space_matches_the_shared_decoder_fixture() {
+        assert_eq!(Vault::SPACE, 353);
+    }
+}
