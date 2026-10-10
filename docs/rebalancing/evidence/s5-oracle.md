@@ -1,6 +1,6 @@
 # S5 Pyth account-mode research
 
-**Status:** primary-source inventory complete; fixed-feed Devnet account and consumer proof outstanding. This is not S5C acceptance, S0B admission, or a claim that any candidate account was fetched from chain.
+**Status:** primary-source inventory and one direct Devnet fixed-feed/parser observation complete; S5C acceptance and S0B admission remain open. The observed accounts were live at the recorded slot, but feed freshness is transient and no ETF consumer transaction has run.
 
 ## Account model decision
 
@@ -12,38 +12,47 @@ Pyth's current Solana guide distinguishes fixed, shard-selected price-feed accou
 
 | Asset price | Stable Pyth Core feed ID | Candidate shard-0 account | Source status |
 |---|---|---|---|
-| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Listed by Pyth as sponsored on Solana Mainnet and Devnet; direct Devnet read not performed here. |
-| BTC/USD | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Address derived with the official SDK for shard 0; direct Devnet read not performed here. |
-| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Listed by Pyth as sponsored on Solana Mainnet and Devnet; direct Devnet read not performed here. |
+| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Direct Devnet account fetched and decoded by the pinned Rust SDK; see observation below. |
+| BTC/USD | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Direct Devnet account fetched and decoded by the pinned Rust SDK; see observation below. |
+| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Direct Devnet account fetched and decoded by the pinned Rust SDK; see observation below. |
 
 | Program | Solana Devnet address | Role |
 |---|---|---|
-| Pyth Receiver / Pull Oracle | `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` | Owns `PriceUpdateV2` update accounts. |
-| Pyth Price Feed / Push Oracle | `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` | Program listed for fixed Push Feed accounts. |
+| Pyth Receiver / Pull Oracle | `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` | Direct Devnet read: executable under upgradeable BPF loader. |
+| Pyth Price Feed / Push Oracle | `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` | Direct Devnet read: executable under upgradeable BPF loader. |
 
 Pyth documents a nominal 55-second heartbeat and 0.5% deviation for the default sponsored Solana feeds. These are updater criteria, not an update SLA; stale feeds must block new risk. A price feed does not prove that the corresponding Devnet SPL mint is backed by that real-world asset. Use labeled synthetic BTC/USD and USD test mints if no backed Devnet mint is separately established.
 
 ## S5C account/parser proof required
 
-The isolated adapter now depends on the repository-pinned `anchor-lang = 0.32.1` and `pyth-solana-receiver-sdk = 1.2.0`. It checks the manifest PDA and Receiver owner before SDK deserialization, then validates the pinned feed ID, Full verification, maximum age, positive/nonfuture price, confidence ratio and exact 18-decimal fixed-point conversion. Three offline unit tests pass, including round-trip SDK account serialization/deserialization and negative owner/staleness/Partial cases. These tests use constructed local account data and do **not** prove any live Devnet owner, bytes, price or update status.
+The isolated adapter depends on the repository-pinned `anchor-lang = 0.32.1` and `pyth-solana-receiver-sdk = 1.2.0`. It checks the manifest PDA and Receiver owner before SDK deserialization, then validates the pinned feed ID, Full verification, maximum age, positive/nonfuture price, confidence ratio and exact 18-decimal fixed-point conversion. Four offline unit tests pass, including round-trip SDK account serialization/deserialization and negative owner/staleness/Partial cases. A reusable live probe now fetches account bytes and invokes that same SDK-backed adapter; the observation below establishes one point-in-time account/parser match.
 
-- Read exact Devnet genesis and query each candidate address from the same cluster.
+- Refresh and retain direct Devnet observations before deployment; the present sample is not a freshness SLA.
 - Record account owner, data length, type/layout, embedded feed ID, shard, raw price/confidence/exponent, publish time, read slot and mode-specific verification evidence.
 - Compile the selected parser against the repo's exact Anchor and Pyth SDK lockfile; use fetched account data to prove successful decoding and reject wrong owner, wrong feed identity, malformed layout, nonpositive price, unsupported exponent, excessive confidence, stale and nonfuture-time cases at the adapter boundary.
 - If using Receiver updates, prove `Full` verification and the exact client posting flow. If using fixed Push Feed accounts, document the trusted Pyth program's verification/update semantics and do not report a Receiver verification field.
 - S5C does not require an ETF-program transaction because S5E has not deployed that program yet. The real Devnet consumer transaction, on-chain rejection without token movement, and stale-feed recovery are S5H/CP5 proof obligations after S5E.
 
-No Devnet account read was available during this audit because the environment could not resolve the public Solana RPC host. All addresses above remain candidates until the direct proof succeeds.
+## Direct Devnet observation — 10 October 2026
+
+The read-only tool at [`tools/rebalancing/etf-oracle-probe`](../../tools/rebalancing/etf-oracle-probe/README.md) queried `https://api.devnet.solana.com` at confirmed commitment. At slot `509627905`, block time `1791656201` (2026-10-10 18:16:41 UTC), Devnet genesis was `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. All three fixed feed accounts had owner `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, 134 bytes of data, and decoded through the pinned SDK with the expected embedded feed ID and `Full` verification. The adapter accepted each at this observation using a 60-second age ceiling and a deliberately permissive `u16::MAX` confidence ceiling (not an approved policy).
+
+| Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Data SHA-256 |
+|---|---:|---:|---:|---|
+| SOL/USD | `10989570949 ± 3366894`, exponent `-8` | 32 seconds | 4 bps | `a7bf8cf4272fc7032857621ee978768b46546bd519237b642b0fe529297c86f5` |
+| BTC/USD | `8299695083557 ± 5978366443`, exponent `-8` | 32 seconds | 8 bps | `f72cf1a2ca50815700527de5b66077c7b5a262c67b56a37e012e07ea5768248e` |
+| USDC/USD | `99987886 ± 97114`, exponent `-8` | 32 seconds | 10 bps | `8096144b43dfb21b9ca165bef052123ce163d01ddd6d158b813225eaec937c76` |
+
+Both Pyth program IDs in the table above were executable under `BPFLoaderUpgradeab1e11111111111111111111111` at confirmed slot `509627995`. A prior probe minutes earlier observed BTC/USD and USDC/USD at 326 seconds old and correctly rejected them under the 60-second check; a later snapshot had all three feeds at 32 seconds old. This confirms fail-closed staleness behavior and changing availability, not a guaranteed update cadence. The raw price for a Pyth feed does not prove that any corresponding Devnet SPL test mint is backed by the labeled asset.
 
 ## 11 October 2026 compatibility finding
 
-The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `PriceUpdateV2` parser and `get_price_no_older_than` method enforce the Receiver account discriminator, feed ID, maximum age and Full verification when used through Anchor `Account<PriceUpdateV2>`. A fixed sponsored feed is a different lifecycle (long-lived shard/feed PDA) from a user-posted ephemeral update, but Pyth's current official Push Oracle program source shows `update_price_feed` CPI-calls the Receiver's `post_update` using that PDA as the `price_update_account`, then deserializes it with `PriceUpdateV2::try_deserialize` and verifies the embedded feed ID. This strongly indicates the same account data type and Receiver CPI ownership path are used for both modes. Thus the current Rust parser is a plausible candidate for fixed feeds; no custom raw-byte parser is justified from the evidence found so far.
+The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `PriceUpdateV2` parser and `get_price_no_older_than` method enforce the Receiver account discriminator, feed ID, maximum age and Full verification when used through Anchor `Account<PriceUpdateV2>`. A fixed sponsored feed is a different lifecycle (long-lived shard/feed PDA) from a user-posted ephemeral update, but Pyth's current official Push Oracle program source shows `update_price_feed` CPI-calls the Receiver's `post_update` using that PDA as the `price_update_account`, then deserializes it with `PriceUpdateV2::try_deserialize` and verifies the embedded feed ID. The direct observation above confirms all three candidate accounts use the Receiver owner and decode with the pinned SDK as Full-verified `PriceUpdateV2` data. Thus the current Rust parser is a viable account-mode match for this sample; no custom raw-byte parser is justified from the evidence found so far.
 
-The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. For the fixed sponsored path, the Full-verification property must still be asserted from the actual decoded account (there is no separate feed-mode verification field), and the exact owner must be read from Devnet. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; existing native Rust tests compile locally, but S5C still needs the exact intended build target and consumer proof.
+The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. The direct observation asserts Full verification in the actual decoded account. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; native tests and the live account probe compile with the pinned versions, but an ETF SBF consumer transaction remains for S5H after S5E.
 
-No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C must prove exact address derivation, account owner/discriminator/layout, Full verification, embedded feed ID, freshness, confidence and precision against Devnet before acceptance. If account owner or parser compatibility fails, return a reviewed S5A amendment to ephemeral Full Receiver `PriceUpdateV2` accounts, including the client-posted update transaction and rent/cleanup flow. Do not hand-parse production account bytes without a versioned layout and official-source validation.
+No S5A oracle decision change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has now directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, freshness and confidence for one point-in-time Devnet read. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
-The direct `getGenesisHash` RPC probe in this session failed before connecting because the environment could not resolve `api.devnet.solana.com`. This environmental failure does not establish that the feed accounts are absent or malformed. Exact genesis, owner, executable state, account bytes, feed identity, price, timestamp, and slot remain open.
 
 ## Primary sources
 

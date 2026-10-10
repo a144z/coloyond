@@ -1,14 +1,14 @@
 # ETF AMM v1 deployment manifest
 
-**Status:** `DRAFT / NOT FROZEN / NOT ADMITTED`. The candidate feed IDs and shard-0 addresses below come from current Pyth primary documentation and its official address derivation. No direct Devnet `getAccountInfo` result has been recorded for these candidate accounts in this repository. Do not deploy, seed, or enable swaps from this draft.
+**Status:** `DRAFT / NOT FROZEN / NOT ADMITTED`. A direct Devnet account/parser observation for the candidate fixed feeds is recorded in [S5C evidence](evidence/s5-oracle.md#direct-devnet-observation--10-october-2026). This does not admit assets or freeze feed risk limits. No ETF program, pool or test mint is deployed by this manifest; do not deploy, seed, or enable swaps from this draft.
 
 ## Network and program
 
 | Field | Value | Evidence state |
 |---|---|---|
 | Cluster | Solana Devnet | Planned test network only. |
-| Genesis hash | _TBD from the exact RPC used by the wallet_ | Must be read and pinned before deployment. |
-| RPC endpoint | _TBD, public or approved provider_ | Store an endpoint label; never treat it as chain identity. |
+| Genesis hash | `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` | Directly observed from the read-only public Devnet probe; verify the exact wallet/app endpoint against this before deployment. |
+| RPC endpoint | `https://api.devnet.solana.com` | Used for current read-only probes only; the app's approved endpoint remains TBD. Endpoint is not chain identity. |
 | Program name | `coloyond-etf` | New program, separate from `coloyond-vault` v0.3.0. |
 | Program ID | _TBD after program IDL/source freeze_ | No ETF program exists in this manifest. |
 | Program executable / loader owner | _TBD from direct Devnet read_ | Require an executable-account and ProgramData/upgrade-authority record. |
@@ -28,8 +28,8 @@ Pyth's current Solana documentation lists the Receiver and Price Feed programs s
 
 | Program | Devnet address | Use | Status |
 |---|---|---|---|
-| Pyth Receiver / Pull Oracle | `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` | Owns verified `PriceUpdateV2` update accounts. | Officially listed; direct Devnet executable read still required. |
-| Pyth Price Feed / Push Oracle | `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` | Program ID used for fixed shard-0 sponsored feed accounts. | Officially listed; direct Devnet executable read still required. |
+| Pyth Receiver / Pull Oracle | `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` | Owns verified `PriceUpdateV2` update accounts. | Direct Devnet read at confirmed slot `509627995`: executable under upgradeable BPF loader. |
+| Pyth Price Feed / Push Oracle | `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` | Program ID used for fixed shard-0 sponsored feed accounts. | Direct Devnet read at confirmed slot `509627995`: executable under upgradeable BPF loader. |
 
 The current first choice is the fixed shard-0 sponsored feed account path because it avoids posting a fresh update with every action. A `PriceUpdateV2` Receiver account is a distinct candidate path, not an interchangeable type. If the fixed feed account path cannot be safely decoded with the current SDK/toolchain, S5C must return a reviewed amendment for Full-verified Receiver updates and their wallet update transaction flow. Do not downgrade to Partial verification.
 
@@ -39,9 +39,11 @@ These candidate values are for identity discovery only. The direct Devnet check 
 
 | Pool asset label | Feed | Stable Pyth Core feed ID | Candidate shard-0 account | Devnet mint and backing status |
 |---|---|---|---|---|
-| SOL | SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | WSOL candidate mint `So11111111111111111111111111111111111111112`; mint owner, decimals, authorities and exact Devnet account must be verified. |
-| Test BTC | BTC/USD | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Devnet-created classic SPL test mint, address/decimals/authorities TBD; must be labeled `synthetic / unbacked`, not BTC. |
-| Test USD | USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Devnet-created classic SPL test mint, address/decimals/authorities TBD; label `synthetic / unbacked`, not redeemable USDC. |
+| SOL | SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Feed owner/layout/id/Full/freshness were verified once at slot `509627905`; WSOL Devnet mint owner, decimals, authorities and matching account remain to be verified. |
+| Test BTC | BTC/USD | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Feed owner/layout/id/Full/freshness were verified once at slot `509627905`; Devnet-created classic SPL test mint, address/decimals/authorities TBD; label `synthetic / unbacked`, not BTC. |
+| Test USD | USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Feed owner/layout/id/Full/freshness were verified once at slot `509627905`; Devnet-created classic SPL test mint, address/decimals/authorities TBD; label `synthetic / unbacked`, not redeemable USDC. |
+
+The observation is point-in-time only. BTC/USD and USDC/USD were stale in an earlier sample before updating again; S5C evidence records both reads. The selected freshness and confidence thresholds remain unapproved, and a Pyth price does not attest to the backing or identity of an SPL mint.
 
 The colleague blueprint's legacy `H6AR...` SOL and `HovQM...` BTC values are preserved in the proposal file but are not selected as current Pyth Core Receiver accounts. Never infer a token's mint or backing from its ticker or price feed.
 
