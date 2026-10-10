@@ -15,9 +15,9 @@ fn every_valid_weight_step_is_safe_at_selected_near_u64_reserve_anchors() {
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        assert_eq!(fields.len(), 8);
-        let [balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps, reference_floor, exact_max_out] =
-            <[u64; 8]>::try_from(fields).expect("eight vector fields");
+        assert_eq!(fields.len(), 9);
+        let [balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps, decimal_floor, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 9]>::try_from(fields).expect("nine vector fields");
 
         let quote = quote_exact_in(
             &[balance_in, balance_out],
@@ -29,20 +29,24 @@ fn every_valid_weight_step_is_safe_at_selected_near_u64_reserve_anchors() {
         )
         .unwrap_or_else(|error| panic!("valid boundary vector rejected ({error:?}): {line}"));
 
-        assert!(
-            quote.amount_out <= reference_floor,
-            "Decimal overpayment: {line}"
+        assert_eq!(
+            decimal_floor, exact_curve_floor,
+            "Decimal/reference disagreement: {line}"
         );
         assert!(
-            quote.amount_out <= exact_max_out,
+            quote.amount_out <= exact_curve_floor,
+            "exact curve overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_gross_custody_max,
             "exact invariant exceeded: {line}"
         );
-        let error = reference_floor - quote.amount_out;
-        let reference = u128::from(reference_floor.max(1));
+        let error = exact_curve_floor - quote.amount_out;
+        let reference = u128::from(exact_curve_floor.max(1));
         let relative_error_pptr =
             (u128::from(error) * 1_000_000_000_000 + reference - 1) / reference;
         maximum_relative_error_pptr = maximum_relative_error_pptr.max(relative_error_pptr);
-        if reference_floor <= 1_000_000_000 {
+        if exact_curve_floor <= 1_000_000_000 {
             assert!(
                 error <= 1,
                 "small-output error exceeds one base unit: {line}"

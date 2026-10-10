@@ -168,9 +168,9 @@ fn generated_full_width_quotes_obey_decimal_and_exact_custody_bounds() {
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        assert_eq!(fields.len(), 8);
-        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, reference_floor, exact_max_out] =
-            <[u64; 8]>::try_from(fields).expect("eight vector fields");
+        assert_eq!(fields.len(), 9);
+        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, decimal_floor, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 9]>::try_from(fields).expect("nine vector fields");
         let quote = quote_exact_in(
             &[balance_in, balance_out],
             &[weight_in as u16, weight_out as u16],
@@ -180,24 +180,28 @@ fn generated_full_width_quotes_obey_decimal_and_exact_custody_bounds() {
             fee_bps as u16,
         )
         .unwrap_or_else(|error| panic!("valid full-width vector rejected ({error:?}): {line}"));
-        assert!(
-            quote.amount_out <= reference_floor,
-            "Decimal overpayment: {line}"
+        assert_eq!(
+            decimal_floor, exact_curve_floor,
+            "Decimal/reference disagreement: {line}"
         );
         assert!(
-            quote.amount_out <= exact_max_out,
+            quote.amount_out <= exact_curve_floor,
+            "exact curve overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_gross_custody_max,
             "exact custody invariant violated: {line}"
         );
-        let error = reference_floor - quote.amount_out;
+        let error = exact_curve_floor - quote.amount_out;
         maximum_absolute_error = maximum_absolute_error.max(error);
-        let reference = u128::from(reference_floor.max(1));
+        let reference = u128::from(exact_curve_floor.max(1));
         let scaled_error = u128::from(error) * 1_000_000_000_000;
         let relative_error_pptr = (scaled_error + reference - 1) / reference;
         if relative_error_pptr > maximum_relative_error_pptr {
             maximum_relative_error_pptr = relative_error_pptr;
             maximum_error_case = line;
         }
-        if reference_floor <= 1_000_000_000 {
+        if exact_curve_floor <= 1_000_000_000 {
             assert!(
                 error <= 1,
                 "small-output error exceeds one base unit: {line}"
@@ -371,9 +375,9 @@ fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        assert_eq!(fields.len(), 11);
-        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, asset_in, asset_out, amount_in, fee_bps, reference_floor] =
-            <[u64; 11]>::try_from(fields).expect("eleven vector fields");
+        assert_eq!(fields.len(), 13);
+        let [reserve0, reserve1, reserve2, weight0, weight1, weight2, asset_in, asset_out, amount_in, fee_bps, decimal_floor, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 13]>::try_from(fields).expect("thirteen vector fields");
         let quote = quote_exact_in(
             &[reserve0, reserve1, reserve2],
             &[weight0 as u16, weight1 as u16, weight2 as u16],
@@ -383,9 +387,20 @@ fn generated_three_asset_quotes_cover_minimum_weight_boundary() {
             fee_bps as u16,
         )
         .unwrap();
-        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
-        let error = reference_floor - quote.amount_out;
-        let reference = u128::from(reference_floor.max(1));
+        assert_eq!(
+            decimal_floor, exact_curve_floor,
+            "Decimal/reference disagreement: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_curve_floor,
+            "exact curve overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_gross_custody_max,
+            "gross custody bound exceeded: {line}"
+        );
+        let error = exact_curve_floor - quote.amount_out;
+        let reference = u128::from(exact_curve_floor.max(1));
         let scaled_error = u128::from(error) * 1_000_000_000_000;
         let relative_error_pptr = (scaled_error + reference - 1) / reference;
         maximum_relative_error_pptr = maximum_relative_error_pptr.max(relative_error_pptr);
@@ -413,8 +428,8 @@ fn extreme_weight_quotes_never_exceed_an_exact_integer_invariant_safe_output() {
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, reference_floor] =
-            <[u64; 7]>::try_from(fields).expect("seven vector fields");
+        let [balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, decimal_floor, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 9]>::try_from(fields).expect("nine vector fields");
         let quote = quote_exact_in(
             &[balance_in, balance_out],
             &[weight_in as u16, weight_out as u16],
@@ -424,8 +439,19 @@ fn extreme_weight_quotes_never_exceed_an_exact_integer_invariant_safe_output() {
             fee_bps as u16,
         )
         .unwrap();
-        assert!(quote.amount_out <= reference_floor, "overpaid: {line}");
-        let shortfall = reference_floor - quote.amount_out;
+        assert_eq!(
+            decimal_floor, exact_curve_floor,
+            "Decimal/reference disagreement: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_curve_floor,
+            "exact curve overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_gross_custody_max,
+            "gross custody bound exceeded: {line}"
+        );
+        let shortfall = exact_curve_floor - quote.amount_out;
         assert!(
             shortfall <= 1,
             "unexpected quote shortfall {shortfall}: {line}"
@@ -542,6 +568,39 @@ fn rejects_large_input_or_output_ratios() {
         quote_exact_in(&[1_000, 1_000, 1_000], &[9_800, 100, 100], 0, 1, 10, 0),
         Err(MathError::OutputTooLarge)
     );
+}
+
+#[test]
+fn exact_input_ratio_cap_accepts_boundary_and_rejects_next_base_unit() {
+    let exact = quote_exact_in(&[10_000, 10_000], &[5_000, 5_000], 0, 1, 3_000, 30)
+        .expect("exactly 30% gross input is within the configured bound");
+    assert_eq!(exact.amount_in, 3_000);
+    assert!(exact.amount_out > 0);
+    assert!(u128::from(exact.amount_out) * 10_000 <= u128::from(10_000_u64) * 3_000);
+    assert_eq!(
+        quote_exact_in(&[10_000, 10_000], &[5_000, 5_000], 0, 1, 3_001, 30),
+        Err(MathError::InputTooLarge)
+    );
+}
+
+#[test]
+fn fee_adjusted_input_uses_floor_and_retains_the_remainder() {
+    let cases = [
+        (1_000, 997, 3),
+        (1_001, 997, 4),
+        (1_003, 999, 4),
+        (3_333, 3_323, 10),
+        (5_000, 4_985, 15),
+    ];
+    for (gross_in, expected_net, expected_fee) in cases {
+        let quote = quote_exact_in(&[20_000, 20_000], &[5_000, 5_000], 0, 1, gross_in, 30).unwrap();
+        assert_eq!(quote.amount_in_after_fee, expected_net);
+        assert_eq!(quote.fee_amount, expected_fee);
+        assert_eq!(
+            quote.amount_in_after_fee + quote.fee_amount,
+            quote.amount_in
+        );
+    }
 }
 
 #[test]

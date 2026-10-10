@@ -15,9 +15,9 @@ fn three_asset_full_width_quotes_stay_below_decimal_and_exact_pair_bounds() {
             .split(',')
             .map(|field| field.parse().expect("valid generated numeric field"))
             .collect();
-        assert_eq!(fields.len(), 12);
-        let [b0, b1, b2, w0, w1, w2, asset_in, asset_out, gross_in, fee_bps, reference_floor, exact_max_out] =
-            <[u64; 12]>::try_from(fields).expect("twelve vector fields");
+        assert_eq!(fields.len(), 13);
+        let [b0, b1, b2, w0, w1, w2, asset_in, asset_out, gross_in, fee_bps, decimal_floor, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 13]>::try_from(fields).expect("thirteen vector fields");
         let balances = [b0, b1, b2];
         let weights = [w0 as u16, w1 as u16, w2 as u16];
         let input_index = asset_in as usize;
@@ -33,20 +33,24 @@ fn three_asset_full_width_quotes_stay_below_decimal_and_exact_pair_bounds() {
         )
         .unwrap_or_else(|error| panic!("valid three-asset vector rejected ({error:?}): {line}"));
 
-        assert!(
-            quote.amount_out <= reference_floor,
-            "Decimal overpayment: {line}"
+        assert_eq!(
+            decimal_floor, exact_curve_floor,
+            "Decimal/reference disagreement: {line}"
         );
         assert!(
-            quote.amount_out <= exact_max_out,
+            quote.amount_out <= exact_curve_floor,
+            "exact curve overpayment: {line}"
+        );
+        assert!(
+            quote.amount_out <= exact_gross_custody_max,
             "exact invariant exceeded: {line}"
         );
-        let error = reference_floor - quote.amount_out;
-        let reference = u128::from(reference_floor.max(1));
+        let error = exact_curve_floor - quote.amount_out;
+        let reference = u128::from(exact_curve_floor.max(1));
         let relative_error_pptr =
             (u128::from(error) * 1_000_000_000_000 + reference - 1) / reference;
         maximum_relative_error_pptr = maximum_relative_error_pptr.max(relative_error_pptr);
-        if reference_floor <= 1_000_000_000 {
+        if exact_curve_floor <= 1_000_000_000 {
             assert!(
                 error <= 1,
                 "small-output error exceeds one base unit: {line}"

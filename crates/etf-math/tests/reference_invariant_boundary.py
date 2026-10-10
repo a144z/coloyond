@@ -3,8 +3,9 @@
 import csv
 from decimal import Decimal, ROUND_FLOOR, getcontext
 from itertools import product
-from math import gcd
 from pathlib import Path
+
+from reference_weighted_integer import exact_curve_max_output, exact_max_output
 
 
 getcontext().prec = 180
@@ -23,15 +24,6 @@ def floor_quote(balance_in, balance_out, weight_in, weight_out, amount_in, fee_b
     return int(ideal.to_integral_value(rounding=ROUND_FLOOR))
 
 
-def invariant_holds(balance_in, balance_out, weight_in, weight_out, gross_input, amount_out):
-    divisor = gcd(weight_in, weight_out)
-    input_power = weight_in // divisor
-    output_power = weight_out // divisor
-    before = balance_in**input_power * balance_out**output_power
-    after = (balance_in + gross_input) ** input_power * (balance_out - amount_out) ** output_power
-    return after >= before
-
-
 def vectors():
     cases = set()
     for reserves, weights in product(RESERVE_PAIRS, WEIGHT_PAIRS):
@@ -43,18 +35,19 @@ def vectors():
                 net_input = amount_in * (BPS - fee_bps) // BPS
                 if amount_in == 0 or net_input == 0:
                     continue
-                amount_out = floor_quote(
+                decimal_floor = floor_quote(
                     balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps
                 )
-                if amount_out == 0 or amount_out * BPS > balance_out * 3_000:
+                curve_floor = exact_curve_max_output(
+                    balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps
+                )
+                gross_custody_max = exact_max_output(
+                    balance_in, balance_out, weight_in, weight_out, amount_in
+                )
+                if curve_floor > gross_custody_max:
+                    raise AssertionError("fee-adjusted curve floor exceeds gross custody maximum")
+                if curve_floor == 0 or curve_floor * BPS > balance_out * 3_000:
                     continue
-                if not invariant_holds(
-                    balance_in, balance_out, weight_in, weight_out, amount_in, amount_out
-                ):
-                    raise AssertionError(
-                        "reference floor violated exact integer invariant: "
-                        f"{balance_in},{balance_out},{weight_in},{weight_out},{amount_in},{fee_bps},{amount_out}"
-                    )
                 cases.add(
                     (
                         balance_in,
@@ -63,7 +56,9 @@ def vectors():
                         weight_out,
                         amount_in,
                         fee_bps,
-                        amount_out,
+                        decimal_floor,
+                        curve_floor,
+                        gross_custody_max,
                     )
                 )
     return sorted(cases)
@@ -82,7 +77,9 @@ def main():
                 "weight_out_bps",
                 "amount_in",
                 "fee_bps",
-                "reference_floor",
+                "decimal_reference_floor",
+                "exact_curve_floor",
+                "exact_gross_custody_max_out",
             )
         )
         writer.writerows(rows)

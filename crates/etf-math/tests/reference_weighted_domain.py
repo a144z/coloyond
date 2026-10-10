@@ -10,8 +10,9 @@ enumeration of all u64 states.
 import csv
 import random
 from decimal import Decimal, ROUND_FLOOR, getcontext
-from math import gcd
 from pathlib import Path
+
+from reference_weighted_integer import exact_curve_max_output, exact_max_output
 
 
 getcontext().prec = 180
@@ -25,27 +26,6 @@ RESERVE_ANCHORS = (
 )
 INPUT_RATIOS_BPS = (1, 2, 10, 100, 500, 1_000, 3_000)
 FEES_BPS = (0, 1, 30, 100, 500, 2_500, 9_000)
-
-
-def invariant_holds(balance_in, balance_out, weight_in, weight_out, gross_in, amount_out):
-    divisor = gcd(weight_in, weight_out)
-    input_power = weight_in // divisor
-    output_power = weight_out // divisor
-    before = balance_in**input_power * balance_out**output_power
-    after = (balance_in + gross_in) ** input_power * (balance_out - amount_out) ** output_power
-    return after >= before
-
-
-def exact_max_output(balance_in, balance_out, weight_in, weight_out, gross_in):
-    low = 0
-    high = balance_out
-    while low < high:
-        middle = (low + high + 1) // 2
-        if invariant_holds(balance_in, balance_out, weight_in, weight_out, gross_in, middle):
-            low = middle
-        else:
-            high = middle - 1
-    return low
 
 
 def reference_floor(balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps):
@@ -77,17 +57,14 @@ def vectors():
                     safe = exact_max_output(
                         balance_in, balance_out, weight_in, balance_out_weight, amount_in
                     )
-                    if floor > safe:
-                        raise AssertionError("Decimal floor exceeds exact custody invariant")
-                    if not invariant_holds(
-                        balance_in, balance_out, weight_in, balance_out_weight, amount_in, safe
-                    ):
-                        raise AssertionError("binary-search maximum violates exact integer invariant")
-                    if safe < balance_out and invariant_holds(
-                        balance_in, balance_out, weight_in, balance_out_weight, amount_in, safe + 1
-                    ):
-                        raise AssertionError("binary-search result was not maximal")
-                    cases.add((balance_in, balance_out, weight_in, balance_out_weight, amount_in, fee_bps, floor, safe))
+                    curve_floor = exact_curve_max_output(
+                        balance_in, balance_out, weight_in, balance_out_weight, amount_in, fee_bps
+                    )
+                    if curve_floor > safe:
+                        raise AssertionError("fee-adjusted curve floor exceeds gross custody invariant")
+                    if curve_floor * BPS > balance_out * 3_000:
+                        continue
+                    cases.add((balance_in, balance_out, weight_in, balance_out_weight, amount_in, fee_bps, floor, curve_floor, safe))
 
     while len(cases) < SAMPLE_COUNT:
         balance_in = rng.choice(anchors) if rng.randrange(3) == 0 else rng.randint(1, MAX_U64)
@@ -104,15 +81,14 @@ def vectors():
         if floor == 0 or floor * BPS > balance_out * 3_000:
             continue
         safe = exact_max_output(balance_in, balance_out, weight_in, weight_out, amount_in)
-        if floor > safe:
-            raise AssertionError("Decimal floor exceeds exact custody invariant")
-        if not invariant_holds(balance_in, balance_out, weight_in, weight_out, amount_in, safe):
-            raise AssertionError("binary-search maximum violates exact integer invariant")
-        if safe < balance_out and invariant_holds(
-            balance_in, balance_out, weight_in, weight_out, amount_in, safe + 1
-        ):
-            raise AssertionError("binary-search result was not maximal")
-        cases.add((balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, floor, safe))
+        curve_floor = exact_curve_max_output(
+            balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps
+        )
+        if curve_floor > safe:
+            raise AssertionError("fee-adjusted curve floor exceeds gross custody invariant")
+        if curve_floor * BPS > balance_out * 3_000:
+            continue
+        cases.add((balance_in, balance_out, weight_in, weight_out, amount_in, fee_bps, floor, curve_floor, safe))
     # Keep every near-u64 anchor case in the final sample; the rest is a
     # deterministic sorted selection from the random interior population.
     edge_cases = sorted(
@@ -131,7 +107,8 @@ def main():
         writer = csv.writer(stream, lineterminator="\n")
         writer.writerow((
             "balance_in", "balance_out", "weight_in_bps", "weight_out_bps",
-            "gross_in", "fee_bps", "reference_floor", "exact_invariant_max_out",
+            "gross_in", "fee_bps", "decimal_reference_floor", "exact_curve_floor",
+            "exact_gross_custody_max_out",
         ))
         writer.writerows(rows)
     print(f"validated {len(rows)} full-width samples -> {output.name}")

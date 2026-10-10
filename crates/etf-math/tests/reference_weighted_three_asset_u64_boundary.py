@@ -9,8 +9,9 @@ import csv
 import itertools
 import random
 from decimal import Decimal, ROUND_FLOOR, getcontext
-from math import gcd
 from pathlib import Path
+
+from reference_weighted_integer import exact_curve_max_output, exact_max_output
 
 
 getcontext().prec = 180
@@ -51,26 +52,6 @@ def weight_partitions():
     return tuple(sorted(weights))
 
 
-def invariant_holds(balance_in, balance_out, weight_in, weight_out, gross_in, amount_out):
-    divisor = gcd(weight_in, weight_out)
-    input_power = weight_in // divisor
-    output_power = weight_out // divisor
-    before = balance_in**input_power * balance_out**output_power
-    after = (balance_in + gross_in) ** input_power * (balance_out - amount_out) ** output_power
-    return after >= before
-
-
-def exact_max_output(balance_in, balance_out, weight_in, weight_out, gross_in):
-    low, high = 0, balance_out
-    while low < high:
-        middle = (low + high + 1) // 2
-        if invariant_holds(balance_in, balance_out, weight_in, weight_out, gross_in, middle):
-            low = middle
-        else:
-            high = middle - 1
-    return low
-
-
 def reference_floor(balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps):
     net_input = gross_in * (BPS - fee_bps) // BPS
     base = Decimal(balance_in) / Decimal(balance_in + net_input)
@@ -105,16 +86,13 @@ def vectors():
                         safe = exact_max_output(
                             balance_in, balance_out, weight_in, weight_out, gross_in
                         )
-                        if floor > safe:
-                            raise AssertionError("Decimal floor exceeds exact custody invariant")
-                        if not invariant_holds(
-                            balance_in, balance_out, weight_in, weight_out, gross_in, safe
-                        ):
-                            raise AssertionError("exact output bound is unsafe")
-                        if safe < balance_out and invariant_holds(
-                            balance_in, balance_out, weight_in, weight_out, gross_in, safe + 1
-                        ):
-                            raise AssertionError("exact output bound is not maximal")
+                        curve_floor = exact_curve_max_output(
+                            balance_in, balance_out, weight_in, weight_out, gross_in, fee_bps
+                        )
+                        if curve_floor > safe:
+                            raise AssertionError("fee-adjusted curve floor exceeds gross custody invariant")
+                        if curve_floor * BPS > balance_out * 3_000:
+                            continue
                         rows.add(
                             (
                                 *balances,
@@ -124,6 +102,7 @@ def vectors():
                                 gross_in,
                                 fee_bps,
                                 floor,
+                                curve_floor,
                                 safe,
                             )
                         )
@@ -144,7 +123,8 @@ def main():
                 "balance_0", "balance_1", "balance_2",
                 "weight_0_bps", "weight_1_bps", "weight_2_bps",
                 "asset_in", "asset_out", "gross_in", "fee_bps",
-                "reference_floor", "exact_invariant_max_out",
+                "decimal_reference_floor", "exact_curve_floor",
+                "exact_gross_custody_max_out",
             )
         )
         writer.writerows(rows)
