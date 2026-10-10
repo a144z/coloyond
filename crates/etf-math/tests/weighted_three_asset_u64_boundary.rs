@@ -117,3 +117,85 @@ fn three_asset_full_width_transition_caps_fail_closed() {
         Err(MathError::OutputTooLarge)
     );
 }
+
+#[test]
+fn three_asset_tiny_near_u64_quotes_match_exact_fee_and_custody_bounds() {
+    let mut tested = 0usize;
+    let mut zero_net_cases = 0usize;
+    let mut directions = BTreeSet::new();
+
+    for line in include_str!("weighted_three_asset_tiny_u64_boundary_vectors.csv")
+        .lines()
+        .skip(1)
+    {
+        let fields: Vec<u64> = line
+            .split(',')
+            .map(|field| field.parse().expect("valid generated integer vector"))
+            .collect();
+        let [b0, b1, b2, w0, w1, w2, asset_in, asset_out, gross_in, fee_bps, net_in, exact_curve_floor, exact_gross_custody_max] =
+            <[u64; 13]>::try_from(fields).expect("thirteen vector fields");
+        let balances = [b0, b1, b2];
+        let weights = [w0 as u16, w1 as u16, w2 as u16];
+        let input_index = asset_in as usize;
+        let output_index = asset_out as usize;
+        let quote = quote_exact_in(
+            &balances,
+            &weights,
+            input_index,
+            output_index,
+            gross_in,
+            fee_bps as u16,
+        );
+
+        assert_eq!(
+            net_in,
+            gross_in * (10_000 - fee_bps) / 10_000,
+            "reference fee arithmetic disagrees: {line}"
+        );
+        assert!(
+            exact_curve_floor <= exact_gross_custody_max,
+            "invalid bound ordering: {line}"
+        );
+        if net_in == 0 {
+            zero_net_cases += 1;
+            assert_eq!(
+                quote,
+                Err(MathError::NoOutput),
+                "zero-net input must fail closed: {line}"
+            );
+        } else {
+            match quote {
+                Ok(quote) => {
+                    assert_eq!(
+                        quote.amount_in_after_fee, net_in,
+                        "net input mismatch: {line}"
+                    );
+                    assert!(
+                        quote.amount_out <= exact_curve_floor,
+                        "quote exceeds exact curve floor: {line}"
+                    );
+                    assert!(
+                        quote.amount_out <= exact_gross_custody_max,
+                        "quote exceeds gross custody bound: {line}"
+                    );
+                    assert!(
+                        exact_curve_floor - quote.amount_out <= 1,
+                        "shortfall exceeds one base unit: {line}"
+                    );
+                }
+                Err(MathError::NoOutput) if exact_curve_floor <= 1 => {}
+                Err(error) => panic!("unexpected tiny-input quote failure ({error:?}): {line}"),
+            }
+        }
+
+        directions.insert((input_index, output_index));
+        tested += 1;
+    }
+
+    assert_eq!(tested, 1_944, "regenerate the selected tiny-input corpus");
+    assert_eq!(
+        zero_net_cases, 432,
+        "include every zero-net 1-unit nonzero-fee case"
+    );
+    assert_eq!(directions.len(), 6, "cover every ordered three-asset pair");
+}
