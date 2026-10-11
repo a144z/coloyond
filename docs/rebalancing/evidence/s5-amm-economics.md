@@ -78,4 +78,10 @@ This is explicitly a shock-then-redemption calculation at fractional token preci
 | BTC +50% | 1% | $120,000 | $1,200 | $118,800 | $12 → $12 |
 | USDC -10% | 50% | $98,000 | $49,000 | $49,000 | $9.80 → $9.80 |
 
-Three focused standard-library tests pass, including all asset/shock/fraction combinations and invalid/non-finite input rejection. This demonstrates accounting sensitivity only. It excludes token-decimal rounding and transfer fees, is not oracle-price validation, and proves no production contract/CPI behavior or live executable depth. S5A policy decisions and S5E gating remain unchanged.
+Three focused standard-library tests pass, including all asset/shock/fraction combinations and invalid/non-finite input rejection. This demonstrates accounting sensitivity only. Integer base-unit floors are analyzed separately below; this fractional-precision model does not include them or transfer fees, is not oracle-price validation, and proves no production contract/CPI behavior or live executable depth. S5A policy decisions and S5E gating remain unchanged.
+
+## Integer-base-unit in-kind floor sensitivity (supplemental)
+
+`tools/rebalancing/etf-economics/in_kind_floor_sensitivity.py` calculates the exact integer floor `payout = floor(reserve_base_units × redeemed_share_units / total_share_units)` independently for USDC/BTC/SOL decimal scales 6/8/9. Its 15 synthetic cases cross three fixed reserve magnitudes with redemptions of 1, 100,000, 333,333, 500,000, or 999,999 out of 1,000,000 share units. Inputs are bounded to u64 reserves and share supply. Each row reports the exact divmod remainder/denominator plus an 80-significant-digit Decimal representation of dust in base units and token units. Five focused tests verify per-asset conservation, no overdraw, dust below one base unit including the u64 boundary, grid coverage, and invalid-input rejection.
+
+This finite model covers the integer-floor arithmetic only. It does not exercise Anchor account constraints, SPL CPI behavior, transfer fees, token-account rounding outside the stated formula, compute limits, or a production redemption. ETF v1 excludes Token-2022; adding it later requires an explicit transfer-fee and extension review. S5A policy decisions and S5E gates remain unchanged.
