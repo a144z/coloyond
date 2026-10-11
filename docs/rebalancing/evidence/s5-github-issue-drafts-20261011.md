@@ -1,6 +1,6 @@
 # Sprint 5 GitHub issue drafts — 11 October 2026
 
-**Status: draft only; GitHub duplicate search and issue creation are blocked by repository access.** The connected GitHub app is authenticated as `agilentic` and cannot see `a144z/coloyond`; `gh auth status` reports the local `wlkit` token is invalid, and the browser sees the repository as private/sign-in required. No issues were created or updated, and duplicate status is unknown. Do not treat these drafts as GitHub tracking or begin implementation that the active goal gates on issue creation.
+**Status: draft only; GitHub duplicate search and issue creation are blocked by repository access.** The connected GitHub app is authenticated as `agilentic` and cannot see `a144z/coloyond`; the local `wlkit` token is invalid. The user explicitly rejected `agilentic` and offered to help authenticate the correct account. An attempted GitHub CLI browser login could not connect to `github.com`, so no account was changed. No issues were created or updated, and duplicate status is unknown. Do not treat these drafts as GitHub tracking or begin implementation that the active goal gates on issue creation.
 
 The current local feature branch was clean and fast-forwarded from `ec513256` to `e80ef5b3` after fetching. The fetched changes include colleague commit `e33568db` (interactive target-weight editor) and merge commit `e80ef5b3`; no history was rewritten. Current branch: `feature/portfolio-rebalancing`.
 
@@ -18,7 +18,7 @@ The current local feature branch was clean and fast-forwarded from `ec513256` to
 - [Cron/TukTuk SDK compatibility evidence](https://github.com/a144z/coloyond/blob/feature/portfolio-rebalancing/docs/rebalancing/evidence/s5-cron-sdk-compat.md)
 - [S5 AMM economics evidence](https://github.com/a144z/coloyond/blob/feature/portfolio-rebalancing/docs/rebalancing/evidence/s5-amm-economics.md)
 
-The following seven issues group the unresolved work by deliverable. Create them only after confirming there are no open or closed duplicates in `a144z/coloyond`; if an equivalent issue exists, update it with the evidence and acceptance criteria instead.
+The following eight issues group the unresolved work by deliverable. Create them only after confirming there are no open or closed duplicates in `a144z/coloyond`; if an equivalent issue exists, update it with the evidence and acceptance criteria instead.
 
 ---
 
@@ -187,6 +187,29 @@ Integrate only the accepted ETF DTO/read model, manifest/RPC reader and transact
 
 ---
 
+## Issue 8 — Evaluate MagicBlock as the prioritized product-demo scheduler
+
+**Suggested title:** `S5D1: evaluate MagicBlock scheduling for the ETF product demo`
+
+**Ownership:** Colleague-owned. This issue records the requested exploration and handoff; the current implementation work does not implement or migrate to MagicBlock.
+
+**Proposed body:**
+
+The preserved ETF blueprint lists MagicBlock Cranks/Ephemeral Rollups alongside TukTuk. A colleague recommends MagicBlock for the product demo based on a claim of higher availability. That availability claim is unverified and must be measured against actual supported network, execution guarantees, operator dependencies, costs, recovery behavior, and account/CPI constraints. Keep the existing Cron→TukTuk work and evidence; do not remove or silently replace it. Prioritize a separate MagicBlock proof for the product demo, without presenting either scheduler as proven until its end-to-end evidence exists.
+
+This issue is assigned to the colleague to investigate and implement. Do not fold it into the current agent's S5 implementation scope. Preserve the shared safety contract: scheduled calls may record eligibility/maintenance only; they cannot transfer ETF pool assets, supply trader input, or perform a swap on behalf of a trader. A weighted swap remains a separate trader-funded transaction.
+
+**Dependencies:** accepted ETF ABI/IDL and Devnet profile; deployed ETF program and pool; current TukTuk/Cron evidence for comparison; current MagicBlock Devnet program/API documentation and supported integration path.
+
+**Acceptance criteria:**
+- [ ] The colleague records a source-backed comparison of MagicBlock base-layer scheduling and Ephemeral Rollup execution against the existing Cron→TukTuk path, including availability assumptions, trust/operator model, account delegation/CPI limits, funding/costs, cancellation, failure recovery, and shutdown.
+- [ ] The chosen demo path is stated precisely (base layer or ER); the implementation does not mix their account state or imply ER execution is Solana base-layer confirmation.
+- [ ] A real ETF maintenance task is registered against the exact deployed program and pool, then invoked by an external scheduler/crank operator; RPC verifies the task identity, program/accounts, signature, and resulting maintenance state.
+- [ ] Funding, failure/recovery, at least two successive executions, and a safe stop with pending/copied actions are demonstrated and reconciled from chain state.
+- [ ] Scheduler execution changes eligibility/maintenance state only. Pool token/share balances remain unchanged, and any swap is performed by a distinct trader-funded transaction.
+- [ ] The demo describes availability only to the extent supported by measured evidence; no “zero infrastructure,” guaranteed cadence, or higher-availability claim is made without proof.
+- [ ] TukTuk evidence remains available as a separate candidate and its status is updated without deleting prior results.
+
 ## Issue-creation access needed
 
-To finish the issue-first gate, reconnect the GitHub app to an account with write access to `a144z/coloyond` (expected owner: `wlkit`) or renew the local GitHub CLI authentication for that account. The previous attempts used the connected `agilentic` profile and returned 404/422 for this private repository; the local `gh` token was reported invalid. Once access is restored, search all open and closed issues for duplicates, create/update these seven grouped issues, replace this draft status with issue numbers/links, then use that issue set to order and track implementation. No private deployment or wallet credentials are needed for issue setup.
+To finish the issue-first gate, authenticate GitHub CLI or the GitHub app as the account the user designates with write access to `a144z/coloyond`. Do not use `agilentic`. Once access is restored, search all open and closed issues for duplicates, create/update these eight grouped issues, replace this draft status with issue numbers/links, then use that issue set to order and track implementation. No private deployment or wallet credentials are needed for issue setup.
