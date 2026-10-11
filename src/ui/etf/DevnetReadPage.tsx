@@ -191,7 +191,7 @@ export function DevnetReadPage() {
     <main className="etf-page cr-shell">
       <header className="etf-topbar">
         <a className="cr-brand" href="/"><span>coloyond</span><sup className="cr-brand-mark">●</sup></a>
-        <div className="etf-topbar-actions"><span className="etf-live-label"><i aria-hidden="true" /> Real Devnet · read only</span><ConnectButton /></div>
+        <div className="etf-topbar-actions"><a className="cr-reference-link" href="/etf-devnet/transactions">ETF transaction desk ↗</a><span className="etf-live-label"><i aria-hidden="true" /> Real Devnet · read only</span><ConnectButton /></div>
       </header>
       <section className="etf-hero">
         <div>
@@ -201,7 +201,8 @@ export function DevnetReadPage() {
         </div>
         <div className="etf-hero-side">
           <StateTag tone="warn">No ETF deployment configured</StateTag>
-          <p>This route does not sign or send transactions. Candidate accounts are not an admitted pool, and oracle limits remain unapproved drafts.</p>
+          <p>Candidate accounts are not an admitted pool, and oracle limits remain unapproved drafts. The transaction desk stays fail-closed until an accepted deployment is available.</p>
+          <a className="etf-refresh etf-refresh-link" href="/etf-devnet/transactions">Open wallet transaction desk <span aria-hidden="true">↗</span></a>
           <button className="etf-refresh" type="button" onClick={() => void refresh()} disabled={state.status === "loading"}>
             {state.status === "loading" ? "Reading RPC…" : "Refresh live RPC state"}<span aria-hidden="true">↗</span>
           </button>

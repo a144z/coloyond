@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { Keypair, PublicKey, SystemProgram, type AccountInfo, type Connection } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, type AccountInfo, type Connection } from "@solana/web3.js";
 import {
   buildEligibilityPokeInstruction,
   buildCancelResumeProposalInstruction,
@@ -18,6 +18,7 @@ import {
   decodeEtfAssetStateAccount,
   deriveEtfAddresses,
   derivePythFixedFeedAccount,
+  deriveWalletAtaPreparationPlan,
   ETF_CONFIG_DOMAIN,
   ETF_DEVNET_CANDIDATE_FEEDS,
   ETF_DEVNET_GENESIS,
@@ -27,6 +28,8 @@ import {
   quoteProportionalDeposit,
   quoteProportionalRedeem,
   verifyEtfManifest,
+  submitWalletTransaction,
+  WalletSubmissionError,
   type EtfDeploymentManifestV1,
 } from "../src/index.js";
 
@@ -261,6 +264,29 @@ test("encodes all S5E instruction discriminators, argument vectors, and account 
   assert.equal(shareAta.keys.length, 6);
   assert.equal(shareAta.programId.toBase58(), "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
   assert.throws(() => buildCreateEtfTokenAccountInstruction(d.context, d.wallet, d.wallet, Keypair.generate().publicKey), /mint_not_in_manifest/);
+  const ataPayer = Keypair.generate();
+  const ataPlan = deriveWalletAtaPreparationPlan(d.context, ataPayer.publicKey, [d.context.config.assets[0]!.mint, d.context.addresses.shareMint]);
+  assert.equal(ataPlan.length, 2);
+  assert.equal(ataPlan[0]!.decimals, d.context.config.assets[0]!.decimals);
+  assert.equal(ataPlan[1]!.decimals, 6);
+  assert.throws(() => deriveWalletAtaPreparationPlan(d.context, ataPayer.publicKey, [Keypair.generate().publicKey]), /wallet_submit_no_token_action_invalid/);
+  const assetAta = buildCreateEtfTokenAccountInstruction(d.context, ataPayer.publicKey, ataPayer.publicKey, d.context.config.assets[0]!.mint);
+  const shareAtaForPayer = buildCreateEtfTokenAccountInstruction(d.context, ataPayer.publicKey, ataPayer.publicKey, d.context.addresses.shareMint);
+  const invalidAta = new TransactionInstruction({ programId: assetAta.programId, keys: assetAta.keys, data: Buffer.from([0]) });
+  const invalidAtaTransaction = new Transaction({ feePayer: ataPayer.publicKey, recentBlockhash: Keypair.generate().publicKey.toBase58() }).add(invalidAta, shareAtaForPayer);
+  let ataSignCalls = 0;
+  await assert.rejects(() => submitWalletTransaction({
+    connection: {} as Connection,
+    signer: { publicKey: ataPayer.publicKey, async signTransaction(transaction) { ataSignCalls += 1; return transaction; } },
+    transaction: invalidAtaTransaction,
+    journal: { async read() { return null; }, async appendIfLatest() { return true; }, async replaceLatest() { return true; } },
+    operationId: "ata-reject-invalid-create-mode",
+    trackedTokenAccounts: [],
+    noTokenBalanceAction: "prepare_accounts",
+    noTokenProgramId: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+    ataPreparationPlan: ataPlan,
+  }), (error: unknown) => error instanceof WalletSubmissionError && error.code === "wallet_submit_no_token_action_invalid");
+  assert.equal(ataSignCalls, 0, "invalid ATA instruction is rejected before requesting a wallet signature");
 
   const seedDeployment = buildTestDeployment({ lifecycle: "unseeded", riskPaused: false });
   const seedSnapshot = await readEtfSnapshot(seedDeployment.rpc, seedDeployment.context, { walletAddress: seedDeployment.wallet.toBase58() });
