@@ -102,3 +102,38 @@ For a read-only interactive check now:
 4. Do not sign: the page has no valid ETF transaction to present while these gates are open.
 
 Smallest next development step: close and record S0B/S5A/S5C/S5D2 test-profile decisions; pin actual governance/guardian and deployment authorities; build and deploy the separately reviewed S5E program; publish its accepted manifest and generated IDL; refresh the fixed Pyth accounts through the authorized update path; then run the program's host/SBF/Localnet checks before enabling the exact Devnet wallet actions. Re-read all addresses and oracle limits from RPC before asking for a user signature.
+
+## Time-boxed Devnet transaction readiness follow-up — 11 October 2026
+
+**Clock:** started 07:20:59 UTC; hard deadline 08:20:59 UTC; final five minutes reserved for validation and handoff; implementation cutoff is 08:15:59 UTC.
+
+**Integrated branch:** `feature/portfolio-rebalancing`. The code/UI gate update is `b3dc273e0e1d7744855171684f689ab9ba1e6db0`; the provisional manifest-profile naming is `ba82bc92ac574807e32d8d97f02bce5bd1ec57cf`; `42074617c757b3ff94d1e6c6b79dbf07c84d74df` is the real no-fast-forward merge of `package/s5f-weighted-math`. These commits use `wlkit <114655923+wlkit@users.noreply.github.com>` and are pushed to `origin/feature/portfolio-rebalancing`. No commit was pushed to `main`.
+
+The unmerged weighted-math branch produced the exact current tree in a merge dry-run and is now integrated. Two older refs remain preserved for follow-up: `agent/feature/s5f-frontend-console` (`f262588d`) conflicts in the README and console files because it predates the signing lock and later receipt changes; `package/s5f-delayed-resume-client` (`f0124754`) conflicts in the README and contains an older test placement. Preserve the current versions when reconciling them; their relevant math/resume behavior is already present in the integrated tree. A fetch around 07:34 UTC found no incoming remote changes.
+
+### Current honest readiness
+
+The browser refreshed the live console at `http://127.0.0.1:5173/etf-devnet/transactions` at 07:24:19 UTC. It read confirmed Devnet slot `509825753` and verified genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. No wallet was connected. Program, pool, accepted manifest, signature, and ETF transaction were unavailable; every signing control remained disabled. Candidate feed reads were:
+
+| Candidate | Account | Embedded feed ID | Read state at 07:24:19 UTC |
+|---|---|---|---|
+| SOL/USD | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | Receiver-owned 134-byte `PriceUpdateV2`, `Full`, 13 seconds old, 4 bps confidence; candidate only |
+| BTC/USD | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | Receiver-owned 134-byte `PriceUpdateV2`, `Full`, 193 seconds old, 8 bps; stale under the draft diagnostic; no BTC mint is admitted |
+| USD/USD reference | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | Receiver-owned 134-byte `PriceUpdateV2`, `Full`, 1,849 seconds old, 10 bps; stale under the draft diagnostic |
+
+The only candidate basket is WSOL plus Devnet Test USD `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`; Test USD is synthetic, unbacked, has active mint/freeze authorities, and is not redeemable as USDC. Both candidate assets remain unadmitted. `DevnetMechanicsV1` is now named consistently in the S5A contract and draft deployment manifest: 60-second age, 100-bps confidence ratio, exponent `[-17,0]`, 30-bps fixed retained fee, 100-bps input cap, 200-bps quote-loss band, and 50-bps seed-composition deviation. These values remain provisional Devnet mechanics, are not enforced by the program, and are not production policy.
+
+There is no Devnet ETF program ID or deployment authority in the manifest. `H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9` is only the Localnet build/IDL placeholder; `Anchor.toml` has no ETF Devnet entry. The generated IDL source exists at `idl/coloyond_etf.json`, but has this Localnet placeholder address and is absent from `public/idl` and the production build. `public/etf-devnet/deployment-manifest.json` is absent. Do not manufacture either accepted artifact from the draft. In S5E, `seed_pool`, `swap_exact_in`, and `poke` still return `PolicyNotFrozen` after account/feed identity checks. No successful S5E CPI evidence exists yet for seed, deposit/refund, in-kind redemption, or weighted swap. Cron→TukTuk remains unproven: there is no ETF task, external crank, funding/recovery, successive run, or safe shutdown.
+
+### Changed files and validation
+
+- `src/ui/etf/EtfTransactionsPage.tsx`: fetch manifest and IDL outcomes independently and show all failed resource reasons together, without relaxing the accepted-manifest gate.
+- `docs/rebalancing/contracts/etf-v1.md` and `docs/rebalancing/deployment-manifest-etf-v1.md`: align the first-test profile under the explicit provisional `DevnetMechanicsV1` name; clarify that 100 bps supersedes the historical 3,000-bps candidate only for this Devnet test profile and correct the USD/USD reference label.
+
+Validation: `node --import tsx --test packages/etf-client/test/*.test.ts` — 73/73 passed; `node --import tsx --test src/ui/etf/test/IndexedDbSubmissionJournal.test.ts` — 3/3 passed; `npm run typecheck` — passed; `npm run build` — passed with the existing 1.85 MB chunk warning; `cargo test --manifest-path programs/coloyond-etf/Cargo.toml --offline` — 12/12 passed; `git diff --check` — passed. These are tests/builds and live read evidence, not a real Devnet transaction proof.
+
+### Manual read and next action
+
+For a live read, open the route above, connect a wallet configured for Solana Devnet if desired, and click **Refresh Devnet state**. Verify the pinned genesis and slot, candidate mint/feed owner/layout/identity/Full/freshness/confidence, synthetic Test USD warning, missing accepted manifest/program/pool, and disabled actions. **There is no transaction to sign now; do not sign a draft transaction.**
+
+Smallest external unblocking handoff: supply an admitted Devnet test mint/profile and an authorized deployer/public authority tuple; finish the strict on-chain `DevnetMechanicsV1` oracle/fee/risk schema and S5B-backed seed/swap paths with Localnet CPI/rollback evidence; reproducibly build/deploy the reviewed ETF binary; publish its exact accepted manifest and matching IDL; then refresh admitted `Full` feeds and reconcile the wallet-signed Devnet initialize/seed/readback flow. After that, complete the delayed resume, deposit/refund, paused in-kind exit, and separate trader-funded swap. No work in this time-boxed unit establishes mainnet policy or passes the scheduler checkpoint.
