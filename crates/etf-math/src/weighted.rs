@@ -255,7 +255,7 @@ fn div_up(numerator: u128, denominator: u128) -> Result<u128, MathError> {
 
 #[cfg(test)]
 mod tests {
-    use std::{eprintln, vec::Vec};
+    use std::{collections::BTreeSet, eprintln, vec::Vec};
 
     use super::{
         exp_negative_q96_upper, mul_q96_down, mul_q96_up, negative_ln_q96_lower, pow_ratio_up,
@@ -270,6 +270,7 @@ mod tests {
         let mut maximum_log_deficit = 0u128;
         let mut maximum_exp_excess = 0u128;
         let mut maximum_power_excess = 0u128;
+        let mut exp_arguments = BTreeSet::new();
 
         for line in include_str!("../tests/q96_interval_vectors.csv")
             .lines()
@@ -296,6 +297,10 @@ mod tests {
                     log_vectors += 1;
                 }
                 "E" => {
+                    assert!(
+                        exp_arguments.insert(exponent),
+                        "duplicate exp argument: {line}"
+                    );
                     let upper = exp_negative_q96_upper(exponent).unwrap();
                     assert!(
                         upper >= reference,
@@ -328,8 +333,25 @@ mod tests {
         }
 
         assert_eq!(log_vectors, 12);
-        assert!(exp_vectors >= 16);
+        assert_eq!(exp_vectors, 20_054);
         assert_eq!(power_vectors, 4_950 * 12);
+        for interval in 1_u128..(26 * 256) {
+            let boundary = interval * (Q96 / 256);
+            assert!(
+                exp_arguments.contains(&(boundary - 1)),
+                "missing pre-boundary {interval}"
+            );
+            assert!(
+                exp_arguments.contains(&boundary),
+                "missing boundary {interval}"
+            );
+            assert!(
+                exp_arguments.contains(&(boundary + 1)),
+                "missing post-boundary {interval}"
+            );
+        }
+        assert!(exp_arguments.contains(&(MAX_EXP_ARGUMENT_Q96 - 1)));
+        assert!(exp_arguments.contains(&MAX_EXP_ARGUMENT_Q96));
         eprintln!(
             "checked Q96 interval vectors: log={log_vectors} max_deficit={maximum_log_deficit}, exp={exp_vectors} max_excess={maximum_exp_excess}, power={power_vectors} max_excess={maximum_power_excess}"
         );

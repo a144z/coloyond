@@ -8,6 +8,8 @@ from pathlib import Path
 
 getcontext().prec = 130
 Q96 = 1 << 96
+MAX_EXP_ARGUMENT_Q96 = 26 * Q96
+EXP_RANGE_REDUCTION_INTERVALS = 26 * 256
 
 
 def ceil_div(numerator, denominator):
@@ -53,11 +55,18 @@ def vectors():
         Q96 // 4, Q96 // 2, Q96 - 1, Q96, Q96 + 1,
         10 * Q96, 13 * Q96, 25 * Q96, 26 * Q96 - 1,
     }
+    # The `z >> 8` range reduction changes its reduced Q96 input every Q96/256
+    # units. Exercise each interior transition immediately before, at, and
+    # after the boundary, then include both final in-domain values.
+    for interval in range(1, EXP_RANGE_REDUCTION_INTERVALS):
+        boundary = interval * (Q96 // 256)
+        z_points.update((boundary - 1, boundary, boundary + 1))
+    z_points.update((MAX_EXP_ARGUMENT_Q96 - 1, MAX_EXP_ARGUMENT_Q96))
     for base, (weight_in, weight_out) in product(bases, ((100, 100), (100, 9_900), (9_900, 100))):
         x = Decimal(base) / Decimal(Q96)
         exponent = int(((-x.ln()) * weight_in / weight_out * Q96).to_integral_value(rounding=ROUND_FLOOR))
         z_points.update({max(0, exponent - 1), exponent, exponent + 1})
-    for z in sorted(value for value in z_points if 0 <= value < 26 * Q96):
+    for z in sorted(value for value in z_points if 0 <= value <= MAX_EXP_ARGUMENT_Q96):
         exact = (-Decimal(z) / Decimal(Q96)).exp()
         rows.append(("E", 0, z, 0, 0, scaled(exact, ROUND_CEILING)))
 
@@ -81,6 +90,8 @@ def main():
     counts = {kind: sum(row[0] == kind for row in rows) for kind in ("L", "E", "P")}
     if counts["P"] != 4_950 * len(base_points()):
         raise RuntimeError(f"unexpected power vector count: {counts}")
+    if counts["E"] != 20_054:
+        raise RuntimeError(f"unexpected exponential boundary vector count: {counts}")
     print(f"wrote Q96 interval vectors: log={counts['L']} exp={counts['E']} power={counts['P']}")
 
 
