@@ -91,10 +91,11 @@ def _validate_snapshot(fixture, path, errors):
         "processed", "confirmed", "finalized"
     }:
         errors.append(f"{path}.network.commitment: unsupported commitment")
-    revision = fixture.get("protocolRevision")
-    if revision is None:
-        revision = fixture.get("configRevision")
-    _text(revision, f"{path}.protocolRevision", errors)
+    _text(fixture.get("protocolRevision"), f"{path}.protocolRevision", errors)
+    config_revision = fixture.get("configRevision")
+    if _text(config_revision, f"{path}.configRevision", errors) and not re.fullmatch(r"[0-9a-f]{64}", config_revision):
+        errors.append(f"{path}.configRevision: expected lowercase SHA-256 hex")
+    _integer_string(fixture.get("poolSequence"), f"{path}.poolSequence", errors)
 
     if "oracle" in fixture:
         oracle = fixture["oracle"]

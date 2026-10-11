@@ -1,4 +1,6 @@
-# Account and instruction contract v1
+# v0.3.0 auction-vault account and instruction contract v1
+
+> **Protocol ownership:** This document specifies the existing two-asset Dutch-auction vault (`programs/coloyond-vault`, v0.3.0). It is not the separate multi-asset ETF AMM contract in [`etf-v1.md`](etf-v1.md). The shared `v1` label is local to this legacy contract and does not define ETF v1 accounts, instructions, reserves, initializer authority, or settlement rules.
 
 **Status:** frozen S0 interface concept for local unfunded implementation. It is not a deployed-program claim. The additive S3E condition revision below records the first concrete condition account and instruction contract; it does not authorize production policy values, deployment, or funded use.
 

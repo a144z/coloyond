@@ -88,7 +88,11 @@ function validateSnapshot(fixture: UnknownRecord, path: string, errors: string[]
   if (typeof network.commitment !== "string" || !["processed", "confirmed", "finalized"].includes(network.commitment)) {
     errors.push(`${path}.network.commitment: unsupported commitment`);
   }
-  text(fixture.protocolRevision ?? fixture.configRevision, `${path}.protocolRevision`, errors);
+  text(fixture.protocolRevision, `${path}.protocolRevision`, errors);
+  if (text(fixture.configRevision, `${path}.configRevision`, errors) && !/^[0-9a-f]{64}$/.test(fixture.configRevision)) {
+    errors.push(`${path}.configRevision: expected lowercase SHA-256 hex`);
+  }
+  integerString(fixture.poolSequence, `${path}.poolSequence`, errors);
 
   if (fixture.oracle !== undefined) {
     if (!isRecord(fixture.oracle)) errors.push(`${path}.oracle: expected object`);

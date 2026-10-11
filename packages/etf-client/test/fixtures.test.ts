@@ -205,12 +205,29 @@ test("failed snapshots reject available payloads while stale oracle diagnostics 
   }
 });
 
-test("null protocol revision falls back to config revision", () => {
+test("null protocol revision is rejected", () => {
   const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
   const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
   snapshot.protocolRevision = null;
   snapshot.configRevision = "fallback-revision";
-  assert.deepEqual(validateReadModelDocument(candidate), []);
+  assert.ok(validateReadModelDocument(candidate).some((error) => error.includes("protocolRevision")));
+});
+
+test("snapshots require immutable config identity and a bounded pool sequence", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  delete snapshot.configRevision;
+  snapshot.poolSequence = "01";
+  const errors = validateReadModelDocument(candidate);
+  assert.ok(errors.some((error) => error.includes("configRevision")));
+  assert.ok(errors.some((error) => error.includes("poolSequence")));
+});
+
+test("config revision is a lowercase SHA-256 digest", () => {
+  const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+  const snapshot = candidate.fixtures.find((fixture) => fixture.id === "snapshot-available-receiver-full")!;
+  snapshot.configRevision = "A".repeat(64);
+  assert.ok(validateReadModelDocument(candidate).some((error) => error.includes("lowercase SHA-256 hex")));
 });
 
 test("snapshot oracle-mode coverage comes from the nested oracle source", () => {

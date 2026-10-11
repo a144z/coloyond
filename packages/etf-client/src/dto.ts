@@ -56,6 +56,8 @@ export type ReadSnapshotFixture = {
   status: "available";
   network: NetworkIdentity;
   protocolRevision: string;
+  configRevision: string;
+  poolSequence: DecimalInteger;
   oracle?: OracleValue;
   balances: BalanceObservation[];
   pool?: unknown;

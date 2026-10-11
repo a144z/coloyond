@@ -19,7 +19,7 @@
 | `initial_emergency_guardian` | `[u8; 32]` | Initial guardian pubkey bytes. Must be nonzero and distinct from governance. |
 | `governance_delay_seconds` | `u64` | Little-endian. |
 
-Each `EtfAssetConfigV1` is encoded in the following order:
+Each `EtfAssetConfigV1` is encoded in the following order. In this schema `oracle_account` is a stable key committed to pool identity for either mode. `ReceiverFull` does not represent a per-transaction ephemeral update; supporting ephemeral keys requires a future schema that authenticates the runtime account binding separately.
 
 | Field | Wire type | Encoding |
 |---|---|---|
@@ -27,7 +27,7 @@ Each `EtfAssetConfigV1` is encoded in the following order:
 | `token_program` | `[u8; 32]` | Decoded address bytes. |
 | `decimals` | `u8` | Integer token precision. |
 | `oracle_mode` | Borsh enum | `0 = PushFeed`, `1 = ReceiverFull`; never reorder or reuse tags. |
-| `oracle_program` | `[u8; 32]` | Decoded program address bytes. |
+| `oracle_program` | `[u8; 32]` | Expected owner of the stable, manifest-pinned `PriceUpdateV2` account (Pyth Pull Oracle Receiver). This is not the fixed-feed PDA derivation program. ETF v1 requires a stable account key committed in `oracle_account`; `ReceiverFull` means that stable account must have Full verification. Ephemeral per-transaction update accounts are not admitted by this schema and require a future version that moves the runtime account key outside immutable pool identity. For `PushFeed`, derive the stable account using the separately pinned Pyth Push Oracle program and shard/feed seeds. |
 | `oracle_account` | `[u8; 32]` | Decoded feed/update account address bytes. |
 | `feed_id` | `[u8; 32]` | Raw Pyth feed ID bytes, not hexadecimal text. |
 | `target_weight_bps` | `u16` | Little-endian basis points. |

@@ -251,12 +251,27 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
         errors = validate_document(document)
         self.assertTrue(any(".oracle: expected object" in error for error in errors))
 
-    def test_null_protocol_revision_falls_back_to_config_revision(self):
+    def test_null_protocol_revision_is_rejected(self):
         document = load_fixture()
         snapshot = document["fixtures"][0]
         snapshot["protocolRevision"] = None
         snapshot["configRevision"] = "fallback-revision"
-        self.assertEqual(validate_document(document), [])
+        self.assertTrue(any("protocolRevision" in error for error in validate_document(document)))
+
+    def test_snapshot_requires_config_identity_and_pool_sequence(self):
+        document = load_fixture()
+        snapshot = document["fixtures"][0]
+        del snapshot["configRevision"]
+        snapshot["poolSequence"] = "01"
+        errors = validate_document(document)
+        self.assertTrue(any("configRevision" in error for error in errors))
+        self.assertTrue(any("poolSequence" in error for error in errors))
+
+    def test_config_revision_must_be_lowercase_sha256_hex(self):
+        document = load_fixture()
+        document["fixtures"][0]["configRevision"] = "A" * 64
+        errors = validate_document(document)
+        self.assertTrue(any("lowercase SHA-256 hex" in error for error in errors))
 
     def test_snapshot_oracle_mode_comes_from_nested_oracle_object(self):
         document = load_fixture()
