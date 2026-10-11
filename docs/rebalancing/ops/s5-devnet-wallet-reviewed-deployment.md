@@ -65,7 +65,7 @@ This command shape uses the CLI wallet as the payer and default upgrade authorit
 
 ## Current disposition
 
-**Not ready for a deployment signature.** Current evidence still has no admitted Devnet ETF program/pool, no final program ID or authority tuple, no accepted asset/oracle policy, no public deployment manifest or served matching IDL, and no on-chain SPL CPI/rollback proof. `solana` and `anchor` are not installed in the active shell (`command -v` found neither), so no CLI deployment command or wallet-signing flow was run. The next action is to close those code/evidence gates, then create a specific program-ID change and reproducible artifact for the user to inspect. At present there is no wallet transaction for the user to sign.
+**Not ready for a deployment signature.** Current evidence still has no admitted Devnet ETF program/pool, no final program ID or authority tuple, no accepted asset/oracle policy, no public deployment manifest or served matching IDL, and no on-chain SPL CPI/rollback proof. `solana` and `anchor` are not installed in the active shell (`command -v` found neither), so no CLI deployment command or wallet-signing flow was run. An ignored `target/deploy` directory contains candidate ETF keypair and SBF artifact files; their relationship to each other and to the current source/placeholder ID is unverified. The keypair contents were not opened, copied, moved, or used. The next action is to close those code/evidence gates, then establish the public program ID without exposing its private key and create a reproducible artifact for the user to inspect. At present there is no wallet transaction for the user to sign.
 
 ## Official references
 

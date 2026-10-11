@@ -144,4 +144,4 @@ The user selected **“Prepare a wallet-reviewed deployment flow for me.”** Th
 
 Official Solana deployment and CLI references support using an explicit program-ID keypair, checking the installed CLI's version/options, inspecting the deployed Program/ProgramData and upgrade authority, and treating buffer-based deployment as potentially non-atomic. The runbook preserves the upgrade authority for the Devnet test and does not use the irreversible `--final` option. Exact CLI details and safety gates are in the runbook.
 
-The active shell has neither `solana` nor `anchor` installed, so the command path cannot be exercised here. No deployment transaction exists to present for signature.
+The active shell has neither `solana` nor `anchor` installed, so the command path cannot be exercised here. An ignored `target/deploy` folder contains candidate ETF keypair and SBF artifact files, but their public identity/source match is unverified; the keypair was not opened or used. No deployment transaction exists to present for signature.
