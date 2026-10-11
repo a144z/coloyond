@@ -160,3 +160,22 @@ The three other local feature branches called out by the user remain intact and 
 No changes were made to these three refs. Their work remains preserved locally and no unrelated branch was pushed into the Sprint 5 feature.
 
 `git fetch --all --prune` at 08:04 UTC again found no incoming remote commits. `feature/portfolio-rebalancing` remains synchronized with `origin/feature/portfolio-rebalancing`.
+
+### Pre-cutoff status and validation — 11 October 2026
+
+At 08:05 UTC the feature branch was clean and synchronized at `eb4492a9964ecff012fb043529e40233dc4560d3`. The wallet-reviewed CLI deployment flow is documented in [the runbook](../ops/s5-devnet-wallet-reviewed-deployment.md); it is not executable in this shell and no valid deployment transaction exists. The browser remains useful for a live, read-only Devnet inspection, but it is **not ready for a real wallet transaction**.
+
+Final validation at 08:05 UTC:
+
+- `node --import tsx --test packages/etf-client/test/*.test.ts` — **73/73 passed**.
+- `node --import tsx --test src/ui/etf/test/IndexedDbSubmissionJournal.test.ts` — **3/3 passed**.
+- `cargo test --manifest-path programs/coloyond-etf/Cargo.toml --offline` — **12/12 passed**.
+- `npm run typecheck` — passed.
+- `npm run build` — passed; existing Vite warning remains for the 1,847.48 kB main JavaScript chunk.
+- `git diff HEAD --check` — passed; branch was clean.
+- The three runbook links in the sprint checklist, S5E draft, and console handoff resolve.
+- `cargo build-sbf --version` — blocked because `build-sbf` is not installed. `solana` and `anchor` are also unavailable.
+
+The validated code and branch merges are the existing current-tree work; this time-boxed follow-up changed only documentation. No wallet connected or signed, no program/pool deployment or initialization occurred, and there is no transaction signature or confirmed Devnet token/share/fee delta. `seed_pool`, `swap_exact_in`, and `poke` remain fail-closed in S5E. Oracle freshness/confidence values remain provisional and unenforced, and candidate assets/feeds are unadmitted. Cron→TukTuk remains unproven.
+
+Manual action available now: open `http://127.0.0.1:5173/etf-devnet/transactions`, optionally connect a Devnet wallet, and press **Refresh Devnet state**. Verify genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, candidate-only feed/mint labels, missing accepted deployment manifest/program/pool, and disabled transaction controls. Do not sign: there is no transaction to review. The next step is to close the S0B/S5A/S5C/S5D2 policy and authority gates, establish the correct public program identity without exposing the candidate keypair, install/review the SBF/CLI toolchain, produce and verify the matching artifact, and then follow the runbook through user-reviewed deployment and separate pool-init/seed signatures.
