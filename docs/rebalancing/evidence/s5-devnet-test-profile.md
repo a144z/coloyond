@@ -19,6 +19,10 @@ The Test USD mint was observed as a classic SPL mint with six decimals, active m
 
 ## Oracle checks and draft parameters
 
+### Mode-semantics reconciliation — draft recommendation
+
+The first profile uses the fixed shard-0 feed accounts, so its canonical `oracle_mode` should be `PushFeed`: that tag identifies the fixed PDA derivation/update path. The data account remains owned by Pyth Receiver, uses `PriceUpdateV2`, and must independently pass exact feed-ID and `Full` verification checks. `oracle_program` therefore continues to mean the expected account-data owner; the Push Oracle program ID is separately pinned for PDA derivation. Full verification is required regardless of mode. This interpretation matches the S5A wire fixture and the Pyth S5C evidence, but remains a draft until S5A review. The current S5E draft decoder rejects `PushFeed` and therefore does not yet implement the candidate profile; fix and test this before manifest acceptance or deployment. This resolution does not select freshness/confidence/fee policy or admit either mint.
+
 For each fixed feed account, require all of the following before any risk-increasing transaction can be enabled:
 
 - Verify the RPC genesis against the pinned Devnet genesis.
