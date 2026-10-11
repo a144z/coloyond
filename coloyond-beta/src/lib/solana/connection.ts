@@ -1,7 +1,8 @@
 import { Connection } from '@solana/web3.js';
-import { CLUSTER, RPC_URL } from './config';
+import { CLUSTER, ER_RPC_URL, RPC_URL } from './config';
 
 export const connection = new Connection(RPC_URL, 'confirmed');
+export const ephemeralConnection = new Connection(ER_RPC_URL, 'confirmed');
 
 export function explorerAddress(address: string): string {
   return `https://explorer.solana.com/address/${address}?cluster=${CLUSTER}`;

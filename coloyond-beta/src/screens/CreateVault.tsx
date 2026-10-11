@@ -14,8 +14,7 @@ import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
 
 const cadenceLabels: Record<number, string> = {
-  75: 'Every 75 seconds · demo cadence',
-  3600: 'Every hour · production cadence',
+  60: 'Every 60 seconds · devnet cadence',
 };
 
 /** Owner SOL held back for the setup transaction's own fees. */
@@ -181,7 +180,7 @@ export function CreateVault() {
       </div>
 
       <div className="mt-4">
-        <Field label="Check cadence" hint="How often the scheduler measures drift while the app is open.">
+        <Field label="Rebalance cadence" hint="How often an active portfolio is checked for drift.">
           <select
             value={cadenceSec}
             onChange={(e) => setCadenceSec(Number(e.target.value))}
@@ -255,8 +254,8 @@ export function CreateVault() {
           </ul>
         ) : null}
         <p className="mt-3 text-[11px] leading-relaxed text-iron">
-          Setup is one reviewed transaction. A funded vault stays withdrawable in kind even if
-          automation never runs. Weight-only edits later keep the schedule and budget, with a
+          Setup uses several devnet transactions. A funded vault stays recoverable in kind even if
+          scheduled execution requires the deployed program and reserve authorization. Weight-only edits later keep the schedule and budget, with a
           120-second cooldown.
         </p>
       </div>
@@ -290,13 +289,13 @@ export function CreateVault() {
           ]}
         />
         <div className="mt-4">
-          <MicroLabel>What this transaction does</MicroLabel>
+          <MicroLabel>What setup does</MicroLabel>
           <ul className="mt-2 space-y-1.5 text-[11.5px] leading-relaxed text-iron">
             <li>· Generates a separate vault custody keypair on this device.</li>
             <li>· Creates the vault's token accounts for all {selected.length} selected assets.</li>
-            <li>· Moves the fee budget and every deposit in one atomic transfer.</li>
-            <li>· Counterparty for future swaps: the funded devnet reserve (spread 0.30% + curve fee, capped at 3.00%).</li>
-            <li>· Scheduler: in-app stand-in. It signs with the vault key while the app is open.</li>
+            <li>· Moves the fee budget and deposits to the new vault.</li>
+            <li>· Counterparty for future swaps: the program-authorized devnet reserve (spread 0.30% + curve fee, capped at 3.00%).</li>
+            <li>· Execution: delegated to MagicBlock Ephemeral Rollups on a 60-second schedule.</li>
           </ul>
         </div>
         <div className="mt-4">

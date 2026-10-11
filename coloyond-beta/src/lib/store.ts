@@ -4,10 +4,13 @@ import { Keypair } from '@solana/web3.js';
 import { describeTxError, signSendConfirm, type TxResult } from './solana/tx';
 import { fetchBalances, keypairFromMnemonic, decodeSecret, encodeSecret, requestAirdrop, buildWrapTx } from './solana/wallet';
 import { fetchRpcStatus, type RpcStatus } from './solana/connection';
-import { fetchPriceBook, pricesFromBook, priceOf, type PriceBook } from './solana/price';
-import { fetchReserveState, executeReserveSwap, type ReserveState } from './solana/reserve';
+import { fetchPriceBook, type PriceBook } from './solana/price';
+import { fetchReserveState, type ReserveState } from './solana/reserve-read';
 import { buildFundTx, buildProvisionTx, buildWithdrawTx, buildCloseTx, fetchVaultBalances } from './solana/vault';
 import { assetSpec, type AssetId } from './solana/assets';
+import { REBALANCE_INTERVAL_SEC } from './solana/config';
+import { initializeAndSchedulePortfolio, setPortfolioActive, updatePortfolioTargets } from './solana/execution';
+import { reserveIsReady } from './solana/reserve-read';
 import { fmtToken } from './format';
 
 /* ---------------- types ---------------- */
@@ -191,7 +194,6 @@ interface ColoyondState {
   // actions
   airdrop: () => Promise<void>;
   wrap: (lamports: number) => Promise<void>;
-  convert: (inAsset: AssetId, outAsset: AssetId, inRaw: number) => Promise<void>;
   createVault: (input: CreateVaultInput) => Promise<string | null>;
   fundVault: (vaultId: string, input: FundVaultInput) => Promise<void>;
   withdrawVault: (vaultId: string, fraction: number) => Promise<void>;
@@ -395,55 +397,17 @@ export const useStore = create<ColoyondState>()(
         }
       },
 
-      convert: async (inAsset, outAsset, inRaw) => {
-        const kp = walletKeypair();
-        const book = get().price;
-        if (!kp) return;
-        if (!book || priceOf(book, inAsset) === null || priceOf(book, outAsset) === null) {
-          get().toast('error', 'Price observation required', 'Wait for a fresh price before converting.');
-          return;
-        }
-        const prices = pricesFromBook(book);
-        const inSpec = assetSpec(inAsset);
-        const outSpec = assetSpec(outAsset);
-        const label = `Convert ${fmtToken(inRaw, inSpec.decimals, 6)} ${inSpec.symbol} into ${outSpec.symbol}`;
-        const ok = await get().runFlow(label, 'RESERVE SWAP · DEVNET', [
-          {
-            label: 'Quote against the funded reserve',
-            run: async () => ({
-              note: `mid $${prices[inAsset].toFixed(2)} per ${inSpec.symbol} · $${prices[outAsset].toFixed(2)} per ${outSpec.symbol}`,
-            }),
-          },
-          {
-            label: 'Sign and send the atomic swap',
-            run: async () => {
-              const { result, quote } = await executeReserveSwap({ owner: kp, inAsset, outAsset, inRaw, prices });
-              return {
-                sig: result.sig,
-                note: `received ${fmtToken(quote.outRaw, outSpec.decimals, 6)} ${outSpec.symbol} · fee ${quote.totalFeePct.toFixed(2)}%`,
-              };
-            },
-          },
-        ]);
-        if (ok) {
-          get().log({
-            vaultId: null,
-            kind: 'owner',
-            summary: label,
-            detail: 'atomic two-transfer swap · mids from the live observation',
-          });
-          get().refreshBalances();
-          get().refreshReserve();
-        }
-      },
-
       createVault: async (input) => {
         const wallet = walletKeypair();
         if (!wallet) return null;
+        if (!(await reserveIsReady(input.assets))) {
+          get().toast('error', 'Devnet execution reserve is not ready', 'Deploy the program and run `npm run bootstrap:execution-reserve` before creating a scheduled portfolio.');
+          return null;
+        }
 
         const vaultKp = Keypair.generate();
         const id = uid();
-        const captured: { result: TxResult | null } = { result: null };
+        const captured: { result: TxResult | null; provisioned: boolean } = { result: null, provisioned: false };
         const plan = {
           assets: input.assets,
           budgetLamports: input.budgetLamports,
@@ -468,19 +432,27 @@ export const useStore = create<ColoyondState>()(
               const tx = buildProvisionTx(wallet, vaultKp, plan);
               const r = await signSendConfirm(tx, [wallet]);
               captured.result = r;
+              captured.provisioned = true;
               return { sig: r.sig, note: `confirmed in slot ${r.slot}` };
             },
           },
           {
-            label: 'Activate automation',
+            label: 'Delegate the portfolio and schedule its 60-second ER rebalance',
             run: async () => {
-              const cadenceNote = input.cadenceSec >= 3600 ? 'every hour' : `every ${input.cadenceSec} seconds`;
-              return { note: `checks ${cadenceNote} while the app is open` };
+              const setup = await initializeAndSchedulePortfolio({
+                owner: wallet,
+                vault: vaultKp,
+                assets: input.assets,
+                targets: input.targets,
+                thresholdPct: input.thresholdPct,
+                taskId: Date.now(),
+              });
+              return { sig: setup.schedule.sig, note: `MagicBlock task scheduled · portfolio ${setup.delegate.sig.slice(0, 12)}…` };
             },
           },
         ]);
 
-        if (!ok || !captured.result) return null;
+        if (!captured.provisioned || !captured.result) return null;
         const txResult = captured.result;
 
         const cfg: VaultConfig = {
@@ -493,10 +465,10 @@ export const useStore = create<ColoyondState>()(
           targets: input.targets,
           thresholdPct: input.thresholdPct,
           cadenceSec: input.cadenceSec,
-          status: 'active',
+          status: ok ? 'active' : 'paused',
           blockedReason: null,
           lastCheckAt: null,
-          nextCheckAt: Date.now() + Math.min(input.cadenceSec * 1000, 12_000),
+          nextCheckAt: ok ? Date.now() + REBALANCE_INTERVAL_SEC * 1000 : null,
           lastTradeAt: null,
           lastTradeSig: null,
           lastTradeSlot: null,
@@ -506,6 +478,14 @@ export const useStore = create<ColoyondState>()(
         };
 
         set((st) => ({ vaults: [cfg, ...st.vaults] }));
+        if (!ok) {
+          get().log({
+            vaultId: id,
+            kind: 'blocked',
+            summary: 'Vault funded; MagicBlock setup is incomplete',
+            detail: 'The vault recovery key was saved locally. Finish the execution setup after checking the required devnet program and reserve setup.',
+          });
+        }
         get().log({
           vaultId: id,
           kind: 'owner',
@@ -645,18 +625,32 @@ export const useStore = create<ColoyondState>()(
         }
       },
 
-      pauseVault: (vaultId) => {
+      pauseVault: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!cfg) return;
-        get().patchVault(vaultId, { status: 'paused', blockedReason: null, nextCheckAt: null });
-        get().log({ vaultId, kind: 'owner', summary: 'Automation paused by owner' });
+        const wallet = walletKeypair();
+        if (!wallet) return;
+        try {
+          const result = await setPortfolioActive(wallet, vaultKeypairOf(cfg).publicKey, false);
+          get().patchVault(vaultId, { status: 'paused', blockedReason: null, nextCheckAt: null });
+          get().log({ vaultId, kind: 'owner', summary: 'Automation paused by owner', sig: result.sig, slot: result.slot });
+        } catch (err) {
+          get().toast('error', 'Pause failed', err instanceof Error ? err.message : 'Unable to pause on MagicBlock.');
+        }
       },
 
-      resumeVault: (vaultId) => {
+      resumeVault: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!cfg) return;
-        get().patchVault(vaultId, { status: 'active', nextCheckAt: Date.now() + 8000 });
-        get().log({ vaultId, kind: 'owner', summary: 'Automation resumed by owner' });
+        const wallet = walletKeypair();
+        if (!wallet) return;
+        try {
+          const result = await setPortfolioActive(wallet, vaultKeypairOf(cfg).publicKey, true);
+          get().patchVault(vaultId, { status: 'active', nextCheckAt: Date.now() + REBALANCE_INTERVAL_SEC * 1000 });
+          get().log({ vaultId, kind: 'owner', summary: 'Automation resumed by owner', sig: result.sig, slot: result.slot });
+        } catch (err) {
+          get().toast('error', 'Resume failed', err instanceof Error ? err.message : 'Unable to resume on MagicBlock.');
+        }
       },
 
       editWeights: async (vaultId, targets) => {
@@ -666,7 +660,15 @@ export const useStore = create<ColoyondState>()(
           get().toast('error', 'Edit cooldown active', 'Weight edits wait 120 seconds between changes.');
           return;
         }
-        get().patchVault(vaultId, { targets, lastWeightEditAt: Date.now(), nextCheckAt: Date.now() + 8000 });
+        const wallet = walletKeypair();
+        if (!wallet) return;
+        try {
+          await updatePortfolioTargets(wallet, vaultKeypairOf(cfg).publicKey, cfg.assets, targets);
+        } catch (err) {
+          get().toast('error', 'Weight update failed', err instanceof Error ? err.message : 'Unable to update targets on MagicBlock.');
+          return;
+        }
+        get().patchVault(vaultId, { targets, lastWeightEditAt: Date.now(), nextCheckAt: Date.now() + REBALANCE_INTERVAL_SEC * 1000 });
         get().log({
           vaultId,
           kind: 'owner',
@@ -684,12 +686,12 @@ export const useStore = create<ColoyondState>()(
     }),
     {
       name: 'coloyond.v1',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (st) => ({ wallet: st.wallet, vaults: st.vaults, logs: st.logs }),
-      migrate: (persisted, version) => {
+      migrate: (persisted, _version) => {
         const p = persisted as { vaults?: Record<string, unknown>[] } | undefined;
-        if (p && version < 2 && Array.isArray(p.vaults)) {
+        if (p && Array.isArray(p.vaults)) {
           p.vaults = p.vaults.map((v) => {
             if (v && typeof v.targetWsolPct === 'number' && !v.targets) {
               const { targetWsolPct, depositedWsolLamports, depositedUsdRaw, ...rest } = v as {
@@ -702,9 +704,10 @@ export const useStore = create<ColoyondState>()(
                 assets: ['wsol', 'tusd'],
                 targets: { wsol: targetWsolPct, tusd: 100 - targetWsolPct },
                 deposited: { wsol: depositedWsolLamports ?? 0, tusd: depositedUsdRaw ?? 0 },
+          cadenceSec: REBALANCE_INTERVAL_SEC,
               };
             }
-            return v;
+            return { ...v, cadenceSec: REBALANCE_INTERVAL_SEC };
           });
         }
         return p as unknown as { wallet: ColoyondState['wallet']; vaults: VaultConfig[]; logs: LogEntry[] };

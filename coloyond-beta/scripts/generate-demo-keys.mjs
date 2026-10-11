@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * Generates the devnet demo keypairs and writes them to
- * src/lib/solana/demo-keys.json (the app and the bootstrap script share
- * this file as the source of truth).
+ * target/demo-keys.json for local devnet bootstrap tooling.
  *
  *   reserve keypair  – the funded swap counterparty for all assets
  *   mint keypairs    – owners of the fixed-address synthetic mints:
@@ -10,8 +9,7 @@
  *                      tBTC (8 decimals, live BTC-USD mid)
  *                      tETH (8 decimals, live ETH-USD mid)
  *
- * These are DEVNET-ONLY. They ship with the demo on purpose (the product
- * design calls for "a funded test reserve as the counterparty") and must
+ * These DEVNET-ONLY secrets stay outside the browser source tree and must
  * never hold mainnet value.
  *
  * Keep SYNTHETIC_MINT_IDS in sync with src/lib/solana/assets.ts.
@@ -23,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const keysPath = join(here, '..', 'src', 'lib', 'solana', 'demo-keys.json');
+const keysPath = join(here, '..', 'target', 'demo-keys.json');
 
 const SYNTHETIC_MINT_IDS = ['tusd', 'tbtc', 'teth'];
 
@@ -36,7 +34,7 @@ const NOTE =
  * already exists on-chain. Returns the key JSON.
  */
 export async function ensureDemoKeys() {
-  const existing = JSON.parse(await readFile(keysPath, 'utf8'));
+  const existing = await readFile(keysPath, 'utf8').then(JSON.parse).catch(() => ({}));
 
   const next = { reserveSecretB58: '', mints: {}, note: NOTE };
 

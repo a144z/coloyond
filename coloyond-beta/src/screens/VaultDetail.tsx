@@ -316,7 +316,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                   </a>
                 ),
               },
-              { k: 'Automation authority', v: 'Vault keypair · in-app scheduler' },
+              { k: 'Automation authority', v: 'Program PDA · MagicBlock schedule' },
               { k: 'LP mint', v: 'Disabled — no pooled capital' },
             ]}
           />
@@ -326,7 +326,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
       <div className="mt-6">
         <LedgerPanel stripe="Execution log" meta={`${vaultLogs.length} entries`}>
           {vaultLogs.length === 0 ? (
-            <p className="text-[12px] text-iron">No automation evidence yet. The first check lands on the cadence.</p>
+            <p className="text-[12px] text-iron">No execution evidence yet. The first scheduled rebalance runs within 60 seconds.</p>
           ) : (
             <ol>
               {vaultLogs.map((l) => (

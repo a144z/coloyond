@@ -1,6 +1,7 @@
 import { useStore } from '../lib/store';
 import { bookStatus, priceEntryOf, pricesFromBook } from '../lib/solana/price';
-import { reserveKeypair, reserveDepthUsd } from '../lib/solana/reserve';
+import { reserveOwner } from '../lib/solana/reserve-read';
+import { reserveDepthUsd } from '../lib/solana/reserve-quote';
 import { assetList } from '../lib/solana/assets';
 import {
   CURVE_BASE_PCT,
@@ -9,7 +10,6 @@ import {
   RESERVE_SPREAD_PCT,
   RPC_URL,
 } from '../lib/solana/config';
-import { keysJson } from '../lib/solana/demo-keys';
 import { explorerAddress } from '../lib/solana/connection';
 import { fmtSol, fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
 import { useNow } from '../hooks/useNow';
@@ -29,11 +29,7 @@ export function SystemScreen() {
   const logs = useStore((s) => s.logs);
 
   const status = bookStatus(price, PRICE_MAX_AGE_MS);
-  const keysReady = Boolean(
-    keysJson.reserveSecretB58 &&
-    ['tusd', 'tbtc', 'teth'].every((id) => keysJson.mints?.[id]?.address),
-  );
-  const reserveAddress = keysReady ? reserveKeypair().publicKey.toBase58() : null;
+  const reserveAddress = reserveOwner.toBase58();
   const reserveDepth = reserve && price ? reserveDepthUsd(reserve, pricesFromBook(price)) : null;
   const active = vaults.filter((v) => v.status === 'active').length;
   const paused = vaults.filter((v) => v.status === 'paused').length;
@@ -102,16 +98,16 @@ export function SystemScreen() {
             </p>
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            One book covers every asset: SOL, BTC and ETH mids come from Coinbase (Binance
-            fallback), tUSD is fixed $1. Stale or missing observations block automation trades by
-            design. Holdings stay withdrawable in kind.
+            This display book shows SOL, BTC and ETH mids from Coinbase (Binance fallback), with
+            tUSD fixed at $1. Execution reads MagicBlock Pyth feeds on the ER and enforces its own
+            60-second freshness limit.
           </p>
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
         <LedgerPanel stripe="Demo reserve" meta={reserve ? 'funded' : 'reading'}>
-          {keysReady ? (
+          {reserveAddress ? (
             <>
               <KeyValue
                 rows={[
@@ -146,34 +142,31 @@ export function SystemScreen() {
                 ]}
               />
               <p className="mt-3 text-[11px] leading-relaxed text-iron">
-                Shared, finite, devnet-only inventory. The reserve keypair co-signs every swap;
-                traders pay their own fees. The curve fee scales with trade size against total
-                depth across all assets.
+                Shared devnet inventory is authorized to the execution program. Scheduled swaps run
+                on MagicBlock; the browser does not hold the reserve signing key.
               </p>
             </>
           ) : (
-            <Notice tone="brass" title="Demo keys missing">
-              Run <code className="font-mono font-bold">npm run bootstrap:reserve</code> once to
-              generate the reserve keypair, create the Test USD mint and fund the inventory. The
-              app works right after.
+            <Notice tone="brass" title="Reserve unavailable">
+              The shared devnet token accounts are not initialized yet.
             </Notice>
           )}
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
-        <LedgerPanel stripe="Scheduler" meta="in-app stand-in">
+        <LedgerPanel stripe="Scheduler" meta="MagicBlock Ephemeral Rollups">
           <KeyValue
             rows={[
-              { k: 'State', v: 'Running while the app is open' },
-              { k: 'Tick', v: 'every 3 seconds' },
+              { k: 'Execution', v: 'on-chain scheduled crank' },
+              { k: 'Interval', v: '60 seconds' },
+              { k: 'Dashboard sync', v: 'every 10 seconds while open' },
               { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed` },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            The native design delegates execution to MagicBlock's engine so schedules survive a
-            closed app. This web build keeps the same decision logic (fresh price, budget floor,
-            drift threshold) in a local scheduler instead.
+            Each portfolio is delegated and registered with MagicBlock's scheduler. The app reads
+            the delegated state and trade counter; it does not decide or submit scheduled swaps.
           </p>
         </LedgerPanel>
       </div>

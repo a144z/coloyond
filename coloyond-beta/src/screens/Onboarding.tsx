@@ -67,7 +67,7 @@ export function Onboarding() {
               { k: 'Tokens', v: 'WSOL · tUSD · tBTC · tETH' },
               { k: 'Price feed', v: 'Coinbase spot · Binance fallback' },
               { k: 'Counterparty', v: 'Funded devnet reserve' },
-              { k: 'Scheduler', v: 'In-app stand-in for delegated execution' },
+              { k: 'Scheduler', v: 'MagicBlock ER · 60-second schedule' },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">

@@ -7,6 +7,10 @@
 
 export const CLUSTER = 'devnet' as const;
 export const RPC_URL = 'https://api.devnet.solana.com';
+/** MagicBlock's public Ephemeral Rollup on devnet. */
+export const ER_RPC_URL = 'https://devnet-as.magicblock.app/';
+export const EXECUTION_PROGRAM_ID = 'HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d';
+export const DEMO_RESERVE_PUBLIC_KEY = 'BkHED8XBKnYdwpQpu4JdBqbiQ6KZePNWNj8JxbC5tBQx';
 
 /** Reserve economics, from the design sheet: spread and curve-fee margin. */
 export const RESERVE_SPREAD_PCT = 0.3;
@@ -17,7 +21,8 @@ export const CURVE_CAP_PCT = 3.0;
 
 /** Automation defaults. */
 export const DEFAULT_THRESHOLD_PCT = 2.0;
-export const CADENCE_OPTIONS_SEC = [75, 3600] as const;
+export const REBALANCE_INTERVAL_SEC = 60;
+export const CADENCE_OPTIONS_SEC = [REBALANCE_INTERVAL_SEC] as const;
 export const BUDGET_FLOOR_LAMPORTS = 2_000_000; // below this, automation halts (blocked: budget)
 export const MIN_TX_LAMPORTS = 5_000;
 /** Upper bound on trades executed within a single rebalance check. */

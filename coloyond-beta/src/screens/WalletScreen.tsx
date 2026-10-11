@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../lib/store';
-import { quoteSwap } from '../lib/solana/reserve';
+import { quoteSwap } from '../lib/solana/reserve-quote';
 import { bookStatus, priceOf, pricesFromBook, type PriceBook } from '../lib/solana/price';
 import { PRICE_MAX_AGE_MS } from '../lib/solana/config';
 import { ASSET_IDS, assetList, assetSpec, type AssetId } from '../lib/solana/assets';
@@ -32,7 +32,6 @@ export function WalletScreen() {
   const reserve = useStore((s) => s.reserve);
   const airdrop = useStore((s) => s.airdrop);
   const wrap = useStore((s) => s.wrap);
-  const convert = useStore((s) => s.convert);
 
   const [fromAsset, setFromAsset] = useState<AssetId>('wsol');
   const [toAsset, setToAsset] = useState<AssetId>('tusd');
@@ -66,7 +65,6 @@ export function WalletScreen() {
     }
   }
 
-  const canConvert = quote !== null && priceOk && !overBalance && inRaw !== null;
   const solValue =
     balances && prices
       ? (balances.solLamports / 1e9) * (prices.wsol ?? 0) +
@@ -234,16 +232,12 @@ export function WalletScreen() {
           ) : null}
 
           <div className="mt-4">
-            <Button
-              variant="primary"
-              full
-              disabled={!canConvert}
-              onClick={() => {
-                if (canConvert && inRaw !== null) void convert(fromAsset, toAsset, inRaw);
-              }}
-            >
-              Convert via reserve
+            <Button variant="primary" full disabled>
+              Reserve swaps are program-managed
             </Button>
+            <p className="mt-2 text-[11px] leading-relaxed text-iron">
+              Set portfolio target weights to execute swaps on MagicBlock every 60 seconds.
+            </p>
           </div>
 
           {reserve ? (

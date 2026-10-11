@@ -6,7 +6,7 @@ import {
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import { assetList, assetSpec, isAssetId, mintOf, type AssetId } from './assets';
-import { fetchBalances, wrapSolInstructions, type Balances } from './wallet';
+import { fetchEphemeralBalances, wrapSolInstructions, type Balances } from './wallet';
 
 /**
  * Vault lifecycle transactions.
@@ -173,7 +173,7 @@ export function buildCloseTx(wallet: Keypair, vault: Keypair, bal: Balances, ass
 }
 
 export async function fetchVaultBalances(vault: Keypair): Promise<Balances> {
-  return fetchBalances(vault.publicKey);
+  return fetchEphemeralBalances(vault.publicKey);
 }
 
 /* ---------------- weight math (pure) ---------------- */

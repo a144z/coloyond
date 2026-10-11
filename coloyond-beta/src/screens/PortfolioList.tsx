@@ -53,8 +53,8 @@ export function PortfolioList() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-iron">
-        Closing this app pauses nothing you own — but automation checks only run while the app is
-        open. On device, delegated execution would keep the schedule unattended.
+        Scheduled rebalances continue on MagicBlock every 60 seconds. Open the app to refresh balances
+        and see the latest execution state.
       </p>
     </Screen>
   );

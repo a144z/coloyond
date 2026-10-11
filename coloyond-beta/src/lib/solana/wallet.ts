@@ -9,7 +9,7 @@ import { base58 } from '@scure/base';
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { SOLANA_DERIVATION_PATH, deriveEd25519Path } from './derivation';
-import { connection } from './connection';
+import { connection, ephemeralConnection } from './connection';
 import { FAUCET_LAMPORTS } from './config';
 import { emptyTokens, mintOf, mintToAssetMap, type AssetId } from './assets';
 
@@ -46,13 +46,17 @@ export function decodeSecret(secret: string): Keypair {
  * Read SOL plus every token balance in two RPC calls: one getBalance and one
  * parsed token-account scan (mapped onto the asset registry).
  */
-export async function fetchBalances(owner: PublicKey): Promise<Balances> {
+export async function fetchBalances(
+  owner: PublicKey,
+  tokenRpc = connection,
+  solRpc = connection,
+): Promise<Balances> {
   const byMint = mintToAssetMap();
   const tokens = emptyTokens();
 
   const [solLamports, tokenAccounts] = await Promise.all([
-    connection.getBalance(owner, 'confirmed'),
-    connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
+    solRpc.getBalance(owner, 'confirmed'),
+    tokenRpc.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
   ]);
 
   for (const { account } of tokenAccounts.value) {
@@ -65,6 +69,11 @@ export async function fetchBalances(owner: PublicKey): Promise<Balances> {
   }
 
   return { solLamports, tokens };
+}
+
+/** Vault and reserve token balances live on the ER after delegation; SOL budgets stay on base. */
+export function fetchEphemeralBalances(owner: PublicKey): Promise<Balances> {
+  return fetchBalances(owner, ephemeralConnection, connection);
 }
 
 /** Wrap SOL into the owner's own WSOL ATA within a given transaction. */

@@ -1,6 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
 import { NATIVE_MINT } from '@solana/spl-token';
-import { keysJson } from './demo-keys';
 
 /**
  * The tradable asset universe.
@@ -92,14 +91,20 @@ export function assetList(): AssetSpec[] {
 /** Synthetic mint ids, in registry order. Keep in sync with scripts/generate-demo-keys.mjs. */
 export const SYNTHETIC_ASSET_IDS: AssetId[] = ASSET_IDS.filter((id) => ASSETS[id].synthetic);
 
+// Public devnet mint addresses only. Mint and reserve secret keys belong in
+// local bootstrap tooling and are never imported into the browser bundle.
+const SYNTHETIC_MINTS: Partial<Record<AssetId, string>> = {
+  tusd: '39Byty3S2nCgRHk6kshaDiX6UKi7RjGmLVP4Qpz2ZK1D',
+  tbtc: '2VnSReFZw6pXAsANhSNFqwjqiEd22ihSehLY6RVXXy8M',
+  teth: '5zPzxpfy9bBvhXDQ4cwQGY2zX97RwrrUkadK186HXZSX',
+};
+
 export function mintOf(id: AssetId): PublicKey {
   const spec = ASSETS[id];
   if (!spec.synthetic) return NATIVE_MINT;
-  const mk = keysJson.mints?.[id];
-  if (!mk?.address) {
-    throw new Error(`demo mint keys for "${id}" are missing. Run: npm run bootstrap:reserve`);
-  }
-  return new PublicKey(mk.address);
+  const address = SYNTHETIC_MINTS[id];
+  if (!address) throw new Error(`devnet mint address for "${id}" is missing`);
+  return new PublicKey(address);
 }
 
 export function mintToAssetMap(): Map<string, AssetId> {
