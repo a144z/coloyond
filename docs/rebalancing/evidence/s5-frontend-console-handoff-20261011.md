@@ -150,4 +150,11 @@ The active shell has neither `solana` nor `anchor` installed, and `cargo build-s
 
 The live route `/etf-devnet/transactions` last refreshed at 07:45:57 UTC, confirmed slot `509831203`, and showed the expected Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. No wallet was connected; the accepted manifest, ETF program and pool remain unavailable; all wallet actions are disabled; there are no recorded operations or signatures. The console's own live candidate-feed read showed SOL/USD Full, 49 seconds old and 3 bps confidence (inside only the draft diagnostic); BTC/USD Full, 752 seconds old and 5 bps confidence (stale); USD/USD Full, 3,147 seconds old and 10 bps (stale). All remain candidate/reference observations, not admitted pool configuration. Test USD is still labeled synthetic/unbacked and not redeemable as USDC.
 
-`git fetch --all --prune` at 07:49 UTC found no incoming remote changes. The local feature head and `origin/feature/portfolio-rebalancing` matched at that fetch. The three Sprint 5 refs are ancestors of the feature head: weighted math, delayed resume, and frontend console. Unrelated feature branches remain outside this Sprint 5 integration.
+`git fetch --all --prune` at 07:49 UTC found no incoming remote changes. The local feature head and `origin/feature/portfolio-rebalancing` matched at that fetch. The three Sprint 5 refs are ancestors of the feature head: weighted math, delayed resume, and frontend console.
+
+The three other local feature branches called out by the user remain intact and are **not** merged into this Sprint 5 branch yet:
+
+- `feature/donation-sync-atomicity` at `3849921f` contains a focused change and tests in the existing v0.3.0 vault accounting code. The current one-hour scope explicitly says not to alter v0.3.0, so preserve it for that protocol's own review/integration.
+- `feature/portfolio-tokens` at `34a1311b` adds a Portfolio token watchlist, and `feature/ui-reform` at `ac152bb0` updates the reference-rooted portfolio composition UI. Both descend from root `14f09293`, while this rebalancing branch descends from `02e72536`; `git merge-base` finds no common ancestor. Do not use `--allow-unrelated-histories` during this S5 task. Revisit after the current sprint scope or with an explicit integration plan that identifies the intended UI baseline.
+
+No changes were made to these three refs. Their work remains preserved locally and no unrelated branch was pushed into the Sprint 5 feature.
