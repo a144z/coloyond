@@ -2,6 +2,8 @@
 
 **Status: modular program draft compiles for SBF and host tests, but has no Localnet transaction evidence and is not cleared for Devnet use.** The accepted S5A contract/policy freeze, S0B admission, and S5D2 fee/economics review remain gates. Risk-increasing instructions validate the supplied account shape and then return `PolicyNotFrozen` before any token CPI or state write. This work does not deploy a program or pool.
 
+The requested wallet-reviewed Devnet deployment procedure is prepared at [S5 Devnet ETF program deployment — wallet-reviewed runbook](../ops/s5-devnet-wallet-reviewed-deployment.md). It is intentionally non-executable until the listed identity, policy, authority, reproducible-build, and CPI/rollback gates are closed. The runbook is not a deployment authorization.
+
 ## Implemented boundary
 
 The independent `programs/coloyond-etf` package uses Anchor 0.32.1 and the existing ETF identity, math, and oracle crates. The root Cargo workspace was deliberately left unchanged; S5A-W owns its registration. `Anchor.toml` maps the generated draft program ID only under Localnet. `H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9` is a compile/IDL placeholder without a deployment key, not an admitted Devnet program ID.
