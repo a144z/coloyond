@@ -1,17 +1,23 @@
 """Offline integrity tests for the Devnet multi-account response parser."""
 
 import base64
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
 from probe import (
     DEVNET_GENESIS_HASH,
+    FEEDS,
     RECEIVER,
+    build_snapshot,
     validate_account_batch_result,
     validate_block_time,
     validate_devnet_genesis,
     validate_rpc_response,
+    validate_snapshot,
+    write_snapshot,
 )
 
 
@@ -31,12 +37,48 @@ def result(values, *, slot=42):
     return {"context": {"slot": slot}, "value": values}
 
 
+def rpc_call(method, params, value):
+    request = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+    response = {"jsonrpc": "2.0", "id": 1, "result": value}
+    return {"request": request, "response": response}
+
+
+def snapshot_fixture():
+    values = [account(name.encode()) for name in FEEDS]
+    accounts_result = result(values, slot=42)
+    return build_snapshot(
+        rpc_call("getGenesisHash", [], DEVNET_GENESIS_HASH),
+        rpc_call(
+            "getMultipleAccounts",
+            [list(FEEDS.values()), {"encoding": "base64", "commitment": "confirmed"}],
+            accounts_result,
+        ),
+        rpc_call("getBlockTime", [42], 1_800_000_000),
+        captured_at_utc="2026-10-11T00:00:00Z",
+    )
+
+
 class OracleProbeResponseTests(unittest.TestCase):
     def test_pinned_genesis_matches_deployment_manifest(self):
         manifest = Path(__file__).resolve().parents[3] / "docs/rebalancing/deployment-manifest-etf-v1.md"
         match = re.search(r"\| Genesis hash \| `([^`]+)` \|", manifest.read_text())
         self.assertIsNotNone(match)
         self.assertEqual(match.group(1), DEVNET_GENESIS_HASH)
+
+    def test_feed_manifest_matches_all_pinned_probe_addresses(self):
+        manifest = Path(__file__).resolve().parents[3] / "docs/rebalancing/deployment-manifest-etf-v1.md"
+        rows = re.findall(
+            r"\| (?:SOL|Test BTC|Test USD) \| (SOL/USD|BTC/USD|USDC/USD) \| `([^`]+)` \| `([^`]+)` \|",
+            manifest.read_text(),
+        )
+        self.assertEqual(
+            {feed: (feed_id, address) for feed, feed_id, address in rows},
+            {
+                "SOL/USD": ("0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d", FEEDS["sol"]),
+                "BTC/USD": ("0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43", FEEDS["btc"]),
+                "USDC/USD": ("0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a", FEEDS["usdc"]),
+            },
+        )
 
     def test_accepts_pinned_devnet_genesis(self):
         self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
@@ -153,6 +195,54 @@ class OracleProbeResponseTests(unittest.TestCase):
         malformed["space"] = 4
         with self.assertRaisesRegex(RuntimeError, "does not match decoded data length"):
             validate_account_batch_result(result([malformed, account()]), EXPECTED)
+
+    def test_snapshot_round_trip_is_self_contained(self):
+        snapshot = snapshot_fixture()
+        genesis, slot, cluster_time, decoded = validate_snapshot(snapshot)
+        self.assertEqual((genesis, slot, cluster_time), (DEVNET_GENESIS_HASH, 42, 1_800_000_000))
+        self.assertEqual([(name, data) for name, _, _, data in decoded],
+                         [(name, name.encode()) for name in FEEDS])
+        with tempfile.TemporaryDirectory() as directory:
+            path = write_snapshot(snapshot, directory)
+            self.assertEqual(json.loads(path.read_text()), snapshot)
+            self.assertFalse(list(Path(directory).glob(".snapshot-*.tmp")))
+
+    def test_snapshot_rejects_mutated_account_digest_or_owner(self):
+        snapshot = snapshot_fixture()
+        snapshot["account_data_sha256"]["sol"] = "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "digest mismatch"):
+            validate_snapshot(snapshot)
+
+        snapshot = snapshot_fixture()
+        snapshot["rpc_calls"]["getMultipleAccounts"]["response"]["result"]["value"][0]["owner"] = "wrong"
+        with self.assertRaisesRegex(RuntimeError, "owner mismatch"):
+            validate_snapshot(snapshot)
+
+    def test_snapshot_rejects_slot_time_and_capture_metadata_aliases(self):
+        for field, value, message in (
+            ("account_context_slot", True, "recorded slot"),
+            ("cluster_unix_time", True, "recorded cluster time"),
+            ("captured_at_utc", "yesterdayZ", "ISO-8601"),
+            ("schema_version", True, "schema version"),
+        ):
+            snapshot = snapshot_fixture()
+            snapshot[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(RuntimeError, message):
+                validate_snapshot(snapshot)
+
+    def test_snapshot_binds_rpc_method_feed_manifest_and_block_time_slot(self):
+        mutations = (
+            ("getGenesisHash", "request", "method", "getSlot", "invalid getGenesisHash request"),
+            ("getGenesisHash", "request", "id", 2, "invalid getGenesisHash request ID"),
+            ("getGenesisHash", "request", "jsonrpc", "1.0", "invalid getGenesisHash request"),
+            ("getBlockTime", "request", "params", [43], "does not match account context slot"),
+            ("getMultipleAccounts", "request", "params", [[], {"encoding": "base64", "commitment": "confirmed"}], "differs from the pinned query"),
+        )
+        for call, side, key, value, message in mutations:
+            snapshot = snapshot_fixture()
+            snapshot["rpc_calls"][call][side][key] = value
+            with self.subTest(call=call, key=key), self.assertRaisesRegex(RuntimeError, message):
+                validate_snapshot(snapshot)
 
 
 if __name__ == "__main__":

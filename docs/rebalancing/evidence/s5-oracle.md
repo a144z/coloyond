@@ -175,6 +175,12 @@ The read-only SDK-backed probe fetched all three manifest accounts at confirmed 
 
 This is another all-stale point observation, not a freshness SLA or reason to relax the diagnostic limit. A three-asset transaction remains blocked unless every configured feed is acceptable in the same snapshot under a reviewed policy.
 
+## Replayable current-cluster feed read — 11 October 2026
+
+The read-only probe captured the complete confirmed-commitment JSON-RPC exchanges in [an immutable replay fixture](../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-509720001-20261011T002351Z.json) at account-context slot `509720001`, cluster time `1791678229` (2026-10-10 23:03:49 UTC), against the pinned Devnet genesis. It records the exact genesis, `getMultipleAccounts`, and matching `getBlockTime` requests/responses, account owner/space/lamports/base64 bytes, and SHA-256 for each account. Replaying this file offline revalidates the manifest and hashes and passes all three original account byte arrays through the pinned Rust SDK decoder.
+
+All three decoded accounts have the expected Receiver owner, 134-byte allocation, expected feed ID, and `Full` verification. At this observation, SOL/BTC were 129 seconds old and USDC was 250 seconds old; all fail the diagnostic 60-second age ceiling. Confidence was 4/7/9 bps respectively under the probe's permissive diagnostic ceiling. Account-data SHA-256 values are SOL `6265630ab6ddab68eec8a639ab4da089bccb64e77c72b2ca69bcffbf4ed6a20f`, BTC `930c13faf4fa36de8ef17a7f66fe80713f45735647140a65a9d87f0fcaa45e3f`, and USDC `8074a2f32b7246cbebfefcb944b7436abd7e534a939e41115d35d4736564d0f6`. No transaction was sent. This establishes reproducible parser compatibility for those bytes only: the unkeyed hashes are not signed RPC attestations, and historical replay proves neither current liveness, SPL-mint backing, approved oracle policy, nor S5E/Devnet admission.
+
 ## Primary sources
 
 - [Pyth Solana account modes and integration](https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana)
