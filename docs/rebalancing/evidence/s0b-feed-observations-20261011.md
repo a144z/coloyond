@@ -46,6 +46,21 @@ A second read was captured at 2026-10-11 01:49 UTC to check whether the prior Ma
 
 This second sample again found the entire Mainnet basket within the diagnostic age ceiling and the entire Devnet basket stale. Two point observations on Mainnet and repeated stale Devnet observations still do not establish a freshness service-level guarantee, an approved risk ceiling, or feed-publisher/operator independence.
 
+## Third finalized observation — 11 October 2026
+
+A third read checked the two clusters about thirteen minutes after the previous sample. The replayable captures are [Devnet slot 509744939](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-finalized-509744939-20261011T020306.828728Z.json), with block time `1791684185` (`2026-10-11 02:03:05 UTC`), and [Mainnet-beta slot 455479127](../../../tools/rebalancing/etf-oracle-probe/snapshots/mainnet-beta-finalized-455479127-20261011T020316.444005Z.json), with block time `1791684188` (`2026-10-11 02:03:08 UTC`). Both snapshots passed the pinned Rust SDK decoder and retained the expected Receiver owner, account allocation, feed IDs and `Full` verification.
+
+| Cluster | Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Diagnostic age check | Data SHA-256 |
+|---|---|---:|---:|---:|---|---|
+| Devnet | SOL/USD | `10993213228 ± 3590186`, exponent `-8` | 166 s | 4 bps | fail: stale | `dcb33d68d5806e56a4e9e382a18f41a53320a86dee591640d4bdaec4734de02d` |
+| Devnet | BTC/USD | `8293827000000 ± 7152644753`, exponent `-8` | 166 s | 9 bps | fail: stale | `83bc1348cab5f250c6f964a8ab76937142d66c9309f375a5f16985ef3da15761` |
+| Devnet | USDC/USD | `99987680 ± 87320`, exponent `-8` | 166 s | 9 bps | fail: stale | `602f0a36beb6fb53c06c2dd0e2605c52086d42ef03b9bd9b38ec0299175952a0` |
+| Mainnet-beta | SOL/USD | `10992300789 ± 3586124`, exponent `-8` | 33 s | 4 bps | pass | `70c2cb1618f2b9a3929a15e226d3c7483ede201ba41ae81ad4e2322631416531` |
+| Mainnet-beta | BTC/USD | `8293861032860 ± 7285306075`, exponent `-8` | 33 s | 9 bps | pass | `4e48a4f0fc4ceb15ec48789d4b7cd307ffa53eafbf408a3df84c3e4cabd102d5` |
+| Mainnet-beta | USDC/USD | `99986821 ± 92929`, exponent `-8` | 33 s | 10 bps | pass | `81fe37a789833a388b084de5a66a3755bea81d36d2616281f406aeee848a528b` |
+
+Mainnet again passed only the diagnostic 60-second age ceiling; Devnet again had all three feeds stale. The RPC block times were three seconds apart, but the feed publish times differed by 136 seconds, so these are not a synchronized price comparison. Repeated stale Devnet reads do not prove why updates were delayed, who operated a publisher, or what service-level freshness a future runtime can deliver.
+
 ## Limits and remaining admission work
 
 These snapshots show that the pinned account addresses exist and decode correctly at finalized commitment on both clusters. They do not establish continued feed delivery, two independent pusher operators, accepted confidence/exponent/freshness limits, USDC redemption/backing, a live ETF consumer transaction, or safe executable liquidity. The Devnet test-BTC and test-USD labels remain synthetic/unbacked. S0B remains held until the risk limits and repeated observations are reviewed, the updater path is demonstrated, the exact SBF integration rejects unsafe cases, and the required issuer/freeze/depeg disclosure is present. No transaction was sent.

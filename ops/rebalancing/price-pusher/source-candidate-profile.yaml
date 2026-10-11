@@ -11,7 +11,10 @@ cluster_profiles:
     source_listed: true
     live_account_verified: true
     finalized_observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
-    finalized_observation_slots: [509739413, 509741455]
+    finalized_observation_slots: [509739413, 509741455, 509744939]
+    latest_finalized_slot: 509744939
+    latest_basket_age_check_seconds: 60
+    latest_basket_fresh_at_diagnostic_limit: false
     genesis_hash: EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG
     rpc_provider: null
     rpc_url_secret_ref: null
@@ -19,7 +22,10 @@ cluster_profiles:
     enabled_for_sprint: false
     live_account_verified: true
     finalized_observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
-    finalized_observation_slots: [455474123, 455475245]
+    finalized_observation_slots: [455474123, 455475245, 455479127]
+    latest_finalized_slot: 455479127
+    latest_basket_age_check_seconds: 60
+    latest_basket_fresh_at_diagnostic_limit: true
     genesis_hash: 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d
     rpc_provider: null
     rpc_url_secret_ref: null
