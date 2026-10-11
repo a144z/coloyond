@@ -1,0 +1,95 @@
+kind: coloyond-helium-tuktuk-source-provenance
+schema_version: 1
+review_date_utc: "2026-10-11"
+status: source_review_pinned_deployment_match_unverified
+upstream:
+  repository: https://github.com/helium/tuktuk
+  branch_observed: main
+  observed_commit: 77dabc07580496517b6c390446daf4962fb3c39a
+  immutable_commit_url: https://github.com/helium/tuktuk/commit/77dabc07580496517b6c390446daf4962fb3c39a
+  verification: git ls-remote main matched the commit; a detached local checkout at that SHA supplied the file hashes below
+  license: Apache-2.0
+programs:
+  tuktuk:
+    declared_program_id: tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA
+    declaration_source: solana-programs/programs/tuktuk/src/lib.rs
+    devnet_account_observed: true
+    devnet_programdata_sha256: 372aaf2b16a212a0fde3269574b3de18dd99178ff730cc2b609c45d9bf8a473a
+    source_binary_match: unverified
+  cron:
+    declared_program_id: cronAjRZnJn3MTP3B9kE62NWDrjSuAPVXf9c4hu4grM
+    declaration_source: solana-programs/programs/cron/src/lib.rs
+    devnet_account_observed: true
+    devnet_programdata_sha256: a2ee82589b7241bcdc167921e4121b7bd5e0aaebcd22c09101a525dfcf036fa1
+    source_binary_match: unverified
+source_files:
+  - path: README.md
+    sha256: a8bced8f5a6276dd3c1e5684e197a8ff6f401d99beb9dcd054c9fedb28bef1ff
+    review: operator requirements, queue deposit/funding/reward, Cron close and recovery guidance
+  - path: solana-programs/programs/tuktuk/src/lib.rs
+    sha256: c2e33a1f23c580f33b59a68a862669577c17eabca37ecf1bf72b8c8619279819
+    review: declared TukTuk program ID and instruction surface
+  - path: solana-programs/programs/tuktuk/src/state.rs
+    sha256: f782ea5b91872097e7813daefab1b53bf9fc15d21eb2975344e540730125dfb7
+    review: TriggerV0, TaskV0, TransactionSourceV0 and compiled transaction size helper
+  - path: solana-programs/programs/tuktuk/src/instructions/initialize_task_queue_v0.rs
+    sha256: 03616a727842e5f8d66d2f7818ffe795e49458b119b508ca6ac37d64844ec9c0
+    review: config-driven minimum deposit and capacity-dependent queue allocation
+  - path: solana-programs/programs/tuktuk/src/instructions/queue_task_v0.rs
+    sha256: 8f35a67c6feb5e500348b12b8f5746a01aec7896c24f3187c3ce2ce783011913
+    review: task PDA, description bound and TaskV0 allocation formula
+  - path: solana-programs/programs/tuktuk/src/instructions/run_task_v0.rs
+    sha256: 725c09e129d0c8c93b9fa9e7b86fc7faff3d1a2c13ea28e71abc2ddc80b31fd7
+    review: task execution, returned-child processing and task-queue funding behavior
+  - path: solana-programs/programs/cron/src/lib.rs
+    sha256: 28ddd17591317f4b959876c64bb0e9b3b94d5ece63f534cad541df96e642f129
+    review: declared Cron program ID and versioned instruction surface
+  - path: solana-programs/programs/cron/src/state.rs
+    sha256: abc8efdbe24c91d05dc50ea73aa4d1ef702d14f28c3470c4a056d9d85b9d34d4
+    review: cron job schedule state, next schedule task and removed state
+  - path: solana-programs/programs/cron/src/schedule.rs
+    sha256: 6a21aa483710a9c0cb1ebbc210a254223dd69a7e741703d9e42eaec56a0866c2
+    review: next execution and compiled schedule transaction construction
+  - path: solana-programs/programs/cron/src/instructions/initialize_cron_job_v0.rs
+    sha256: b91bfcac32fd42a7adf0d50d64073e3af28c3cd77c00347f3d1473dedb76f96d
+    review: Cron job and transaction record initialization
+  - path: solana-programs/programs/cron/src/instructions/queue_cron_tasks_v0.rs
+    sha256: c5c493f79040ab2eb2894d3468b496053c87ba59892e3819d05769b91477f42f
+    review: compatibility handoff from V0 schedule task to V1
+  - path: solana-programs/programs/cron/src/instructions/queue_cron_tasks_v1.rs
+    sha256: 0cf1dcc6d904dc1b6e7939b574a7367d8d395c8c9d379fb02e4d42504bfb61c9
+    review: versioned schedule processing, queue/task-chain checks and next-task return
+  - path: solana-programs/programs/cron/src/instructions/requeue_cron_task_v0.rs
+    sha256: 74007bb9eeea35b3a8f7568470e5fc2b1b0e9eab047bb5707b3a034f979187dc
+    review: V0 requeue instruction is deprecated and returns an error
+  - path: solana-programs/programs/cron/src/instructions/requeue_cron_task_v1.rs
+    sha256: 54afa075c17774eaef7de2232712aeca3253c77d10c51968ab3c1a3314f8c08b
+    review: guarded V1 recovery/requeue path
+  - path: solana-programs/programs/cron/src/instructions/close_cron_job_v0.rs
+    sha256: d2c083b0ba20746de320d6aa633a8a2eff8a31f4a06d345f7c8c19d468236289
+    review: Cron job close checks and cleanup
+  - path: solana-programs/programs/cron/src/instructions/remove_cron_transaction_v0.rs
+    sha256: 3487fae64e6c5c8ce0f25554a279683829213811c87e7f8a411983a9ae654010
+    review: transaction-record removal/close lifecycle
+reviewed_source_facts:
+  task_trigger:
+    variants: [Now, Timestamp(i64)]
+    recurring_by_itself: false
+  queue:
+    configured_minimum_deposit_lamports: 1000000000
+    note: Runtime initialization transfers config.min_deposit; the README's 1 SOL is the observed configured value, not a hard-coded universal constant.
+    rent: Capacity and lookup-table allocation affect account size; queue/task capacity, rent, rewards and recursive funding are separate budget items.
+  cron:
+    current_schedule_path: queue_cron_tasks_v1
+    compatibility_path: queue_cron_tasks_v0 hands scheduled work to V1
+    recovery_path: requeue_cron_task_v1
+    legacy_requeue_v0: deprecated_and_fails
+    close_order: remove_or_close_each_cron_transaction_before_closing_job
+    executor: external_crank_turner_required
+    price_condition: evaluated_by_the_called_coloyond_instruction_not_by_cron
+limitations:
+  - These source hashes identify one upstream source revision; no reproducible upstream build was performed.
+  - Earlier Devnet ProgramData hashes are not matched to this commit or a release artifact.
+  - No ETF task or Cron job was registered and no crank-run transaction was sent.
+  - Queue funding, task rent/reward, exact compiled ETF payload, CPI/packet/compute fit, recurrence recovery, and independent crank-turner availability remain unproven.
+immutable_source_base: https://github.com/helium/tuktuk/blob/77dabc07580496517b6c390446daf4962fb3c39a/
