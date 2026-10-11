@@ -6,7 +6,7 @@
 
 `tools/rebalancing/solver-probe/probe.py` has two explicit operations:
 
-- `status` reads the genesis hash first and requires it to match the selected mainnet/devnet cluster before reading finalized slot/health and canonical WSOL/USDC mint account owner, decimals and supply. On 10 October 2026, the official Solana [`getGenesisHash` RPC reference](https://solana.com/docs/rpc/http/getgenesishash) returned Devnet genesis `GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC`; that current RPC value differs from reset-era Devnet constants still present in older SDK source. A mismatch fails closed.
+- `status` reads the genesis hash first and requires it to match the selected mainnet/devnet cluster before reading finalized slot/health and canonical WSOL/USDC mint account owner, decimals and supply. On 11 October 2026, the public Devnet endpoint and independent OnFinality endpoint returned `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` at adjacent slots, matching the Solana SDK genesis constant. The current Solana [`getGenesisHash` documentation example](https://solana.com/docs/rpc/http/getgenesishash) prints `GH7ome...`; the probes follow the live endpoint consensus and record this documentation discrepancy. A mismatch still fails closed.
 - `simulate` accepts an unsigned base64 transaction, refuses any non-zero signature byte, reads the base fee, and calls `simulateTransaction` with signature verification off and recent blockhash replacement on. It reports bytes, transaction version, static/lookup key slots, compute-budget settings, simulated CU, logs, and RPC error.
 
 This is transaction-shape tooling, not a route finder or an auction executor. The simulator does not resolve address lookup table pubkeys, and RPC simulation is not a landed transaction or proof of token deltas/depth. The generic probe makes no Jupiter dependency. Any future venue adapter must produce both-direction, size-ladder quotes directly from verified pool state; a Router quote alone is not independent venue evidence.
@@ -32,12 +32,16 @@ SOLANA_RPC_URL=https://api.devnet.solana.com \
 
 Result: `BLOCKED`, `getGenesisHash` could not resolve the public RPC hostname (`nodename nor servname provided, or not known`). The cluster could not be verified; no slot, mint account, owner, decimals, or supply was returned. Mainnet RPC, direct Orca/Meteora/Raydium pool state, route quotes, pool depth, an unsigned route-plus-fill simulation, a fill landing, realized fees, and solver net returns were not measured in this run. A failure to reach RPC does not indicate that the assets or pools are absent.
 
+### Current Devnet identity and mint read — 11 October 2026
+
+After the probe pin was aligned to the active cluster, a read-only retry completed at finalized slot `509699404` (2026-10-10 23:01:46 UTC). The RPC returned genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, health `ok`, canonical WSOL with classic SPL Token ownership and 9 decimals, and Devnet USDC with classic SPL Token ownership and 6 decimals. The public RPC and independent OnFinality endpoint reported the same genesis at slots `509698933` and `509698943`; the Solana SDK constant agrees. Solana's current `getGenesisHash` documentation example prints `GH7ome...`, which conflicts with these live responses; current probes pin observed endpoint identity and fail closed for a different hash. The retry read no wallet and signed or sent no transaction. It does not establish executable DEX depth, route quotes, transaction costs, fills or solver profitability.
+
 ## What the result does and does not prove
 
 | Evidence | Status |
 |---|---|
 | Transaction parser behavior | Locally tested; 5 focused tests pass |
-| Finalized Devnet WSOL/USDC mint state | Unavailable due DNS failure |
+| Finalized Devnet WSOL/USDC mint state | Read-only live evidence at slot `509699404`; no market-depth or route evidence |
 | Direct DEX pool IDs/state and size-ladder depth | Not measured |
 | Jupiter Router build | Not attempted; it is optional and does not establish independent depth |
 | Safe-price spread and no-bid economics | Not computable: live route/oracle inputs and approved auction bounds are absent |

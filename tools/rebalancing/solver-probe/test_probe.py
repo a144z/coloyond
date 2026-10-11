@@ -1,7 +1,21 @@
 import base64
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from probe import ProbeError, parse_transaction, redact_url, shortvec, verify_cluster_genesis
+from probe import (
+    ProbeError,
+    Rpc,
+    parse_transaction,
+    redact_url,
+    shortvec,
+    simulate,
+    status,
+    verify_cluster_genesis,
+)
 
 
 def b58decode(text: str) -> bytes:
@@ -22,7 +36,7 @@ def sv(value: int) -> bytes:
     return bytes(out)
 
 
-def fixture(*, versioned: bool = False, lookup: bool = False) -> bytes:
+def fixture(*, versioned: bool = False, lookup: bool = False, compute_price: bool = False) -> bytes:
     compute_budget = b58decode("ComputeBudget111111111111111111111111111111")
     key0, key1 = b"\x11" * 32, compute_budget
     msg = bytearray()
@@ -35,7 +49,10 @@ def fixture(*, versioned: bool = False, lookup: bool = False) -> bytes:
     msg.extend(sv(1))
     msg.extend([1])  # program index: Compute Budget
     msg.extend(sv(0))
-    instruction = b"\x02" + (1_000_000).to_bytes(4, "little")
+    if compute_price:
+        instruction = b"\x03" + (10_000).to_bytes(8, "little")
+    else:
+        instruction = b"\x02" + (1_000_000).to_bytes(4, "little")
     msg.extend(sv(len(instruction)) + instruction)
     if versioned:
         msg.extend(sv(1 if lookup else 0))
@@ -62,6 +79,26 @@ class TransactionParsingTests(unittest.TestCase):
         self.assertEqual(parsed.lookup_accounts, 2)
         self.assertEqual(parsed.account_key_slots, 4)
 
+    def test_instruction_indexes_must_reference_transaction_account_keys(self):
+        raw = bytearray(fixture())
+        instruction_offset = 1 + 64 + 3 + 1 + 2 * 32 + 32 + 1
+        raw[instruction_offset] = 2
+        with self.assertRaisesRegex(ProbeError, "outside transaction account keys"):
+            parse_transaction(bytes(raw))
+
+        raw = bytearray(fixture())
+        raw[instruction_offset + 1] = 1
+        raw.insert(instruction_offset + 2, 2)
+        with self.assertRaisesRegex(ProbeError, "outside transaction account keys"):
+            parse_transaction(bytes(raw))
+
+        # Versioned transactions may reference loaded address-table keys too.
+        raw = bytearray(fixture(versioned=True, lookup=True))
+        instruction_offset += 1  # version prefix
+        raw[instruction_offset + 1] = 1
+        raw.insert(instruction_offset + 2, 3)
+        self.assertEqual(parse_transaction(bytes(raw)).account_key_slots, 4)
+
     def test_nonempty_signature_is_detected(self):
         raw = bytearray(fixture())
         raw[1] = 1
@@ -78,15 +115,114 @@ class TransactionParsingTests(unittest.TestCase):
         self.assertEqual(redact_url("https://user:secret@example.invalid/token/abc?key=xyz"), "https://example.invalid/<redacted>?<redacted>")
 
     def test_expected_devnet_genesis_is_accepted(self):
-        verify_cluster_genesis("devnet", "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC")
+        verify_cluster_genesis("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG")
 
-    def test_reset_era_devnet_genesis_is_rejected(self):
+    def test_conflicting_documentation_example_genesis_is_rejected(self):
         with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
-            verify_cluster_genesis("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG")
+            verify_cluster_genesis("devnet", "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC")
 
     def test_mainnet_endpoint_labeled_devnet_is_rejected(self):
         with self.assertRaisesRegex(ProbeError, "cluster mismatch"):
             verify_cluster_genesis("devnet", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
+
+    def test_rpc_requires_a_matching_json_rpc_result_or_error_envelope(self):
+        class Response:
+            def __init__(self, body):
+                self.body = json.dumps(body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return self.body
+
+        malformed = (
+            None,
+            [],
+            {"jsonrpc": "2.0", "id": 1},
+            {"jsonrpc": "2.0", "id": 2, "result": 42},
+            {"jsonrpc": "1.0", "id": 1, "result": 42},
+            {"jsonrpc": "2.0", "id": 1, "result": 42, "error": {}},
+        )
+        for payload in malformed:
+            with self.subTest(payload=payload):
+                client = Rpc("https://rpc.invalid", 1)
+                with patch("probe.urllib.request.urlopen", return_value=Response(payload)):
+                    with self.assertRaises(ProbeError):
+                        client.call("getSlot", [])
+
+        client = Rpc("https://rpc.invalid", 1)
+        with patch(
+            "probe.urllib.request.urlopen",
+            return_value=Response({"jsonrpc": "2.0", "id": 1, "result": 42}),
+        ):
+            self.assertEqual(client.call("getSlot", []), 42)
+
+    def test_simulation_requires_the_rpc_err_field_before_reporting_success(self):
+        class FakeRpc:
+            def __init__(self, simulation_value):
+                self.simulation_value = simulation_value
+
+            def call(self, method, params):
+                if method == "getFeeForMessage":
+                    return {"value": 5_000}
+                return {"value": self.simulation_value}
+
+        with tempfile.TemporaryDirectory() as directory:
+            transaction_path = Path(directory) / "unsigned.txt"
+            transaction_path.write_text(base64.b64encode(fixture()).decode())
+            args = SimpleNamespace(
+                transaction=str(transaction_path),
+                rpc_url="https://rpc.invalid",
+                timeout=1,
+            )
+            for simulation_value, expected_status in (
+                ({"unitsConsumed": 123}, "BLOCKED"),
+                ({"err": None, "unitsConsumed": 123, "logs": []}, "SIMULATION_COMPLETE"),
+            ):
+                with self.subTest(simulation_value=simulation_value):
+                    with patch("probe.Rpc", return_value=FakeRpc(simulation_value)):
+                        self.assertEqual(simulate(args)["status"], expected_status)
+
+    def test_simulation_rejects_malformed_consumed_units_before_fee_estimation(self):
+        class FakeRpc:
+            def call(self, method, params):
+                if method == "getFeeForMessage":
+                    return {"value": 5_000}
+                return {"value": {"err": None, "unitsConsumed": "123"}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            transaction_path = Path(directory) / "unsigned.txt"
+            transaction_path.write_text(base64.b64encode(fixture(compute_price=True)).decode())
+            args = SimpleNamespace(
+                transaction=str(transaction_path),
+                rpc_url="https://rpc.invalid",
+                timeout=1,
+            )
+            with patch("probe.Rpc", return_value=FakeRpc()):
+                result = simulate(args)
+            self.assertEqual(result["status"], "BLOCKED")
+            self.assertIn("unitsConsumed", result["blocker"])
+
+    def test_status_blocks_on_malformed_mint_account_data(self):
+        class FakeRpc:
+            def call(self, method, params):
+                if method == "getGenesisHash":
+                    return "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+                if method == "getSlot":
+                    return 42
+                if method == "getHealth":
+                    return "ok"
+                return {"value": {"owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"}}
+
+        args = SimpleNamespace(cluster="devnet", rpc_url="https://rpc.invalid", timeout=1)
+        with patch("probe.Rpc", return_value=FakeRpc()):
+            result = status(args)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("malformed mint account data", result["blocker"])
 
 
 if __name__ == "__main__":

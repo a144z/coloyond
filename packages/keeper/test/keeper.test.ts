@@ -39,6 +39,24 @@ test("keeps uncertain submission pending and does not send a duplicate", async (
   assert.equal(results.at(-1)?.status, "confirmed");
 });
 
+test("observer failure after submission cannot lose the signature or cause a duplicate", async () => {
+  const runtime = new FakeRuntime();
+  runtime.applyOnConfirm = false;
+  runtime.confirmationResults = [{ status: "unknown" }, { status: "unknown" }];
+  const results: Array<{ status: string }> = [];
+  const service = new KeeperService({ cluster: "localnet", expectedGenesisHash: "localnet-genesis", vaultAddress: runtime.state.vaultAddress, dryRun: false, maxFeeLamports: 2_000n }, runtime, { start: startCandidate }, (result) => {
+    if (result.status === "submitted") throw new Error("observer unavailable");
+    results.push(result);
+  });
+
+  await service.reconcile();
+  assert.equal(runtime.sends, 1);
+  assert.equal(results.at(-1)?.status, "pending");
+  await service.reconcile();
+  assert.equal(runtime.sends, 1);
+  assert.equal(results.at(-1)?.status, "pending");
+});
+
 test("a fresh service restarts from chain and does not repeat an applied start", async () => {
   const runtime = new FakeRuntime();
   runtime.confirmationResults = [{ status: "confirmed" }];

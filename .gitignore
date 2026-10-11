@@ -1,4 +1,5 @@
 /target/
+/tools/rebalancing/etf-math-sbf-bench/target/
 /.anchor/
 /.env.local
 /node_modules/

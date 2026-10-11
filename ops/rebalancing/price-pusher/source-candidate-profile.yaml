@@ -1,22 +1,32 @@
 # Evidence-only source candidate. This is NOT accepted by Pyth Price Pusher.
 # Do not rename this as a runtime price-config.yaml or deploy it.
-# Status remains blocked until final account reads, pusher release/config probe,
-# RPC/operator selection, and the feed/age/confidence policy are reviewed.
+# Status remains blocked: finalized point-in-time identity reads exist, but the
+# pusher release/config, RPC/operator selection, and feed risk policy are open.
 kind: coloyond-pyth-pusher-source-candidate
 schema_version: 1
 status: blocked
-checked_utc: "2026-10-10"
+checked_utc: "2026-10-11"
 cluster_profiles:
   devnet:
     source_listed: true
-    live_account_verified: false
-    genesis_hash: null
+    live_account_verified: true
+    finalized_observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
+    finalized_observation_slots: [509739413, 509741455, 509744939]
+    latest_finalized_slot: 509744939
+    latest_basket_age_check_seconds: 60
+    latest_basket_fresh_at_diagnostic_limit: false
+    genesis_hash: EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG
     rpc_provider: null
     rpc_url_secret_ref: null
   mainnet:
     enabled_for_sprint: false
-    live_account_verified: false
-    genesis_hash: null
+    live_account_verified: true
+    finalized_observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
+    finalized_observation_slots: [455474123, 455475245, 455479127]
+    latest_finalized_slot: 455479127
+    latest_basket_age_check_seconds: 60
+    latest_basket_fresh_at_diagnostic_limit: true
+    genesis_hash: 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d
     rpc_provider: null
     rpc_url_secret_ref: null
 pyth:
@@ -33,14 +43,24 @@ feeds:
   - alias: SOL/USD
     feed_id: "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"
     shard_0_account_source_listed: 7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE
-    live_account_verified: false
+    live_account_verified: true
+    observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
+    pyth_sponsored_update_heartbeat_seconds: 55
+    pyth_sponsored_price_deviation_percent: 0.5
+    pusher_confidence_ratio_percent: null
+  - alias: BTC/USD
+    feed_id: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43"
+    shard_0_account_source_listed: 4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo
+    live_account_verified: true
+    observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
     pyth_sponsored_update_heartbeat_seconds: 55
     pyth_sponsored_price_deviation_percent: 0.5
     pusher_confidence_ratio_percent: null
   - alias: USDC/USD
     feed_id: "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"
     shard_0_account_source_listed: Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX
-    live_account_verified: false
+    live_account_verified: true
+    observation_ref: ../../../docs/rebalancing/evidence/s0b-feed-observations-20261011.md
     pyth_sponsored_update_heartbeat_seconds: 55
     pyth_sponsored_price_deviation_percent: 0.5
     pusher_confidence_ratio_percent: null
@@ -58,7 +78,7 @@ operators:
     payer_keypair_secret_ref: null
     fee_budget_lamports: null
 blockers:
-  - finalized_devnet_account_owner_feed_id_and_freshness_observations
+  - reviewed_freshness_confidence_and_depeg_limits_with_repeated_observations
   - pyth_price_pusher_exact_release_and_hermes_auth_runtime_probe
   - approved_devnet_rpc_and_independent_provider_selection
   - pusher_runtime_confidence_ratio_and_poll_push_fee_budget

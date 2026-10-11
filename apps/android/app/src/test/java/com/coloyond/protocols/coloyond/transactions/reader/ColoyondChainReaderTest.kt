@@ -10,6 +10,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -142,13 +145,19 @@ class ColoyondChainReaderTest {
             pythPriceData(USDC_FEED_ID, price = 100_000_000L, confidence = 1_000L),
         )
         val transport = SnapshotTransport(accounts)
-        val reader = ColoyondChainReader(SolanaRpc(transport, localnet.rpcUrl, noWait), localnet, decoder)
+        val reader = ColoyondChainReader(
+            SolanaRpc(transport, localnet.rpcUrl, noWait),
+            localnet,
+            decoder,
+            Clock.fixed(Instant.parse("2026-10-11T12:34:56Z"), ZoneOffset.UTC),
+        )
 
         val snapshot = reader.read(wallet)
 
         assertEquals(105uL, snapshot.contextSlot)
         assertEquals("local-genesis", snapshot.genesisHash)
         assertEquals(1_800_000_100L, snapshot.blockTime)
+        assertEquals(Instant.parse("2026-10-11T12:34:56Z"), snapshot.clientRetrievedAt)
         assertEquals(2, snapshot.assets.size)
         assertEquals(ColoyondAddresses.WSOL_MINT, snapshot.assets[0].mint)
         assertEquals(9, snapshot.assets[0].mintState.decimals)

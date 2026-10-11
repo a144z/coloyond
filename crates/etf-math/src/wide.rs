@@ -29,6 +29,18 @@ impl U256 {
             low: ((middle as u64 as u128) << 64) | (low_product as u64 as u128),
         }
     }
+
+    /// Shifts by 96 bits when the result fits in `u128`.
+    pub(crate) fn shr_96_to_u128(self) -> Option<u128> {
+        if self.high >> 64 != 0 {
+            return None;
+        }
+        Some((self.high << 32) | (self.low >> 96))
+    }
+
+    pub(crate) fn low_96_nonzero(self) -> bool {
+        self.low & ((1_u128 << 96) - 1) != 0
+    }
 }
 
 impl Ord for U256 {
@@ -95,6 +107,15 @@ mod tests {
         for (left, right, high, low) in vectors {
             assert_eq!(U256::mul_u128(left, right), U256 { high, low });
         }
+    }
+
+    #[test]
+    fn shifts_q96_products_and_rejects_results_wider_than_u128() {
+        let q96 = 1_u128 << 96;
+        let product = U256::mul_u128(q96 - 1, q96 - 1);
+        assert_eq!(product.shr_96_to_u128(), Some(q96 - 2));
+        assert!(product.low_96_nonzero());
+        assert_eq!(U256::mul_u128(u128::MAX, u128::MAX).shr_96_to_u128(), None);
     }
 
     #[test]

@@ -1,0 +1,108 @@
+{
+  "account_context_slot": 455475245,
+  "account_data_sha256": {
+    "btc": "ba03b4b09a88eadc7177c8b9de1a761bbf6c46989d3609918a6c9ccba687e038",
+    "sol": "8e7388721d5dbc4ca619b24b7012ffcb869b2bc94f3fd2dce98dd7f221142d0f",
+    "usdc": "67d670544078514c92c80da5453f115d0635d783d5f3fa4a24662a9ddc7202bd"
+  },
+  "captured_at_utc": "2026-10-11T01:49:14Z",
+  "cluster": "solana-mainnet-beta",
+  "cluster_unix_time": 1791683346,
+  "commitment": "finalized",
+  "genesis_hash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc_calls": {
+    "getBlockTime": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getBlockTime",
+        "params": [
+          455475245
+        ]
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": 1791683346
+      }
+    },
+    "getGenesisHash": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getGenesisHash",
+        "params": []
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+      }
+    },
+    "getMultipleAccounts": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getMultipleAccounts",
+        "params": [
+          [
+            "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+            "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo",
+            "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
+          ],
+          {
+            "commitment": "finalized",
+            "encoding": "base64"
+          }
+        ]
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "context": {
+            "apiVersion": "4.3.0",
+            "slot": 455475245
+          },
+          "value": [
+            {
+              "data": [
+                "IvEjY51+9M1gMUcENA3t3zcf1CRyFI8kjp0abRpesqw6zYt/1dayQwHvDYtv2izrpB2hXUCV0do5Kg0vjtDGx7wPTPrIwoC1bbxg1o8CAAAAYEkzAAAAAAD4////6OrKagAAAADn6spqAAAAAIgflI8CAAAAi0Q1AAAAAAB2/yUbAAAAAAA=",
+                "base64"
+              ],
+              "executable": false,
+              "lamports": 1825031,
+              "owner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+              "rentEpoch": 18446744073709551615,
+              "space": 134
+            },
+            {
+              "data": [
+                "IvEjY51+9M01pwwRFi+/Wg5/fS+W4Z+XsCJGoVaH7mcnlIl0SOZY3gHmLfbItKhf4aZ9tE3BLeXbMw96xmty3GWK/t8PSkFbQ32yZFCLBwAA7qd5lgEAAAD4////6OrKagAAAADn6spqAAAAAKAYpAGLBwAA2C9yewEAAAB2/yUbAAAAAAA=",
+                "base64"
+              ],
+              "executable": false,
+              "lamports": 1824130,
+              "owner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+              "rentEpoch": 18446744073709551615,
+              "space": 134
+            },
+            {
+              "data": [
+                "IvEjY51+9M2+k5qDCfVkBxh//zCsVLFpSYvpn22OG/1CRGgM1PfR4gHqoCDGHMR5cSgTRhzhU4lKlqbACyHtDPwnmNH5qenJSomq9QUAAAAAPnwBAAAAAAD4////6OrKagAAAADn6spqAAAAAEyy9QUAAAAAcmIBAAAAAAB2/yUbAAAAAAA=",
+                "base64"
+              ],
+              "executable": false,
+              "lamports": 1823631,
+              "owner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+              "rentEpoch": 18446744073709551615,
+              "space": 134
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rpc_url": "https://api.mainnet-beta.solana.com",
+  "schema_version": 1
+}

@@ -35,7 +35,7 @@ MINTS = {
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 EXPECTED_GENESIS = {
     "mainnet": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
-    "devnet": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
+    "devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
 }
 
 
@@ -104,12 +104,15 @@ def parse_transaction(raw: bytes) -> TxShape:
     ix_count, mpos = shortvec(message, mpos)
     compute_unit_limit = None
     compute_unit_price = None
+    instruction_indices: list[int] = []
     for _ in range(ix_count):
         if mpos >= len(message):
             raise ProbeError("truncated instruction")
         program_index = message[mpos]
         mpos += 1
         account_indices, mpos = shortvec(message, mpos)
+        instruction_indices.append(program_index)
+        instruction_indices.extend(message[mpos : mpos + account_indices])
         mpos += account_indices
         data_len, mpos = shortvec(message, mpos)
         end = mpos + data_len
@@ -142,6 +145,8 @@ def parse_transaction(raw: bytes) -> TxShape:
         raise ProbeError("unexpected trailing message bytes")
     if readonly_signed > required_sigs or readonly_unsigned > account_count - required_sigs:
         raise ProbeError("invalid account header")
+    if any(index >= account_count + writable + readonly for index in instruction_indices):
+        raise ProbeError("instruction account index outside transaction account keys")
     return TxShape(
         bytes=len(raw),
         signature_count=sig_count,
@@ -191,8 +196,25 @@ class Rpc:
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
             raise ProbeError(f"RPC {method} unavailable: {reason}") from None
-        if "error" in payload:
-            raise ProbeError(f"RPC {method} error: {payload['error']}")
+        if not isinstance(payload, dict):
+            raise ProbeError(f"RPC {method} malformed response: expected JSON-RPC object")
+        if payload.get("jsonrpc") != "2.0":
+            raise ProbeError(f"RPC {method} malformed response: expected JSON-RPC 2.0")
+        response_id = payload.get("id")
+        if type(response_id) is not int or response_id != self.id:
+            raise ProbeError(f"RPC {method} malformed response: request ID mismatch")
+        has_result = "result" in payload
+        has_error = "error" in payload
+        if has_result == has_error:
+            raise ProbeError(f"RPC {method} malformed response: expected exactly one of result or error")
+        if has_error:
+            error = payload["error"]
+            if not isinstance(error, dict):
+                raise ProbeError(f"RPC {method} malformed error object")
+            code, message = error.get("code"), error.get("message")
+            if isinstance(code, bool) or not isinstance(code, int) or not isinstance(message, str):
+                raise ProbeError(f"RPC {method} malformed error object")
+            raise ProbeError(f"RPC {method} error {code}: {message}")
         return payload["result"]
 
 
@@ -225,8 +247,37 @@ def status(args: argparse.Namespace) -> dict[str, Any]:
         result["finalizedSlot"] = rpc.call("getSlot", [{"commitment": "finalized"}])
         result["rpcHealth"] = rpc.call("getHealth", [])
         for symbol, mint in MINTS[args.cluster].items():
-            account = rpc.call("getAccountInfo", [mint, {"commitment": "finalized", "encoding": "base64"}])["value"]
-            supply = rpc.call("getTokenSupply", [mint, {"commitment": "finalized"}])["value"]
+            account_response = rpc.call("getAccountInfo", [mint, {"commitment": "finalized", "encoding": "base64"}])
+            if not isinstance(account_response, dict) or "value" not in account_response:
+                raise ProbeError(f"{symbol}: malformed getAccountInfo result")
+            account = account_response["value"]
+            account_data_length = None
+            if account is not None:
+                if not isinstance(account, dict) or not isinstance(account.get("owner"), str):
+                    raise ProbeError(f"{symbol}: malformed mint account value")
+                account_data = account.get("data")
+                if (
+                    not isinstance(account_data, (list, tuple))
+                    or len(account_data) != 2
+                    or not isinstance(account_data[0], str)
+                    or account_data[1] != "base64"
+                ):
+                    raise ProbeError(f"{symbol}: malformed mint account data")
+                try:
+                    account_data_length = len(base64.b64decode(account_data[0], validate=True))
+                except ValueError as exc:
+                    raise ProbeError(f"{symbol}: malformed mint account base64") from exc
+
+            supply_response = rpc.call("getTokenSupply", [mint, {"commitment": "finalized"}])
+            if not isinstance(supply_response, dict) or "value" not in supply_response:
+                raise ProbeError(f"{symbol}: malformed getTokenSupply result")
+            supply = supply_response["value"]
+            if supply is not None and (
+                not isinstance(supply, dict)
+                or type(supply.get("decimals")) is not int
+                or not isinstance(supply.get("amount"), str)
+            ):
+                raise ProbeError(f"{symbol}: malformed token supply value")
             result["assets"][symbol] = {
                 "mint": mint,
                 "exists": account is not None,
@@ -234,7 +285,7 @@ def status(args: argparse.Namespace) -> dict[str, Any]:
                 "ownerIsClassicSplToken": bool(account and account.get("owner") == TOKEN_PROGRAM),
                 "decimals": supply.get("decimals") if supply else None,
                 "supplyRaw": supply.get("amount") if supply else None,
-                "accountDataLength": len(base64.b64decode(account["data"][0])) if account else None,
+                "accountDataLength": account_data_length,
             }
         result["status"] = "READS_COMPLETE"
     except ProbeError as exc:
@@ -276,6 +327,11 @@ def simulate(args: argparse.Namespace) -> dict[str, Any]:
             base64.b64encode(raw).decode("ascii"),
             {"encoding": "base64", "sigVerify": False, "replaceRecentBlockhash": True, "commitment": "processed", "innerInstructions": True},
         ])["value"]
+        if not isinstance(simulation, dict) or "err" not in simulation:
+            raise ProbeError("RPC simulateTransaction malformed response: expected value object with err field")
+        units_consumed = simulation.get("unitsConsumed")
+        if units_consumed is not None and (type(units_consumed) is not int or units_consumed < 0):
+            raise ProbeError("RPC simulateTransaction malformed response: unitsConsumed must be a non-negative integer")
         result["simulation"] = {
             "err": simulation.get("err"),
             "unitsConsumed": simulation.get("unitsConsumed"),

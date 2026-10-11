@@ -1,5 +1,7 @@
 # ARCHITECTURE: No-Backend Auto-Rebalancing Multi-Token ETF on Solana Devnet
 
+> **Historical proposal; nonnormative.** Preserve this document as the colleague's original blueprint. The controlling architecture and acceptance gates are [the on-chain rebalancing plan](../onchain-portfolio-rebalancing-plan.md) and [Sprint 5 checklist](../onchain-portfolio-rebalancing-sprint-checklist.md). In particular, a scheduled call does not itself swap or rebalance assets; MagicBlock-first, the proposed dynamic-fee values, “zero off-chain,” and “up-only” claims remain superseded or unverified. The ETF AMM remains a separate foundation pillar from the existing Dutch-auction vault.
+
 ## 1. System Overview
 
 This architecture implements a fully automated, no-backend, multi-token ETF vault on Solana Devnet. The system combines three independent layers:

@@ -14,6 +14,8 @@
         "contextSlot": "9007199254740993"
       },
       "protocolRevision": "etf-v1-fixture",
+      "configRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "poolSequence": "0",
       "oracle": {
         "mode": "receiver_full",
         "account": "11111111111111111111111111111111",
@@ -48,7 +50,7 @@
       "exponent": -6,
       "publishTime": "1791648000",
       "ageSeconds": "3",
-      "accountStatus": "fixture-authenticated-by-mode-specific-checks"
+      "verification": "full"
     },
     {
       "id": "oracle-stale",

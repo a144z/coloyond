@@ -8,7 +8,7 @@
 
 ## 1. Closed loop and authority boundaries
 
-1. Pyth's sponsored shard-0 publisher normally updates its fixed SOL/USD and USDC/USD feed accounts. The Pyth Price Pusher is an independently operable off-chain backup: it reads the latest signed Pyth data from Hermes, compares it with the feed state on Solana, and submits an update transaction when its configured criteria say to do so. Pyth describes feed updates as permissionless. The process still needs a Hermes API credential, an RPC connection, and a fee-payer key.
+1. Pyth's sponsored shard-0 publisher normally updates fixed feed accounts. The current ETF v1 candidate set is SOL/USD, BTC/USD and USDC/USD; the earlier v0.3.0 pair remains SOL/USD and USDC/USD. The Pyth Price Pusher is an independently operable off-chain backup: it reads the latest signed Pyth data from Hermes, compares it with the feed state on Solana, and submits an update transaction when its configured criteria say to do so. Pyth describes feed updates as permissionless. The process still needs a Hermes API credential, an RPC connection, and a fee-payer key.
 2. The keeper reads the vault, policy, intent, custody accounts, and those same pinned oracle accounts. A fresh feed may wake the keeper, but the keeper rereads all state and proposes only a currently eligible S2D/S3 instruction. The transaction is simulated, bounded by an operator fee cap, confirmed, and reconciled against chain state.
 3. The Coloyond program remains the authority. It rechecks feed identity, owner, verification/freshness, policy revision, price bounds, sequence and token-account constraints atomically. Pyth's updater cannot change vault policy, move vault assets, or force a rebalance. A keeper or pusher is not a timer or guaranteed liveness service; if nobody submits, the chain does nothing. Stale/missing oracle data must keep price-dependent risk actions fail-closed.
 
@@ -18,16 +18,19 @@ The Price Pusher fee payer is separate from the vault, governance, keeper and up
 
 The repository has source-listed candidates for the Solana shard-0 feed accounts:
 
-| Feed | Feed ID | Source-listed shard-0 account | Live RPC read |
+| Feed | Feed ID | Source-listed shard-0 account | Finalized RPC evidence |
 |---|---|---|---|
-| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Missing on Devnet and Mainnet |
-| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Missing on Devnet and Mainnet |
+| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Identity decoded on both clusters; Mainnet ages 10/42/33 s, Devnet 140/310/166 s (all Devnet samples stale at 60 s) |
+| BTC/USD | `0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Identity decoded on both clusters; Mainnet ages 10/42/33 s, Devnet 140/310/166 s (all Devnet samples stale at 60 s) |
+| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Identity decoded on both clusters; Mainnet ages 10/42/33 s, Devnet 476/310/166 s (all Devnet samples stale at 60 s) |
+
+These are point-in-time observations from [the replayable finalized feed captures](../evidence/s0b-feed-observations-20261011.md), not current deployment reads. All feeds were Receiver-owned, 134-byte `PriceUpdateV2` accounts with the expected ID and `Full` verification. Three Mainnet baskets passed only the diagnostic 60-second age check (ages 10/42/33 seconds); three Devnet baskets failed it (ages 140/310/166 seconds, latest 166). Repeat the finalized read against the exact deployment manifest immediately before runtime configuration and keep price-dependent actions disabled unless reviewed on-chain limits pass.
 
 Pyth's current public page lists the feeds as sponsored on Solana Mainnet and Devnet, on shard 0, with a default 55-second heartbeat or 0.5% price-deviation update criterion. Those are publisher update criteria; they are **not** Coloyond's maximum accepted price age, confidence ratio, depeg condition, or a freshness guarantee. The receiver program ID is `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; the price-feed program ID shown by Pyth is `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT`.
 
-The machine-readable [`source-candidate-profile.yaml`](../../../ops/rebalancing/price-pusher/source-candidate-profile.yaml) is evidence-only and deliberately is **not** a valid Pyth Price Pusher config. Its `null` fields are gates, not values to guess. Before creating the private runtime config, an operator must:
+The machine-readable [`source-candidate-profile.yaml`](../../../ops/rebalancing/price-pusher/source-candidate-profile.yaml) is evidence-only and deliberately is **not** a valid Pyth Price Pusher config. Its `null` fields are gates, not values to guess. The initial finalized identity reads are recorded, but they do not satisfy a deployment-time refresh. Before creating the private runtime config, an operator must:
 
-- fetch both feed accounts at `finalized` commitment on the selected cluster and record the cluster genesis hash, provider, slot/time, owner, data length/type, decoded feed ID, price, confidence, exponent, publish time and age;
+- refresh every manifest-configured feed account at `finalized` commitment on the selected cluster and record the cluster genesis hash, provider, slot/time, owner, data length/type, decoded feed ID, price, confidence, exponent, publish time and age;
 - independently verify the shard-0 PDA derivation and compare account owner and program IDs with the current official Pyth addresses;
 - check the chosen exact Price Pusher release's Solana CLI and Hermes authentication flags, supported program version and transaction behavior;
 - choose and review a Pusher `confidence_ratio`, polling/pushing frequency, fee budget and alert threshold. Do not copy the Pyth README's sample `confidence_ratio: 50` as a product decision;
@@ -84,7 +87,7 @@ When the primary sponsored publisher is delayed or the Devnet account is stale:
 1. Operator A checks Hermes health, target RPC health, target feed state and the two feeds' age. Confirm expected cluster genesis and feed owner/ID before updating.
 2. If A's runtime/RPC is unhealthy, do not point it at an unverified fallback. Operator B independently performs the same checks using B's separate endpoint and payer.
 3. Start the approved Price Pusher on the verified profile. It monitors its configured feed IDs and submits Pyth updates when the configured update conditions are met; it does not submit a Coloyond rebalance instruction.
-4. Wait for the Pyth update transaction to confirm, then reread both feed accounts at `confirmed` or stronger commitment. Record signatures, slot, decoded feed IDs, publish timestamps, source and target, payer, fees, and result. Confirm the Coloyond reader sees the same accounts and still applies its own age/confidence/depeg bounds.
+4. Wait for the Pyth update transaction to confirm, then reread every configured feed account at `confirmed` or stronger commitment. Record signatures, slot, decoded feed IDs, publish timestamps, source and target, payer, fees, and result. Confirm the Coloyond reader sees the same accounts and still applies its own age/confidence/depeg bounds.
 5. If the account does not advance, Hermes/RPC is unavailable, the transaction fails, or a value violates consumer bounds, page the operator and leave price-dependent actions disabled. Do not lower on-chain freshness limits, accept a stale observation, or repeatedly resubmit without reconciling whether the prior transaction landed.
 
 Any third party may run the same permissionless updater if it has a compatible Pyth feed profile, Hermes access and a fee payer. That is a backup source of transaction submission, not a trusted price override: Pyth's on-chain receiver verifies its update, and the vault program independently validates the consumed account.
@@ -126,7 +129,7 @@ A real Pusher-on-Localnet test remains blocked until a reviewed fixture deploys 
 
 Record the tested code/source and image pins, configuration hash, cluster/genesis, RPC provider, feed-account observations, Hermes API setup (never the secret), payer public keys and budgets, operator ownership/independence, transaction signatures/fees, before/after publish times, failover sequence, alert results, and exact known limits. Required outcomes:
 
-- [ ] Both intended feed accounts exist on finalized Devnet state with verified owner, type, decoded ID and PDA derivation.
+- [ ] Every feed in the selected manifest is freshly observed on finalized Devnet state with verified owner, type, decoded ID and PDA derivation; historical captures alone do not satisfy this deployment check.
 - [ ] A pinned Pyth Price Pusher release authenticates to the selected Hermes endpoint and updates the expected shard-0 feed using a confirmed transaction.
 - [ ] Operator A failure is recovered by B using a different RPC provider and independent Hermes credential/payer.
 - [ ] Feed staleness and pusher failure keep Coloyond's price-dependent action unavailable; successful updates do not bypass program freshness/confidence/depeg checks.

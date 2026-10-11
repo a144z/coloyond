@@ -9,16 +9,14 @@ import {
   TESTNET_GENESIS_HASH,
 } from "../src/networkIdentity.js";
 
-test("Devnet requires the current official RPC genesis hash", () => {
+test("Devnet requires the genesis hash confirmed by independent live RPCs", () => {
   assertClusterGenesisConfiguration("devnet", DEVNET_GENESIS_HASH);
   assertRpcClusterGenesis("devnet", DEVNET_GENESIS_HASH, DEVNET_GENESIS_HASH);
-  assert.throws(() => assertClusterGenesisConfiguration("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1"), /current pinned/);
-  assert.throws(() => assertClusterGenesisConfiguration("devnet", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"), /current pinned/);
+  assert.throws(() => assertClusterGenesisConfiguration("devnet", "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"), /current pinned/);
 });
 
-test("Localnet rejects current and legacy public cluster genesis hashes", () => {
-  for (const publicGenesis of [DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH,
-    "EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"]) {
+test("Localnet rejects public cluster genesis hashes", () => {
+  for (const publicGenesis of [DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
     assert.throws(() => assertClusterGenesisConfiguration("localnet", publicGenesis), /public Solana cluster/);
   }
   assertClusterGenesisConfiguration("localnet", "localnet-genesis-hash");

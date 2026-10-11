@@ -46,7 +46,7 @@ export class KeeperService {
       while (this.dirty) {
         this.dirty = false;
         try { await this.reconcileOnce(); }
-        catch (error) { this.observe({ status: "error", reason: safeError(error) }); }
+        catch (error) { this.emit({ status: "error", reason: safeError(error) }); }
       }
     })();
     try { await this.inFlight; }
@@ -80,12 +80,12 @@ export class KeeperService {
       const after = await this.runtime.readState();
       if (status.status === "confirmed" && after.vault.sequence > pending.before.vault.sequence) {
         this.pending.delete(key);
-        this.observe({ status: "confirmed", action: pending.action, signature: pending.signature, sequence: after.vault.sequence, slot: after.slot });
+        this.emit({ status: "confirmed", action: pending.action, signature: pending.signature, sequence: after.vault.sequence, slot: after.slot });
         return;
       }
       if (actionApplied(pending.action, pending.before, after)) {
         this.pending.delete(key);
-        this.observe({ status: "stale", reason: "Chain advanced while this signature remained unconfirmed; no duplicate was sent", slot: after.slot });
+        this.emit({ status: "stale", reason: "Chain advanced while this signature remained unconfirmed; no duplicate was sent", slot: after.slot });
         return;
       }
       if (status.status === "failed") {
@@ -94,16 +94,16 @@ export class KeeperService {
         return;
       }
       if (actionStillCurrent(pending.action, after)) {
-        this.observe({ status: "pending", action: pending.action, signature: pending.signature, slot: after.slot });
+        this.emit({ status: "pending", action: pending.action, signature: pending.signature, slot: after.slot });
         return;
       }
       this.pending.delete(key);
-      this.observe({ status: "stale", reason: "A different chain transition superseded the pending candidate", slot: after.slot });
+      this.emit({ status: "stale", reason: "A different chain transition superseded the pending candidate", slot: after.slot });
       return;
     }
     const selected = await selectEligibleAction(snapshot, this.proposals);
     if (!selected.action) {
-      this.observe({ status: "idle", reason: selected.reason, slot: snapshot.slot });
+      this.emit({ status: "idle", reason: selected.reason, slot: snapshot.slot });
       return;
     }
     const action = selected.action;
@@ -118,30 +118,30 @@ export class KeeperService {
       if (attempt > 0) await delay(backoffMs(attempt - 1, this.retryBaseDelayMs, this.retryMaxDelayMs));
       before = await this.runtime.readState();
       if (!actionStillCurrent(action, before)) {
-        this.observe({ status: "stale", reason: "Chain sequence or intent changed before simulation/retry; candidate discarded", slot: before.slot });
+        this.emit({ status: "stale", reason: "Chain sequence or intent changed before simulation/retry; candidate discarded", slot: before.slot });
         return;
       }
       const simulation = await this.runtime.simulate(action, before);
       if (!simulation.ok) {
-        this.observe({ status: "rejected", action, reason: simulation.reason ?? "S2D simulation rejected candidate", slot: before.slot });
+        this.emit({ status: "rejected", action, reason: simulation.reason ?? "S2D simulation rejected candidate", slot: before.slot });
         return;
       }
       const feeCap = this.config.maxFeeLamports;
       if (feeCap !== undefined && simulation.feeLamports !== null && simulation.feeLamports > feeCap) {
-        this.observe({ status: "rejected", action, reason: `Estimated network fee exceeds configured ${feeCap} lamport cap`, slot: before.slot });
+        this.emit({ status: "rejected", action, reason: `Estimated network fee exceeds configured ${feeCap} lamport cap`, slot: before.slot });
         return;
       }
       if (this.dryRun) {
-        this.observe({ status: "simulated", action, feeLamports: simulation.feeLamports, slot: before.slot });
+        this.emit({ status: "simulated", action, feeLamports: simulation.feeLamports, slot: before.slot });
         return;
       }
       if (simulation.feeLamports === null || feeCap === undefined) {
-        this.observe({ status: "rejected", action, reason: "Submission requires an estimated fee and explicit fee cap", slot: before.slot });
+        this.emit({ status: "rejected", action, reason: "Submission requires an estimated fee and explicit fee cap", slot: before.slot });
         return;
       }
       const afterSimulation = await this.runtime.readState();
       if (!actionStillCurrent(action, afterSimulation)) {
-        this.observe({ status: "stale", reason: "Chain sequence or intent changed after simulation", slot: afterSimulation.slot });
+        this.emit({ status: "stale", reason: "Chain sequence or intent changed after simulation", slot: afterSimulation.slot });
         return;
       }
       before = afterSimulation;
@@ -152,33 +152,41 @@ export class KeeperService {
         const reason = actionStillCurrent(action, afterSend)
           ? `Submission outcome is unknown; will reconcile before any retry: ${safeError(error)}`
           : "Chain sequence changed while submit RPC outcome was unknown; candidate discarded";
-        this.observe({ status: "stale", reason, slot: afterSend.slot });
+        this.emit({ status: "stale", reason, slot: afterSend.slot });
         return;
       }
-      this.observe({ status: "submitted", action, signature, slot: before.slot });
+      // Record the known signature before any reporting callback or further RPC can fail.
+      this.pending.set(key, { action, before, signature });
+      this.emit({ status: "submitted", action, signature, slot: before.slot });
       const confirmation = await this.runtime.confirm(signature);
       const after = await this.runtime.readState();
       if (confirmation.status === "confirmed" && after.vault.sequence > before.vault.sequence) {
-        this.observe({ status: "confirmed", action, signature, sequence: after.vault.sequence, slot: after.slot });
+        this.pending.delete(key);
+        this.emit({ status: "confirmed", action, signature, sequence: after.vault.sequence, slot: after.slot });
         return;
       }
       if (actionApplied(action, before, after)) {
-        this.observe({ status: "stale", reason: "Chain advanced while this signature remains uncertain; no duplicate was sent", slot: after.slot });
+        this.pending.delete(key);
+        this.emit({ status: "stale", reason: "Chain advanced while this signature remains uncertain; no duplicate was sent", slot: after.slot });
         return;
       }
       if (confirmation.status === "unknown" || confirmation.status === "confirmed") {
-        this.pending.set(key, { action, before, signature });
-        this.observe({ status: "pending", action, signature, slot: after.slot });
+        this.emit({ status: "pending", action, signature, slot: after.slot });
         return;
       }
+      this.pending.delete(key);
       if (!actionStillCurrent(action, after)) {
-        this.observe({ status: "stale", reason: "Chain sequence changed after a failed transaction; candidate discarded", slot: after.slot });
+        this.emit({ status: "stale", reason: "Chain sequence changed after a failed transaction; candidate discarded", slot: after.slot });
         return;
       }
       if (attempt === this.maxRetries) {
-        this.observe({ status: "rejected", action, reason: confirmation.reason ?? "Transaction failed after bounded retry budget", slot: after.slot });
+        this.emit({ status: "rejected", action, reason: confirmation.reason ?? "Transaction failed after bounded retry budget", slot: after.slot });
       }
     }
+  }
+
+  private emit(result: ActionResult | { status: "error"; reason: string }): void {
+    try { this.observe(result); } catch { /* Reporting failures cannot interrupt transaction reconciliation. */ }
   }
 }
 

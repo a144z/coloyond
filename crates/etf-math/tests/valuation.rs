@@ -48,6 +48,16 @@ fn rejects_values_that_cannot_fit_the_documented_value_scale() {
 }
 
 #[test]
+fn aggregate_value_accepts_exact_ceiling_and_rejects_first_total_above_it() {
+    let max_total = u128::MAX / 20_002;
+    assert_eq!(deviation_bps(&[max_total, 0], &[9_900, 100]), Ok(100));
+    assert_eq!(
+        deviation_bps(&[max_total, 1], &[9_900, 100]),
+        Err(MathError::ValueOutOfRange)
+    );
+}
+
+#[test]
 fn exact_target_has_zero_total_variation_distance() {
     assert_eq!(
         deviation_bps(
@@ -80,6 +90,7 @@ fn deviation_is_half_the_absolute_weight_error_sum() {
 #[test]
 fn fractional_bps_deviation_rounds_up() {
     assert_eq!(deviation_bps(&[1, 1], &[9_900, 100]), Ok(4_900));
+    assert_eq!(deviation_bps(&[1, 2], &[5_000, 5_000]), Ok(1_667));
 }
 
 #[test]

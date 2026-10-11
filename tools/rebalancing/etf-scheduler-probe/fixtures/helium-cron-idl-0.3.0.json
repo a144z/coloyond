@@ -1,0 +1,1776 @@
+{
+  "address": "cronAjRZnJn3MTP3B9kE62NWDrjSuAPVXf9c4hu4grM",
+  "metadata": {
+    "name": "cron",
+    "version": "0.3.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "add_cron_transaction_v0",
+      "discriminator": [
+        22,
+        94,
+        81,
+        77,
+        143,
+        154,
+        255,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "cron_job_transaction",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AddCronTransactionArgsV0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "close_cron_job_v0",
+      "discriminator": [
+        114,
+        152,
+        214,
+        24,
+        97,
+        36,
+        231,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "rent_refund",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "user_cron_jobs",
+          "writable": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "cron_job_name_mapping",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_cron_job_v0",
+      "discriminator": [
+        246,
+        64,
+        133,
+        115,
+        169,
+        84,
+        130,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_authority",
+          "signer": true
+        },
+        {
+          "name": "task_queue_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  113,
+                  117,
+                  101,
+                  117,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "task_queue"
+              },
+              {
+                "kind": "account",
+                "path": "queue_authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tuktuk_program"
+            }
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "user_cron_jobs",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  99,
+                  114,
+                  111,
+                  110,
+                  95,
+                  106,
+                  111,
+                  98,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "cron_job_name_mapping",
+          "writable": true
+        },
+        {
+          "name": "task_queue",
+          "writable": true
+        },
+        {
+          "name": "task",
+          "writable": true
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tuktuk_program",
+          "address": "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeCronJobArgsV0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "queue_cron_tasks_v0",
+      "discriminator": [
+        189,
+        88,
+        205,
+        111,
+        249,
+        161,
+        241,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "task_queue"
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "RunTaskReturnV0"
+        }
+      }
+    },
+    {
+      "name": "queue_cron_tasks_v1",
+      "discriminator": [
+        225,
+        26,
+        241,
+        151,
+        79,
+        233,
+        67,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "task_queue"
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "cron_signer",
+          "docs": [
+            "The PDA tuktuk signs for when it runs a task whose transaction declared this cron job's",
+            "seeds. Which task of the job's schedule chain the run is, is settled by the",
+            "`recorded_schedule_task` checks in the handler."
+          ],
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "task_queue"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                76,
+                70,
+                9,
+                57,
+                241,
+                194,
+                170,
+                222,
+                60,
+                41,
+                201,
+                147,
+                62,
+                217,
+                203,
+                139,
+                89,
+                45,
+                87,
+                176,
+                98,
+                76,
+                21,
+                182,
+                104,
+                119,
+                57,
+                144,
+                219,
+                43,
+                21
+              ]
+            }
+          }
+        },
+        {
+          "name": "sysvar_instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "recorded_schedule_task",
+          "docs": [
+            "cron job records the one task carrying its schedule."
+          ]
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "RunTaskReturnV0"
+        }
+      }
+    },
+    {
+      "name": "remove_cron_transaction_v0",
+      "discriminator": [
+        207,
+        237,
+        8,
+        195,
+        65,
+        111,
+        124,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "rent_refund",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "cron_job",
+          "writable": true,
+          "relations": [
+            "cron_job_transaction"
+          ]
+        },
+        {
+          "name": "cron_job_transaction",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RemoveCronTransactionArgsV0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "requeue_cron_task_v0",
+      "discriminator": [
+        235,
+        143,
+        86,
+        234,
+        79,
+        166,
+        165,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "queue_authority",
+          "signer": true
+        },
+        {
+          "name": "task_queue_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  113,
+                  117,
+                  101,
+                  117,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "task_queue"
+              },
+              {
+                "kind": "account",
+                "path": "queue_authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tuktuk_program"
+            }
+          }
+        },
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "task_queue",
+          "writable": true
+        },
+        {
+          "name": "task",
+          "writable": true
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tuktuk_program",
+          "address": "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RequeueCronTaskArgsV0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "requeue_cron_task_v1",
+      "discriminator": [
+        72,
+        243,
+        50,
+        152,
+        58,
+        78,
+        93,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "cron_job"
+          ]
+        },
+        {
+          "name": "queue_authority",
+          "signer": true
+        },
+        {
+          "name": "task_queue_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  113,
+                  117,
+                  101,
+                  117,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "task_queue"
+              },
+              {
+                "kind": "account",
+                "path": "queue_authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tuktuk_program"
+            }
+          }
+        },
+        {
+          "name": "cron_job",
+          "writable": true
+        },
+        {
+          "name": "task_queue",
+          "writable": true
+        },
+        {
+          "name": "task",
+          "writable": true
+        },
+        {
+          "name": "task_return_account_1",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "task_return_account_2",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  115,
+                  107,
+                  95,
+                  114,
+                  101,
+                  116,
+                  117,
+                  114,
+                  110,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  95,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cron_job"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tuktuk_program",
+          "address": "tuktukUrfhXT6ZT77QTU8RQtvgL967uRuVagWF57zVA"
+        },
+        {
+          "name": "next_schedule_task",
+          "docs": [
+            "task may only be queued once that record holds nothing. `Pubkey::default()` is the",
+            "system program, which has data, so it is spelled out rather than left to the emptiness",
+            "test."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RequeueCronTaskArgsV1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CronJobNameMappingV0",
+      "discriminator": [
+        80,
+        161,
+        45,
+        135,
+        20,
+        80,
+        18,
+        234
+      ]
+    },
+    {
+      "name": "CronJobTransactionV0",
+      "discriminator": [
+        117,
+        255,
+        57,
+        94,
+        180,
+        229,
+        113,
+        39
+      ]
+    },
+    {
+      "name": "CronJobV0",
+      "discriminator": [
+        69,
+        161,
+        189,
+        23,
+        250,
+        59,
+        67,
+        157
+      ]
+    },
+    {
+      "name": "TaskQueueAuthorityV0",
+      "discriminator": [
+        206,
+        37,
+        171,
+        34,
+        162,
+        191,
+        47,
+        50
+      ]
+    },
+    {
+      "name": "TaskQueueV0",
+      "discriminator": [
+        150,
+        24,
+        232,
+        159,
+        105,
+        32,
+        161,
+        17
+      ]
+    },
+    {
+      "name": "UserCronJobsV0",
+      "discriminator": [
+        62,
+        38,
+        165,
+        254,
+        98,
+        211,
+        89,
+        60
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidSchedule",
+      "msg": "Invalid schedule"
+    },
+    {
+      "code": 6001,
+      "name": "TransactionAlreadyExists",
+      "msg": "Transaction already exists"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient funds"
+    },
+    {
+      "code": 6003,
+      "name": "Overflow",
+      "msg": "Overflow"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidDataIncrease",
+      "msg": "Invalid data increase"
+    },
+    {
+      "code": 6005,
+      "name": "CronJobHasTransactions",
+      "msg": "Cron job has transactions"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidNumTasksPerQueueCall",
+      "msg": "Invalid number of tasks per queue call"
+    },
+    {
+      "code": 6007,
+      "name": "TooEarly",
+      "msg": "Too early to queue tasks"
+    },
+    {
+      "code": 6008,
+      "name": "TaskAlreadyQueued",
+      "msg": "Cron job already has a scheduled task"
+    },
+    {
+      "code": 6009,
+      "name": "NotEnoughAccounts",
+      "msg": "Not enough accounts"
+    },
+    {
+      "code": 6010,
+      "name": "TaskQueueFull",
+      "msg": "Task queue is full"
+    },
+    {
+      "code": 6011,
+      "name": "NotRunningAsScheduledTask",
+      "msg": "Not running as a scheduled task"
+    },
+    {
+      "code": 6012,
+      "name": "WrongScheduleTask",
+      "msg": "Not the schedule task this cron job records"
+    },
+    {
+      "code": 6013,
+      "name": "WrongCronTransaction",
+      "msg": "Not a transaction of this cron job"
+    },
+    {
+      "code": 6014,
+      "name": "InstructionDeprecated",
+      "msg": "This instruction is deprecated, call its current version"
+    }
+  ],
+  "types": [
+    {
+      "name": "AddCronTransactionArgsV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "transaction_source",
+            "type": {
+              "defined": {
+                "name": "TransactionSourceV0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompiledInstructionV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "program_id_index",
+            "type": "u8"
+          },
+          {
+            "name": "accounts",
+            "type": "bytes"
+          },
+          {
+            "name": "data",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompiledTransactionV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "num_rw_signers",
+            "type": "u8"
+          },
+          {
+            "name": "num_ro_signers",
+            "type": "u8"
+          },
+          {
+            "name": "num_rw",
+            "type": "u8"
+          },
+          {
+            "name": "accounts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "instructions",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "CompiledInstructionV0"
+                }
+              }
+            }
+          },
+          {
+            "name": "signer_seeds",
+            "type": {
+              "vec": {
+                "vec": "bytes"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CronJobNameMappingV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cron_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CronJobTransactionV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "cron_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "transaction",
+            "type": {
+              "defined": {
+                "name": "TransactionSourceV0"
+              }
+            }
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CronJobV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "user_cron_jobs",
+            "type": "pubkey"
+          },
+          {
+            "name": "task_queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "free_tasks_per_transaction",
+            "type": "u8"
+          },
+          {
+            "name": "num_tasks_per_queue_call",
+            "type": "u8"
+          },
+          {
+            "name": "schedule",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "current_exec_ts",
+            "type": "i64"
+          },
+          {
+            "name": "current_transaction_id",
+            "type": "u32"
+          },
+          {
+            "name": "num_transactions",
+            "type": "u32"
+          },
+          {
+            "name": "next_transaction_id",
+            "type": "u32"
+          },
+          {
+            "name": "removed_from_queue",
+            "type": "bool"
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          },
+          {
+            "name": "next_schedule_task",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeCronJobArgsV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schedule",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "free_tasks_per_transaction",
+            "docs": [
+              "The number of free tasks each transaction will be executed with.",
+              "This allows transactions scheduled via cron to themselves schedule more transactions.",
+              "If none of your transactions need to schedule more transactions, set this to 0."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "num_tasks_per_queue_call",
+            "docs": [
+              "The number of tasks to queue per queue call.",
+              "Cron job works by queueing a single task that runs at the appropriate time. This tasks job",
+              "is to recursively queue all transactions in this cron. The higher you set this number, the more",
+              "tasks will be queued per queue call, making the tasks execute faster/more parallelized.",
+              "Setting this too high without proper lookup tables will result in the queue call being too large"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RemoveCronTransactionArgsV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequeueCronTaskArgsV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "task_id",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequeueCronTaskArgsV1",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "task_id",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RunTaskReturnV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tasks",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TaskReturnV0"
+                }
+              }
+            }
+          },
+          {
+            "name": "accounts",
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TaskQueueAuthorityV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "task_queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "queue_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TaskQueueV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tuktuk_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "update_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_crank_reward",
+            "type": "u64"
+          },
+          {
+            "name": "uncollected_protocol_fees",
+            "type": "u64"
+          },
+          {
+            "name": "capacity",
+            "type": "u16"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          },
+          {
+            "name": "task_bitmap",
+            "type": "bytes"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "lookup_tables",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "num_queue_authorities",
+            "type": "u16"
+          },
+          {
+            "name": "stale_task_age",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TaskReturnV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trigger",
+            "type": {
+              "defined": {
+                "name": "TriggerV0"
+              }
+            }
+          },
+          {
+            "name": "transaction",
+            "type": {
+              "defined": {
+                "name": "TransactionSourceV0"
+              }
+            }
+          },
+          {
+            "name": "crank_reward",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "free_tasks",
+            "type": "u8"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransactionSourceV0",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "CompiledV0",
+            "fields": [
+              {
+                "defined": {
+                  "name": "CompiledTransactionV0"
+                }
+              }
+            ]
+          },
+          {
+            "name": "RemoteV0",
+            "fields": [
+              {
+                "name": "url",
+                "type": "string"
+              },
+              {
+                "name": "signer",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "TriggerV0",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Now"
+          },
+          {
+            "name": "Timestamp",
+            "fields": [
+              "i64"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserCronJobsV0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_cron_job_id",
+            "type": "u32"
+          },
+          {
+            "name": "next_cron_job_id",
+            "type": "u32"
+          },
+          {
+            "name": "bump_seed",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

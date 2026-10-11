@@ -522,6 +522,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "coloyond-etf-identity"
+version = "0.1.0"
+dependencies = [
+ "borsh 1.8.1",
+ "sha2",
+]
+
+[[package]]
 name = "coloyond-etf-math"
 version = "0.1.0"
 

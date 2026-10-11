@@ -55,6 +55,8 @@ impl PinnedFeed {
 pub struct OracleLimits {
     pub maximum_age_seconds: u64,
     pub maximum_confidence_bps: u16,
+    pub minimum_exponent: i32,
+    pub maximum_exponent: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,38 +69,65 @@ pub struct ValidatedPrice {
     pub confidence_bps: u128,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FixedPriceInterval {
+    pub lower: u128,
+    pub midpoint: u128,
+    pub upper: u128,
+}
+
 impl ValidatedPrice {
     /// Convert to an unsigned fixed-point value exactly. Reject unsupported
     /// exponents, overflow, or any conversion that would discard precision.
     pub fn to_fixed(self, decimals: u8) -> Result<u128> {
-        let shift = self
-            .exponent
-            .checked_add(i32::from(decimals))
-            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
-        let mantissa = u128::from(self.mantissa);
-        if shift >= 0 {
-            let scale = ten_to(
-                u32::try_from(shift).map_err(|_| error!(OracleError::UnsupportedExponent))?,
-            )?;
-            mantissa
-                .checked_mul(scale)
-                .ok_or_else(|| error!(OracleError::ArithmeticOverflow))
-        } else {
-            let divisor = ten_to(
-                u32::try_from(
-                    shift
-                        .checked_neg()
-                        .ok_or_else(|| error!(OracleError::UnsupportedExponent))?,
-                )
-                .map_err(|_| error!(OracleError::UnsupportedExponent))?,
-            )?;
-            require!(mantissa % divisor == 0, OracleError::PrecisionLoss);
-            Ok(mantissa / divisor)
-        }
+        raw_to_fixed(u128::from(self.mantissa), self.exponent, decimals)
     }
 
     pub fn to_usd_fixed(self) -> Result<u128> {
         self.to_fixed(USD_FIXED_DECIMALS)
+    }
+
+    /// Return the exact fixed-point Pyth `price ± conf` interval. The lower
+    /// endpoint must remain positive; all endpoints must convert without loss.
+    pub fn confidence_interval(self, decimals: u8) -> Result<FixedPriceInterval> {
+        let lower = self
+            .mantissa
+            .checked_sub(self.confidence)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| error!(OracleError::NonPositivePrice))?;
+        let upper = u128::from(self.mantissa)
+            .checked_add(u128::from(self.confidence))
+            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
+
+        Ok(FixedPriceInterval {
+            lower: raw_to_fixed(u128::from(lower), self.exponent, decimals)?,
+            midpoint: self.to_fixed(decimals)?,
+            upper: raw_to_fixed(upper, self.exponent, decimals)?,
+        })
+    }
+}
+
+fn raw_to_fixed(mantissa: u128, exponent: i32, decimals: u8) -> Result<u128> {
+    let shift = exponent
+        .checked_add(i32::from(decimals))
+        .ok_or_else(|| error!(OracleError::ArithmeticOverflow))?;
+    if shift >= 0 {
+        let scale =
+            ten_to(u32::try_from(shift).map_err(|_| error!(OracleError::UnsupportedExponent))?)?;
+        mantissa
+            .checked_mul(scale)
+            .ok_or_else(|| error!(OracleError::ArithmeticOverflow))
+    } else {
+        let divisor = ten_to(
+            u32::try_from(
+                shift
+                    .checked_neg()
+                    .ok_or_else(|| error!(OracleError::UnsupportedExponent))?,
+            )
+            .map_err(|_| error!(OracleError::UnsupportedExponent))?,
+        )?;
+        require!(mantissa % divisor == 0, OracleError::PrecisionLoss);
+        Ok(mantissa / divisor)
     }
 }
 
@@ -115,6 +144,14 @@ pub fn decode_fixed_feed_account(
         account_owner,
         PYTH_RECEIVER_PROGRAM_ID,
         OracleError::WrongOracleOwner
+    );
+    // `PriceUpdateV2::LEN` reserves the maximum Borsh enum width for Partial
+    // verification. Full serializes one byte shorter. Accept exactly those
+    // two SDK-defined account lengths, without assuming how the final
+    // allocation byte is initialized.
+    require!(
+        (PriceUpdateV2::LEN - 1..=PriceUpdateV2::LEN).contains(&data.len()),
+        OracleError::InvalidAccountData
     );
     let mut bytes = data;
     PriceUpdateV2::try_deserialize(&mut bytes).map_err(|_| error!(OracleError::InvalidAccountData))
@@ -138,7 +175,8 @@ pub fn validate_fixed_feed(
         OracleError::WrongOracleOwner
     );
     require!(
-        limits.maximum_age_seconds <= i64::MAX as u64,
+        limits.maximum_age_seconds <= i64::MAX as u64
+            && limits.minimum_exponent <= limits.maximum_exponent,
         OracleError::InvalidPolicy
     );
 
@@ -153,6 +191,10 @@ pub fn validate_fixed_feed(
         )
         .map_err(|_| error!(OracleError::InvalidPrice))?;
     require!(price.price > 0, OracleError::NonPositivePrice);
+    require!(
+        (limits.minimum_exponent..=limits.maximum_exponent).contains(&price.exponent),
+        OracleError::UnsupportedExponent
+    );
     require!(
         price.publish_time <= clock.unix_timestamp,
         OracleError::FuturePublishTime
@@ -179,12 +221,10 @@ pub fn validate_fixed_feed(
         publish_time: price.publish_time,
         confidence_bps,
     };
-    validated.to_usd_fixed()?;
-    ValidatedPrice {
-        mantissa: validated.confidence,
-        ..validated
-    }
-    .to_usd_fixed()?;
+    // Keep a validated observation safe to consume as an executable interval:
+    // a positive midpoint is insufficient when its lower confidence bound is
+    // zero or negative, or when any endpoint cannot be represented exactly.
+    validated.confidence_interval(USD_FIXED_DECIMALS)?;
     Ok(validated)
 }
 
@@ -237,6 +277,8 @@ mod tests {
         OracleLimits {
             maximum_age_seconds: 60,
             maximum_confidence_bps: 100,
+            minimum_exponent: -17,
+            maximum_exponent: 0,
         }
     }
 
@@ -291,6 +333,139 @@ mod tests {
         .unwrap();
         assert_eq!(price.to_usd_fixed().unwrap(), 7_160_106_530_690_000_000_000);
         assert_eq!(price.publish_time, NOW);
+    }
+
+    #[test]
+    fn every_pinned_feed_matches_independent_address_and_id_vectors() {
+        let cases = [
+            (
+                PinnedFeed::SolUsd,
+                "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+                "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+            ),
+            (
+                PinnedFeed::BtcUsd,
+                "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo",
+                "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+            ),
+            (
+                PinnedFeed::UsdcUsd,
+                "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+                "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+            ),
+        ];
+
+        for (feed, expected_address, expected_id_hex) in cases {
+            let expected_address = expected_address.parse::<Pubkey>().unwrap();
+            assert_eq!(feed.address(), expected_address);
+            assert_eq!(feed.id_hex(), expected_id_hex);
+            let expected_feed_id = get_feed_id_from_hex(expected_id_hex).unwrap();
+            let value = PriceUpdateV2 {
+                write_authority: Pubkey::new_unique(),
+                verification_level: VerificationLevel::Full,
+                price_message: PriceFeedMessage {
+                    feed_id: expected_feed_id,
+                    price: 100_000_000,
+                    conf: 1_000,
+                    exponent: -8,
+                    publish_time: NOW,
+                    prev_publish_time: NOW - 1,
+                    ema_price: 100_000_000,
+                    ema_conf: 1_000,
+                },
+                posted_slot: 1,
+            };
+
+            let validated = validate_fixed_feed(
+                feed,
+                expected_address,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &value,
+                &clock(),
+                limits(),
+            )
+            .unwrap();
+            assert_eq!(validated.mantissa, 100_000_000);
+        }
+    }
+
+    #[test]
+    fn sponsored_shard_zero_addresses_match_official_pda_derivation() {
+        // Pyth's TypeScript SDK derives fixed feed accounts with two seeds:
+        // little-endian u16 shard ID, then the 32-byte feed ID, under the
+        // Push Oracle program ID. The account data itself is Receiver-owned.
+        let push_oracle_program = pubkey!("pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT");
+        let shard_zero = 0u16.to_le_bytes();
+        for feed in [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd] {
+            let feed_id = get_feed_id_from_hex(feed.id_hex()).unwrap();
+            let (derived, _) = Pubkey::find_program_address(
+                &[&shard_zero, feed_id.as_ref()],
+                &push_oracle_program,
+            );
+            assert_eq!(derived, feed.address(), "{}", feed.id_hex());
+        }
+    }
+
+    #[test]
+    fn confidence_interval_uses_exact_fixed_point_price_plus_and_minus_confidence() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            716_010_653_069,
+            5_000_000,
+            NOW,
+        );
+        let price = validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            limits(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            price.confidence_interval(USD_FIXED_DECIMALS).unwrap(),
+            FixedPriceInterval {
+                lower: 7_160_056_530_690_000_000_000,
+                midpoint: 7_160_106_530_690_000_000_000,
+                upper: 7_160_156_530_690_000_000_000,
+            }
+        );
+    }
+
+    #[test]
+    fn confidence_interval_rejects_nonpositive_lower_bound_and_precision_loss() {
+        let no_positive_lower = ValidatedPrice {
+            mantissa: 100,
+            confidence: 100,
+            exponent: -8,
+            publish_time: NOW,
+            confidence_bps: 10_000,
+        };
+        assert!(no_positive_lower
+            .confidence_interval(USD_FIXED_DECIMALS)
+            .is_err());
+
+        let negative_lower = ValidatedPrice {
+            mantissa: 100,
+            confidence: 101,
+            ..no_positive_lower
+        };
+        assert!(negative_lower
+            .confidence_interval(USD_FIXED_DECIMALS)
+            .is_err());
+
+        let unrepresentable_bound = ValidatedPrice {
+            mantissa: 100,
+            confidence: 1,
+            exponent: -1,
+            publish_time: NOW,
+            confidence_bps: 1,
+        };
+        assert_eq!(unrepresentable_bound.to_fixed(0).unwrap(), 10);
+        assert!(unrepresentable_bound.confidence_interval(0).is_err());
     }
 
     #[test]
@@ -381,6 +556,9 @@ mod tests {
         let zero = update(PinnedFeed::SolUsd, VerificationLevel::Full, 0, 0, NOW);
         assert!(check(&zero, 100).is_err());
 
+        let negative = update(PinnedFeed::SolUsd, VerificationLevel::Full, -1, 0, NOW);
+        assert!(check(&negative, 100).is_err());
+
         let future = update(
             PinnedFeed::SolUsd,
             VerificationLevel::Full,
@@ -401,7 +579,125 @@ mod tests {
     }
 
     #[test]
-    fn decoder_checks_owner_and_uses_the_sdk_account_layout() {
+    fn rejects_each_other_pinned_feed_id_for_every_feed() {
+        let feeds = [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd];
+        for expected_feed in feeds {
+            for embedded_feed in feeds {
+                if expected_feed == embedded_feed {
+                    continue;
+                }
+                let value = update(
+                    embedded_feed,
+                    VerificationLevel::Full,
+                    100_000_000,
+                    1_000,
+                    NOW,
+                );
+                assert!(
+                    validate_fixed_feed(
+                        expected_feed,
+                        expected_feed.address(),
+                        PYTH_RECEIVER_PROGRAM_ID,
+                        &value,
+                        &clock(),
+                        limits(),
+                    )
+                    .is_err(),
+                    "embedded {:?} must not validate as {:?}",
+                    embedded_feed,
+                    expected_feed
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn configured_age_and_rounded_confidence_limits_are_inclusive() {
+        let at_age_limit = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_000,
+            NOW - 60,
+        );
+        let limits_at_boundary = OracleLimits {
+            maximum_age_seconds: 60,
+            maximum_confidence_bps: 100,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &at_age_limit,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_ok());
+
+        let one_second_too_old = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_000,
+            NOW - 61,
+        );
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &one_second_too_old,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_err());
+
+        // 100 bps is accepted; 100.0001 bps rounds upward to 101 and fails.
+        let just_over_confidence_limit = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000_001,
+            NOW,
+        );
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &just_over_confidence_limit,
+            &clock(),
+            limits_at_boundary,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_positive_midpoint_with_nonpositive_confidence_lower_bound() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            100_000_000,
+            NOW,
+        );
+        let permissive_diagnostic_limit = OracleLimits {
+            maximum_age_seconds: 60,
+            maximum_confidence_bps: 10_000,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            permissive_diagnostic_limit,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn decoder_accepts_only_full_or_maximum_sdk_account_length() {
         let value = update(
             PinnedFeed::UsdcUsd,
             VerificationLevel::Full,
@@ -411,6 +707,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
         value.try_serialize(&mut bytes).unwrap();
+        assert_eq!(bytes.len(), PriceUpdateV2::LEN - 1);
         let decoded = decode_fixed_feed_account(
             PinnedFeed::UsdcUsd,
             USDC_USD_FEED_ACCOUNT,
@@ -419,6 +716,87 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decoded.price_message.feed_id, value.price_message.feed_id);
+
+        let mut full_with_allocation_byte = bytes.clone();
+        full_with_allocation_byte.push(0xa5);
+        let decoded_padded_full = decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &full_with_allocation_byte,
+        )
+        .unwrap();
+        assert!(validate_fixed_feed(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &decoded_padded_full,
+            &clock(),
+            limits(),
+        )
+        .is_ok());
+
+        let partial = update(
+            PinnedFeed::UsdcUsd,
+            VerificationLevel::Partial { num_signatures: 1 },
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let mut maximum_allocation = Vec::new();
+        partial.try_serialize(&mut maximum_allocation).unwrap();
+        assert_eq!(maximum_allocation.len(), PriceUpdateV2::LEN);
+        let decoded_partial = decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &maximum_allocation,
+        )
+        .unwrap();
+        assert!(validate_fixed_feed(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &decoded_partial,
+            &clock(),
+            limits(),
+        )
+        .is_err());
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes[..PriceUpdateV2::LEN - 2],
+        )
+        .is_err());
+        let mut oversized_full = bytes.clone();
+        oversized_full.extend_from_slice(&[0, 0]);
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &oversized_full,
+        )
+        .is_err());
+
+        let mut bad_discriminator = bytes.clone();
+        bad_discriminator[0] ^= 0xff;
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            USDC_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bad_discriminator,
+        )
+        .is_err());
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::UsdcUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes,
+        )
+        .is_err());
         assert!(decode_fixed_feed_account(
             PinnedFeed::UsdcUsd,
             USDC_USD_FEED_ACCOUNT,
@@ -426,5 +804,128 @@ mod tests {
             &bytes,
         )
         .is_err());
+    }
+
+    #[test]
+    fn decoder_rejects_unsupported_verification_level_variant_tag() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let mut bytes = Vec::new();
+        value.try_serialize(&mut bytes).unwrap();
+        let verification_level_offset = 8 + 32;
+        assert_eq!(bytes.len(), PriceUpdateV2::LEN - 1);
+        assert_eq!(bytes[verification_level_offset], 1);
+        bytes[verification_level_offset] = u8::MAX;
+
+        assert!(decode_fixed_feed_account(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn exponent_policy_is_inclusive_and_rejects_each_outside_boundary() {
+        let policy = OracleLimits {
+            minimum_exponent: -17,
+            maximum_exponent: 0,
+            ..limits()
+        };
+        for exponent in [-17, 0] {
+            let mut at_boundary = update(
+                PinnedFeed::SolUsd,
+                VerificationLevel::Full,
+                100_000_000,
+                1_000,
+                NOW,
+            );
+            at_boundary.price_message.exponent = exponent;
+            assert!(validate_fixed_feed(
+                PinnedFeed::SolUsd,
+                SOL_USD_FEED_ACCOUNT,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &at_boundary,
+                &clock(),
+                policy,
+            )
+            .is_ok());
+        }
+        for exponent in [-18, 1] {
+            let mut outside = update(
+                PinnedFeed::SolUsd,
+                VerificationLevel::Full,
+                100_000_000,
+                1_000,
+                NOW,
+            );
+            outside.price_message.exponent = exponent;
+            assert!(validate_fixed_feed(
+                PinnedFeed::SolUsd,
+                SOL_USD_FEED_ACCOUNT,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &outside,
+                &clock(),
+                policy,
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_policy_and_fixed_point_overflow_or_precision_loss() {
+        let value = update(
+            PinnedFeed::SolUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let invalid_policy = OracleLimits {
+            minimum_exponent: 1,
+            maximum_exponent: -1,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            invalid_policy,
+        )
+        .is_err());
+        let invalid_age = OracleLimits {
+            maximum_age_seconds: i64::MAX as u64 + 1,
+            ..limits()
+        };
+        assert!(validate_fixed_feed(
+            PinnedFeed::SolUsd,
+            SOL_USD_FEED_ACCOUNT,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &value,
+            &clock(),
+            invalid_age,
+        )
+        .is_err());
+
+        assert!(raw_to_fixed(u128::MAX, 1, 0).is_err());
+        assert!(raw_to_fixed(101, -1, 0).is_err());
+        assert!(raw_to_fixed(1, i32::MIN, 0).is_err());
+        assert!(raw_to_fixed(1, i32::MAX, 1).is_err());
+        let interval_overflow = ValidatedPrice {
+            mantissa: u64::MAX,
+            confidence: 0,
+            exponent: 0,
+            publish_time: NOW,
+            confidence_bps: 0,
+        };
+        assert!(interval_overflow.confidence_interval(30).is_err());
     }
 }

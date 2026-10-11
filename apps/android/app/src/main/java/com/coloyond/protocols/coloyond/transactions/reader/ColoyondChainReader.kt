@@ -6,6 +6,8 @@ import com.coloyond.core.rpc.SolanaRpc
 import com.coloyond.protocols.coloyond.transactions.ColoyondAddresses
 import com.coloyond.protocols.coloyond.transactions.SolanaNetwork
 import java.math.BigInteger
+import java.time.Clock
+import java.time.Instant
 
 sealed interface AccountPresence<out T> {
     data class Present<T>(val value: T) : AccountPresence<T>
@@ -73,6 +75,7 @@ data class ColoyondChainSnapshot(
     val oracles: List<OracleRead>,
     val walletTokenAccounts: Map<String, AccountPresence<ClassicTokenAccount>>,
     val riskBlockers: List<String>,
+    val clientRetrievedAt: Instant? = null,
 )
 
 class ChainReadException(val code: String, message: String, cause: Throwable? = null) :
@@ -83,6 +86,7 @@ class ColoyondChainReader(
     private val rpc: SolanaRpc,
     private val network: SolanaNetwork,
     private val idl: AnchorIdlAccountDecoder,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     init {
         ColoyondAddresses.validateNetwork(network)
@@ -255,6 +259,7 @@ class ColoyondChainReader(
             oracles = oracles,
             walletTokenAccounts = walletAccounts,
             riskBlockers = blockers.distinct(),
+            clientRetrievedAt = clock.instant(),
         )
     }
 
