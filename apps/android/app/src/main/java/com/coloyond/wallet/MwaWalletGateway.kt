@@ -20,6 +20,10 @@ import com.solana.transaction.Transaction
  */
 class MwaWalletGateway : WalletGateway {
 
+    /** S0E origin and real-wallet capability evidence are still missing; this gateway remains demo-only. */
+    val fundedActionsUnavailableReason: String =
+        "Funded actions are disabled until Coloyond has a verified app-owned HTTPS identity and the target wallet proves exact sign-only and Localnet recovery."
+
     private val adapter = MobileWalletAdapter(
         connectionIdentity = ConnectionIdentity(
             identityUri = AppConfig.identityUri,
@@ -64,6 +68,20 @@ class MwaWalletGateway : WalletGateway {
             is TransactionResult.NoWalletFound -> GatewayResult.NoWallet
             is TransactionResult.Failure -> GatewayResult.Rejected(result.message)
         }
+
+    @Suppress("DEPRECATION")
+    override suspend fun signVaultTransaction(
+        sender: ActivityResultSender,
+        unsignedWireTransaction: ByteArray,
+    ): VaultSigningResult = when (val result = adapter.transact(sender) {
+        signTransactions(arrayOf(unsignedWireTransaction.copyOf()))
+    }) {
+        is TransactionResult.Success -> result.payload?.signedPayloads?.singleOrNull()?.let { VaultSigningResult.Signed(it) }
+            ?: VaultSigningResult.Unknown("Wallet completed sign-only without returning exactly one signed transaction")
+        is TransactionResult.NoWalletFound -> VaultSigningResult.NoWallet
+        // MWA reports general failures without enough evidence to classify submission state.
+        is TransactionResult.Failure -> VaultSigningResult.Unknown(result.message)
+    }
 
     override suspend fun disconnect(sender: ActivityResultSender): GatewayResult =
         when (val result = adapter.disconnect(sender)) {

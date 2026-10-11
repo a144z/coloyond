@@ -1,0 +1,13 @@
+[package]
+name = "coloyond-etf-oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anchor-lang = "=0.32.1"
+pyth-solana-receiver-sdk = "=1.2.0"
+
+[lib]
+name = "coloyond_etf_oracle"
+path = "src/lib.rs"

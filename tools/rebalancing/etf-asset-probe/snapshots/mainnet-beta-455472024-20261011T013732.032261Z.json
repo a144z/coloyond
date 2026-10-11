@@ -1,0 +1,137 @@
+{
+  "account_context_slot": 455472019,
+  "assets": [
+    {
+      "address": "So11111111111111111111111111111111111111112",
+      "data_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "data_sha256": "b0f919425a529f4971ef8dabd535aec34947d5c8c4885df80dae91635b98c5f3",
+      "executable": false,
+      "interpretation_limit": "Mint metadata only; this probe does not establish issuer, backing, reserves, or redemption rights.",
+      "lamports": 1851952043390,
+      "mint": {
+        "decimals": 9,
+        "freeze_authority": null,
+        "is_initialized": true,
+        "mint_authority": null,
+        "supply_base_units": 0
+      },
+      "owner_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "space": 82,
+      "symbol_candidate": "wsol"
+    },
+    {
+      "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "data_base64": "AQAAAJj+huiNm+Lqi8HMpIeLKYjCQPUrhCS/tA7Rot3LXhmbq6kSFNpnGwAGAQEAAABicKqKWcWUBbRShshncubNEm6bil06OFNtN/e0FOi2Zw==",
+      "data_sha256": "4e6ceef964b0f0c9f79fed758f483240982b30dfa4615a6c7177f5ee76e1aaaa",
+      "executable": false,
+      "interpretation_limit": "Mint metadata only; this probe does not establish issuer, backing, reserves, or redemption rights.",
+      "lamports": 549535699757,
+      "mint": {
+        "decimals": 6,
+        "freeze_authority": "7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar",
+        "is_initialized": true,
+        "mint_authority": "BJE5MMbqXjVwjAF7oxwPYXnTXDyspzZyt4vwenNw5ruG",
+        "supply_base_units": 7714010708486571
+      },
+      "owner_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "space": 82,
+      "symbol_candidate": "circle_usdc"
+    }
+  ],
+  "captured_at_utc": "2026-10-11T01:37:32.032261Z",
+  "cluster": "mainnet-beta",
+  "commitment": "finalized",
+  "finalized_slot": 455472024,
+  "genesis_hash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc_calls": {
+    "getGenesisHash": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getGenesisHash",
+        "params": []
+      },
+      "request_timestamp_utc": "2026-10-11T01:37:29.273975Z",
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+      },
+      "response_timestamp_utc": "2026-10-11T01:37:30.413918Z"
+    },
+    "getMultipleAccounts": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getMultipleAccounts",
+        "params": [
+          [
+            "So11111111111111111111111111111111111111112",
+            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          ],
+          {
+            "commitment": "finalized",
+            "encoding": "base64"
+          }
+        ]
+      },
+      "request_timestamp_utc": "2026-10-11T01:37:30.413943Z",
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "context": {
+            "apiVersion": "4.3.0",
+            "slot": 455472019
+          },
+          "value": [
+            {
+              "data": [
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+                "base64"
+              ],
+              "executable": false,
+              "lamports": 1851952043390,
+              "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "rentEpoch": 18446744073709551615,
+              "space": 82
+            },
+            {
+              "data": [
+                "AQAAAJj+huiNm+Lqi8HMpIeLKYjCQPUrhCS/tA7Rot3LXhmbq6kSFNpnGwAGAQEAAABicKqKWcWUBbRShshncubNEm6bil06OFNtN/e0FOi2Zw==",
+                "base64"
+              ],
+              "executable": false,
+              "lamports": 549535699757,
+              "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "rentEpoch": 18446744073709551615,
+              "space": 82
+            }
+          ]
+        }
+      },
+      "response_timestamp_utc": "2026-10-11T01:37:31.221753Z"
+    },
+    "getSlot": {
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "getSlot",
+        "params": [
+          {
+            "commitment": "finalized"
+          }
+        ]
+      },
+      "request_timestamp_utc": "2026-10-11T01:37:31.221788Z",
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": 455472024
+      },
+      "response_timestamp_utc": "2026-10-11T01:37:32.032236Z"
+    }
+  },
+  "rpc_url": "https://api.mainnet-beta.solana.com",
+  "schema_version": 1
+}

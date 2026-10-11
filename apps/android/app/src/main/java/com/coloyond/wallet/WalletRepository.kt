@@ -3,10 +3,16 @@ package com.coloyond.wallet
 import com.coloyond.config.AppConfig
 import com.coloyond.core.rpc.SignatureStatus
 import com.coloyond.core.rpc.SolanaRpc
+import com.coloyond.core.storage.ObservedSignatureStatus
+import com.coloyond.core.storage.PendingActionKind
+import com.coloyond.core.storage.PendingActionRecord
+import com.coloyond.core.storage.PendingActionState
 import com.coloyond.core.storage.PendingIntentStore
 import com.coloyond.core.storage.PrefsStore
+import com.coloyond.core.storage.ReconciliationObservation
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import kotlin.coroutines.cancellation.CancellationException
+import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +42,7 @@ class WalletRepository(
     private val _feedback = MutableStateFlow<String?>(null)
     val feedback: StateFlow<String?> = _feedback
 
-    private val _pendingNotice = MutableStateFlow<String?>(pendingIntents.pending())
+    private val _pendingNotice = MutableStateFlow(pendingIntents.current()?.pendingDescription())
     val pendingNotice: StateFlow<String?> = _pendingNotice
 
     /** Bumped on every connect, disconnect, and mode switch; late results from an older session are dropped. */
@@ -50,10 +56,11 @@ class WalletRepository(
 
     private fun gatewayFor(mock: Boolean): WalletGateway = if (mock) mockGateway else mwaGateway
 
-    /** Rule 21: on an Activity reload, surface an interrupted transaction. */
+    /** Surface interrupted work after Activity/process recreation; never dispatch it again automatically. */
     fun reportPendingIntents() {
-        pendingIntents.pending()?.let { notice ->
-            _feedback.value = "Pending transaction from an earlier session: $notice"
+        pendingIntents.current()?.let { action ->
+            _pendingNotice.value = action.pendingDescription()
+            _feedback.value = "Wallet action ${action.id} needs reconciliation. It will not be resent automatically."
         }
     }
 
@@ -113,9 +120,22 @@ class WalletRepository(
     suspend fun signTransaction(sender: ActivityResultSender, memo: String) {
         val address = connectedAddress
             ?: return fail("Connect first; connect and sign are separate steps")
+        pendingIntents.current()?.let { unresolved ->
+            _feedback.value = "Pending wallet action ${unresolved.id} needs reconciliation before another handoff"
+            _pendingNotice.value = unresolved.pendingDescription()
+            return
+        }
         val mock = prefs.currentMockMode
-        pendingIntents.save("signTransaction", memo)
-        _pendingNotice.value = pendingIntents.pending()
+        var pending = PendingActionRecord(
+            id = UUID.randomUUID().toString(),
+            kind = PendingActionKind.DEMO_MEMO,
+            state = PendingActionState.PREPARED,
+            createdAtMillis = System.currentTimeMillis(),
+            cluster = AppConfig.blockchainLabel,
+            walletAddress = address,
+        )
+        pendingIntents.save(pending)
+        _pendingNotice.value = pending.pendingDescription()
         _state.value = WalletState.Signing("transaction")
         try {
             // Demo mode never touches the network, so it needs no real blockhash.
@@ -127,11 +147,17 @@ class WalletRepository(
                     return fail("Could not fetch a blockhash: ${error.message}", address)
                 }
             }
+            pending = pending.handedOff()
+            pendingIntents.save(pending)
+            _pendingNotice.value = pending.pendingDescription()
             when (val result = gatewayFor(mock).signAndSendMemo(sender, memo, blockhash)) {
                 is GatewayResult.Ok -> {
                     val signature = result.payload ?: run {
-                        clearPending()
-                        return fail("Wallet returned no signature", address)
+                        pendingIntents.save(pending.needsReconciliation("Wallet returned no signature"))
+                        _pendingNotice.value = pendingIntents.current()?.pendingDescription()
+                        _state.value = WalletState.Connected(address)
+                        _feedback.value = "Wallet returned no signature; saved for reconciliation and will not be resent"
+                        return
                     }
                     if (mock) {
                         clearPending()
@@ -140,8 +166,9 @@ class WalletRepository(
                         return
                     }
                     // Saved before polling, so a crash or timeout still leaves a signature to check.
-                    pendingIntents.save("signTransaction", memo, signature)
-                    _pendingNotice.value = pendingIntents.pending()
+                    pending = pending.withSignature(signature)
+                    pendingIntents.save(pending)
+                    _pendingNotice.value = pending.pendingDescription()
                     _state.value = WalletState.Connected(address)
                     reportStatus(signature, attempt { awaitStatus(signature) })
                 }
@@ -156,8 +183,16 @@ class WalletRepository(
             }
         } catch (cancelled: CancellationException) {
             // Keep the pending record: the wallet may already have sent the transaction.
+            pendingIntents.save(pending.needsReconciliation("Wallet handoff was interrupted"))
+            _pendingNotice.value = pendingIntents.current()?.pendingDescription()
             _state.value = WalletState.Connected(address)
             throw cancelled
+        } catch (error: Exception) {
+            // Once the wallet call starts, an exception does not prove it did not submit.
+            pendingIntents.save(pending.needsReconciliation(error.message))
+            _pendingNotice.value = pendingIntents.current()?.pendingDescription()
+            _state.value = WalletState.Connected(address)
+            _feedback.value = "Wallet result is unknown; saved for reconciliation and will not be resent: ${error.message}"
         }
     }
 
@@ -165,19 +200,65 @@ class WalletRepository(
         outcome.fold(
             onSuccess = { status ->
                 when {
-                    status == null ->
+                    status == null -> {
+                        pendingIntents.current()?.let { pending ->
+                            pendingIntents.save(pending.needsReconciliation("Signature not found yet"))
+                            _pendingNotice.value = pendingIntents.current()?.pendingDescription()
+                        }
                         _feedback.value = "Signature $signature sent; not seen on-chain yet. Kept as pending."
+                    }
                     status.err != null -> {
+                        pendingIntents.current()?.let { pending ->
+                            pendingIntents.save(pending.reconcile(
+                                ReconciliationObservation(
+                                    signatureStatus = ObservedSignatureStatus.FAILED,
+                                    signature = signature,
+                                    error = status.err,
+                                ),
+                            ))
+                        }
                         clearPending()
                         _feedback.value = "Transaction $signature failed on-chain: ${status.err}"
                     }
+                    status.confirmationStatus != "confirmed" && status.confirmationStatus != "finalized" -> {
+                        pendingIntents.current()?.let { pending ->
+                            pendingIntents.save(pending.needsReconciliation("Signature is only ${status.confirmationStatus}"))
+                            _pendingNotice.value = pendingIntents.current()?.pendingDescription()
+                        }
+                        _feedback.value = "Signature $signature is only ${status.confirmationStatus}; kept for reconciliation."
+                    }
                     else -> {
-                        clearPending()
-                        _feedback.value = "Signature $signature ${status.confirmationStatus} on-chain"
+                        val pending = pendingIntents.current()
+                        val commitment = if (status.confirmationStatus == "finalized") {
+                            ObservedSignatureStatus.FINALIZED
+                        } else {
+                            ObservedSignatureStatus.CONFIRMED
+                        }
+                        val reconciled = pending?.reconcile(
+                            ReconciliationObservation(commitment, signature),
+                        )
+                        if (reconciled?.state == PendingActionState.CONFIRMED) {
+                            clearPending()
+                            _feedback.value = "Signature $signature ${status.confirmationStatus} and expected effects confirmed"
+                        } else {
+                            reconciled?.let {
+                                pendingIntents.save(it)
+                                _pendingNotice.value = it.pendingDescription()
+                            }
+                            _feedback.value = if (reconciled == null) {
+                                "Signature $signature is ${status.confirmationStatus}, but its pending action is unavailable; effects are unconfirmed."
+                            } else {
+                                "Signature $signature is ${status.confirmationStatus}; account effects still need reconciliation. Kept as pending."
+                            }
+                        }
                     }
                 }
             },
             onFailure = { error ->
+                pendingIntents.current()?.let { pending ->
+                    pendingIntents.save(pending.needsReconciliation(error.message))
+                    _pendingNotice.value = pendingIntents.current()?.pendingDescription()
+                }
                 _feedback.value = "Signature $signature sent, but the status check failed: ${error.message}. Kept as pending."
             },
         )
@@ -237,6 +318,22 @@ class WalletRepository(
         pendingIntents.clear()
         _pendingNotice.value = null
     }
+
+    /** Apply a caller's read-only signature/account observations after restart; this never dispatches a transaction. */
+    fun reconcilePending(observation: ReconciliationObservation): PendingActionRecord? {
+        val updated = pendingIntents.current()?.reconcile(observation) ?: return null
+        if (updated.state.isTerminal) {
+            clearPending()
+        } else {
+            pendingIntents.save(updated)
+            _pendingNotice.value = updated.pendingDescription()
+        }
+        return updated
+    }
+
+    private fun PendingActionRecord.pendingDescription(): String =
+        "${kind.name.lowercase().replace('_', ' ')} · ${state.name.lowercase().replace('_', ' ')}" +
+            (signature?.let { " · $it" } ?: "")
 
     /** Like runCatching, but cancellation propagates instead of becoming a failure. */
     private inline fun <T> attempt(block: () -> T): Result<T> = try {

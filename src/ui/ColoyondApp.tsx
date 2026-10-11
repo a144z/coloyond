@@ -5,6 +5,10 @@ import { Route } from "../types.js";
 import { fetchRoutes } from "../routeService.js";
 import { ReferenceArt } from "./ReferenceArt.js";
 import { PortfolioTokens } from "./portfolio/PortfolioTokens.js";
+import { RebalanceDesk } from "./portfolio/RebalanceDesk.js";
+import { useRebalanceDesk } from "./portfolio/useRebalanceDesk.js";
+import { ConditionStatus } from "./rebalancing/ConditionStatus.js";
+import { ConnectButton } from "./wallet/ConnectButton.js";
 import {
   ECOSYSTEM,
   FEATURE_FARM,
@@ -99,6 +103,7 @@ function RouteCard({ route, selected, sample }: { route: Route; selected: boolea
 
 export function ColoyondApp() {
   const routeRequestVersion = useRef(0);
+  const desk = useRebalanceDesk();
   const [tab, setTab] = useState<ProductTab>("Portfolio");
   const [fromChain, setFromChain] = useState(42161);
   const [toChain, setToChain] = useState(10);
@@ -117,7 +122,11 @@ export function ColoyondApp() {
 
   const fromOptions = symbolsOn(fromChain);
   const toOptions = symbolsOn(toChain);
-  const drift = POSITIONS.reduce((sum, position) => sum + Math.abs(position.target - position.actual), 0);
+  const livePositions = POSITIONS.map((position) => {
+    const live = desk.byId[position.symbol];
+    return live === undefined ? position : { ...position, target: live.targetPct, actual: Math.round(live.weightPct) };
+  });
+  const drift = desk.drift;
   const health = Math.max(0, 100 - drift * 4);
   const completed = QUESTS.filter((quest) => done.has(quest.id));
   const questXp = completed.reduce((sum, quest) => sum + quest.reward, 0);
@@ -188,7 +197,7 @@ export function ColoyondApp() {
       <div className="cr-shell">
         <header className="cr-topbar">
           <a className="cr-brand" href="/" aria-label="coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
-          <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample portfolio</span><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a></div>
+          <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample portfolio</span><a className="cr-reference-link" href="/etf-devnet/transactions" aria-label="Open real Solana Devnet ETF wallet transaction desk">ETF wallet desk <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/etf-devnet" aria-label="Open real Solana Devnet ETF read page">Real ETF Devnet read <span aria-hidden="true">↗</span></a><a className="cr-reference-link cr-lab-link" href="/rebalancing-lab">Rebalance lab <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/symmetry-devnet">Symmetry Devnet <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a><ConnectButton /></div>
         </header>
 
         <section className="cr-intro" aria-labelledby="page-title">
@@ -209,21 +218,21 @@ export function ColoyondApp() {
             </section>
             <section className="cr-portfolio-grid">
               <div className="cr-allocation-block">
-                <SectionTitle index="B /" title="Target and actual" note="Saved target versus sample holdings. APYs are sample." />
+                <SectionTitle index="B /" title="Target and actual" note="The desk holds the live target and the live actual mix. APYs are sample." />
                 <div className="cr-composition" role="group" aria-label="Portfolio composition comparison">
                   <div className="cr-composition-row">
                     <div className="cr-composition-heading"><span>01 / Saved target</span><strong>100%</strong></div>
-                    <div className="cr-composition-track" aria-hidden="true">{POSITIONS.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.target}% target`} style={{ flex: position.target, background: position.color }} />)}</div>
+                    <div className="cr-composition-track" aria-hidden="true">{livePositions.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.target}% target`} style={{ flex: position.target, background: position.color }} />)}</div>
                   </div>
                   <div className="cr-composition-row">
-                    <div className="cr-composition-heading"><span>02 / Actual mix <em>sample</em></span><strong>100%</strong></div>
-                    <div className="cr-composition-track" aria-hidden="true">{POSITIONS.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.actual}% actual`} style={{ flex: position.actual, background: position.color }} />)}</div>
+                    <div className="cr-composition-heading"><span>02 / Actual mix <em>live in the desk</em></span><strong>100%</strong></div>
+                    <div className="cr-composition-track" aria-hidden="true">{livePositions.map((position) => <span key={position.symbol} title={`${position.symbol}: ${position.actual}% actual`} style={{ flex: position.actual, background: position.color }} />)}</div>
                   </div>
                   <p>Each band totals 100%. Colors match the asset rows; change uses percentage points.</p>
                 </div>
                 <table className="cr-alloc-table">
                   <thead><tr><th scope="col">Asset</th><th scope="col">Target</th><th scope="col">Actual</th><th scope="col">Change</th></tr></thead>
-                  <tbody>{POSITIONS.map((position) => {
+                  <tbody>{livePositions.map((position) => {
                     const delta = position.actual - position.target;
                     return <tr key={position.symbol}>
                       <th scope="row"><span className="cr-asset"><span className="cr-asset-dot" style={{ background: position.color }} /><span><strong>{position.symbol}</strong><small>{position.name}</small><small>{position.utility} · <span className="cr-apy">{position.apy}% APY</span></small></span></span></th>
@@ -232,9 +241,11 @@ export function ColoyondApp() {
                   })}</tbody>
                 </table>
               </div>
-              <aside className="cr-health-panel"><span className="cr-kicker">Portfolio signal / Sample</span><div className="cr-health-number">{health}<span>/ 100</span></div><h3>{driftLabel(drift)}</h3><p>Aggregate distance from saved targets: {drift.toFixed(1)} percentage points. The label is an illustration, not a risk score.</p><div className="cr-health-rule"><span style={{ width: `${health}%` }} /></div><div className="cr-next-label">Where to next</div><button onClick={() => setTab("Shield")}>Compare routes <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Yield")}>Explore yield <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Game")}>View progress <span aria-hidden="true">↗</span></button></aside>
+              <aside className="cr-health-panel"><span className="cr-kicker">Portfolio signal / Live demo state</span><div className="cr-health-number">{health}<span>/ 100</span></div><h3>{driftLabel(drift)}</h3><p>Aggregate distance from the saved targets: {drift.toFixed(1)} percentage points, recomputed live from the desk. The label is an illustration, not a risk score.</p><div className="cr-health-rule"><span style={{ width: `${health}%` }} /></div><div className="cr-next-label">Where to next</div><button onClick={() => setTab("Shield")}>Compare routes <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Yield")}>Explore yield <span aria-hidden="true">↗</span></button><button onClick={() => setTab("Game")}>View progress <span aria-hidden="true">↗</span></button></aside>
             </section>
-            <PortfolioTokens onRouteToShield={() => { setTab("Shield"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            <RebalanceDesk desk={desk} />
+            <ConditionStatus />
+            <PortfolioTokens sectionIndex="D /" onRouteToShield={() => { setTab("Shield"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
           </>}
 
           {tab === "Shield" && <>
@@ -266,7 +277,7 @@ export function ColoyondApp() {
             <div className="cr-section-grid cr-section-spaced"><SectionTitle index="B /" title="An optional little chance" note="A simulated boost to demo XP, with no promised financial yield." /></div><section className="cr-boost-panel"><div><span className="cr-kicker">Nes / Optional play</span><h3>Roll, if you like.</h3><p>A small moment of chance after the work. It does not alter holdings, a quote, or strategy returns.</p></div><div className="cr-boost-action"><button className="cr-primary" disabled={Boolean(gamble)} onClick={rollGamble}>{gamble ? "Demo roll complete" : "Roll demo boost"} <span aria-hidden="true">↗</span></button>{gamble && <div className="cr-boost-result" role="status"><strong>{gamble.multiplier} / {gamble.label}</strong><span>{gamble.detail}</span><em>+{gamble.xp} demo XP</em></div>}</div></section>
           </>}
         </main>
-        <footer className="cr-footer"><span>coloyond / A managed strategy, open to interpretation.</span><span>Browser prototype · Sample figures · No wallet execution</span><a href="/reference/index.html">View original UI reference ↗</a></footer>
+        <footer className="cr-footer"><span>coloyond / A managed strategy, open to interpretation.</span><span>Browser prototype · Sample portfolio · Symmetry comparison is read only</span><a href="/reference/index.html">View original UI reference ↗</a></footer>
       </div>
     </div>
   );

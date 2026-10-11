@@ -1,8 +1,10 @@
+/target/
+/tools/rebalancing/etf-math-sbf-bench/target/
+/.anchor/
+/.env.local
+/node_modules/
 node_modules/
-dist/
-.vite/
-*.log
-.DS_Store
-.vscode/
-.playwright-mcp/
-credentials.json
+/.playwright-mcp/
+/dist/
+/.vite/
+/public/localnet-manifest.json

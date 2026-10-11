@@ -20,5 +20,8 @@ class MockWalletGateway(
     override suspend fun signAndSendMemo(sender: ActivityResultSender, memo: String, recentBlockhash: String) =
         GatewayResult.Ok(fakeSignature)
 
+    override suspend fun signVaultTransaction(sender: ActivityResultSender, unsignedWireTransaction: ByteArray) =
+        VaultSigningResult.Unsupported
+
     override suspend fun disconnect(sender: ActivityResultSender) = GatewayResult.Ok()
 }

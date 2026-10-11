@@ -1,0 +1,87 @@
+# S5G live Devnet frontend read — 11 October 2026
+
+**Result:** the integrated `/etf-devnet` route completed a real browser RPC read. This proves frontend-to-RPC read wiring for the observed accounts only. It does not prove wallet connection, ETF transaction construction, signing, deployment, pool initialization, seed, swap, or policy admission.
+
+## Observed browser session
+
+| Field | Observation |
+|---|---|
+| Route | `http://127.0.0.1:5173/etf-devnet` |
+| RPC endpoint | `https://api.devnet.solana.com` |
+| Commitment | `confirmed` |
+| Genesis | `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` — matched the pinned Devnet hash |
+| Account snapshot slot | `509794095` |
+| Client read time | `2026-10-11 13:18:31 Asia/Hong_Kong` |
+| Program / pool | Not configured / not deployed |
+| Connected wallet | None |
+| Signature / transaction | None; this screen is read-only |
+
+## Exact account facts rendered by the page
+
+- WSOL mint `So11111111111111111111111111111111111111112`: classic SPL Token owner, 82-byte mint layout, 9 decimals, zero supply, no mint or freeze authority reported.
+- Test USD mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: classic SPL Token owner, 82-byte mint layout, 6 decimals, supply `16286767455804391005`, active mint authority `GrNg1XM2ctzeE2mXxXCfhcTUbejM8Z4z4wNVTy2FjMEz`, and active freeze authority `CJtyoKSLrktozQzjERTiK3btQtiTK3nN4QrqGHLidyCT`. The page labels it synthetic, unbacked, and not redeemable as USDC.
+- SOL/USD feed `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE`: Receiver owner `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, 134 bytes, expected feed ID, `Full`, publish age 281 seconds, confidence ceiling 5 bps.
+- BTC/USD feed `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo`: same Receiver owner/layout and expected feed ID, `Full`, publish age 281 seconds, confidence ceiling 8 bps. The screen identifies it as an unpaired feed candidate; no BTC mint is admitted.
+- USD/USD feed `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX`: same Receiver owner/layout and expected feed ID, `Full`, publish age 281 seconds, confidence ceiling 10 bps. The page says this reference does not establish Test USD backing.
+
+The current read used observed chain time `1791695910` and feed publish time `1791695629`. Freshness/confidence policy is explicitly **unconfigured**. The screen does not apply or invent a limit, and no risk-increasing transaction is eligible from this observation. All candidate assets remain **not admitted**.
+
+## Reproduction and validation
+
+- `npm run dev -- --host 127.0.0.1 --port 5173`; open `/etf-devnet`. The visible route loaded and completed the above live RPC request.
+- `npm run typecheck -- --pretty false` — passed.
+- `npm run build` — passed; Vite reported the existing large JavaScript chunk warning.
+- `npm --prefix packages/etf-client run typecheck` — passed.
+- `npm --prefix packages/etf-client test` — 31 passed. The sandbox initially denied `tsx`'s temporary IPC socket; rerunning the same test command with execution permission passed.
+- `cargo test --locked --offline -p coloyond-etf-identity -p coloyond-etf-math -p coloyond-etf-oracle` — passed.
+- `git diff --check` — passed.
+
+## Manual wallet/RPC check
+
+1. Start the app and open `http://127.0.0.1:5173/etf-devnet`.
+2. Confirm the displayed endpoint and expected/actual genesis hashes, then click **Refresh live RPC state** and verify the returned slot.
+3. Verify both candidate mint addresses, decimals, token-program owner and authorities. Keep the Test USD synthetic/unbacked disclosure visible.
+4. Verify each feed account, Receiver owner, expected and embedded feed ID, `Full` level, publish age and unconfigured policy status. Do not proceed with a risk-increasing action while policy is unconfigured or feeds are stale.
+5. If using the wallet-read portion, connect a wallet set to Devnet and verify its address and candidate-token balances are read from RPC. Wallet connection was not exercised in this evidence run.
+
+There is no transaction button on this screen. No wallet signature is requested and no submitted, timed-out, or confirmed transaction state is claimed here.
+
+## Follow-up browser snapshot
+
+At `2026-10-11 13:49:03 Asia/Hong_Kong`, the app-shell **Real ETF Devnet read** link opened this route and its live RPC refresh completed at slot `509801777`. The actual and expected genesis again matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The connected wallet was still `None`; program and pool were still unconfigured; no transaction or signature existed.
+
+| Fixed feed account | Verification | Age at observed chain time `1791697743` | Confidence / price |
+|---|---|---:|---:|
+| SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Full | 21 seconds | 3 bps |
+| BTC/USD `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Full | 277 seconds | 9 bps |
+| USD/USD `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Full | 231 seconds | 11 bps |
+
+The page showed the same exact embedded feed IDs, Receiver owner, and 134-byte layout as the expected accounts. Freshness/confidence policy remains unconfigured, so even the 21-second SOL observation is not an approved eligibility result. The Test USD mint remained labeled synthetic, unbacked, and not redeemable as USDC. This is one additional read snapshot, not evidence of continuous freshness, wallet connection, or transaction behavior.
+
+## Time-boxed Sprint 5 refresh
+
+At 2026-10-11 06:40:08 UTC, I refreshed the same browser route against the configured RPC. The request completed at confirmed slot `509814637`; the actual and expected Devnet genesis hashes both matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The result is a new point-in-time RPC observation, not a transaction proof.
+
+| Field | Fresh observation |
+|---|---|
+| Program / pool | Not configured / not deployed |
+| Connected wallet | None |
+| SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Receiver owner and 134-byte `PriceUpdateV2`; expected feed ID; `Full`; age 10 seconds; confidence/price 4 bps |
+| USD/USD reference `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Receiver owner and 134-byte `PriceUpdateV2`; expected feed ID; `Full`; age 82 seconds; confidence/price 9 bps |
+| Candidate asset mint | Test USD `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`; classic Token Program; 6 decimals; supply `16286767455804381005`; active mint authority `GrNg1XM2ctzeE2mXxXCfhcTUbejM8Z4z4wNVTy2FjMEz`; active freeze authority `CJtyoKSLrktozQzjERTiK3btQtiTK3nN4QrqGHLidyCT` |
+| Policy / eligibility | Freshness and confidence policy remained unconfigured. The 82-second USD reference fails the unchanged 60-second proposed test bound; no risk-increasing action is eligible. |
+| Transaction state | No transaction, signature, wallet prompt, or token/share delta |
+
+The UI displayed `Test USD · synthetic / unbacked; not redeemable as USDC`, and showed no program or pool identity. The test profile's 60-second bound was not widened. This snapshot is not a freshness guarantee, admission decision, or evidence that the synthetic mint is backed by USD.
+
+## Sprint 5 transaction-console read
+
+At 2026-10-11 06:51:30 UTC, the new `/etf-devnet/transactions` route refreshed the configured RPC at confirmed slot `509817496`. Actual and expected genesis both matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The wallet was disconnected; no ETF program, accepted manifest/IDL, or pool was available. Every signing control remained disabled and there was no transaction or signature.
+
+| Candidate feed | Account owner / layout / identity | Verification | Age | Confidence / price | Diagnostic result |
+|---|---|---|---:|---:|---|
+| SOL/USD | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 181 seconds | 4 bps | Stale under the draft 60-second bound |
+| BTC/USD | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 181 seconds | 9 bps | Stale; no Devnet BTC mint admitted |
+| USD/USD | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 263 seconds | 10 bps | Stale under the draft 60-second bound |
+
+The UI labels the Test USD mint synthetic, unbacked, and not redeemable as USDC. The draft 60-second/100-bps limits are not approved or program-enforced. This read proves only a point-in-time RPC observation and the route's blocked state, not wallet or transaction behavior. See the [time-boxed console handoff](s5-frontend-console-handoff-20261011.md) for the exact manual steps and remaining gates.
