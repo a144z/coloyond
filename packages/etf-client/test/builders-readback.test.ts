@@ -74,7 +74,7 @@ function priceAccount(feed: Buffer, publishTime: bigint, owner = receiver, verif
 
 type TestDeployment = { manifest: EtfDeploymentManifestV1; idl: Record<string, unknown>; context: ReturnType<typeof verifyEtfManifest>; rpc: Connection; wallet: PublicKey; walletAssetAccounts: { mint: string; tokenAccount: string }[]; shareAccount: PublicKey; programId: PublicKey; pool: PublicKey; addressByKey: Map<string, AccountInfo<Buffer> | null> };
 
-function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: PublicKey; verifyTag?: number; missingPool?: boolean; missingPoolState?: boolean; missingFeed?: boolean; missingMint?: boolean; badMintDecimals?: boolean; badProgramBinary?: boolean; lifecycle?: "unseeded" | "active" | "closed"; riskPaused?: boolean; oraclePublishTime?: bigint; oracleConfidence?: bigint; sequence?: bigint; pendingResume?: Readonly<{ proposer: PublicKey; nonce: bigint; executeAfter: bigint }> | null; blockTime?: number | null; governance?: PublicKey; currentGovernance?: PublicKey; currentGuardian?: PublicKey } = {}): TestDeployment {
+function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: PublicKey; verifyTag?: number; missingPool?: boolean; missingPoolState?: boolean; missingFeed?: boolean; missingMint?: boolean; badMintDecimals?: boolean; badProgramBinary?: boolean; lifecycle?: "unseeded" | "active" | "closed"; riskPaused?: boolean; oraclePublishTime?: bigint; oracleConfidence?: bigint; sequence?: bigint; schedulerEnabled?: boolean; schedulerGeneration?: bigint; lastObservation?: Readonly<{ observedAt: bigint; slot: bigint; deviationBps: number; eligible: boolean; publishTimes: readonly [bigint, bigint, bigint] }> | null; pendingResume?: Readonly<{ proposer: PublicKey; nonce: bigint; executeAfter: bigint }> | null; blockTime?: number | null; governance?: PublicKey; currentGovernance?: PublicKey; currentGuardian?: PublicKey } = {}): TestDeployment {
   const programId = Keypair.generate().publicKey;
   const governance = overrides.governance ?? Keypair.generate().publicKey;
   const guardian = Keypair.generate().publicKey;
@@ -122,8 +122,25 @@ function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: Publ
   map.set(programData.toBase58(), account(new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"), programDataBytes));
 
   const poolBytes = Buffer.alloc(1_265); poolDiscriminator.copy(poolBytes); poolBytes[8] = 1; poolBytes[9] = poolBump; configHash.copy(poolBytes, 10); u32(configBytes.length).copy(poolBytes, 42); configBytes.copy(poolBytes, 46); addresses.shareMint.toBuffer().copy(poolBytes, 1_201); initializer.toBuffer().copy(poolBytes, 1_233);
-  const stateBytes = Buffer.alloc(300); stateDiscriminator.copy(stateBytes); stateBytes[8] = 1; stateBytes[9] = poolStateBump; pool.toBuffer().copy(stateBytes, 10); (overrides.currentGovernance ?? governance).toBuffer().copy(stateBytes, 42); (overrides.currentGuardian ?? guardian).toBuffer().copy(stateBytes, 74); stateBytes[106] = overrides.lifecycle === "unseeded" ? 0 : overrides.lifecycle === "closed" ? 2 : 1; stateBytes[107] = overrides.riskPaused ? 1 : 0; u64(overrides.sequence ?? 8n).copy(stateBytes, 108); // absent observation, optional pending resume/handoff, disabled scheduler
-  if (overrides.pendingResume) { stateBytes[117] = 1; overrides.pendingResume.proposer.toBuffer().copy(stateBytes, 118); u64(overrides.pendingResume.nonce).copy(stateBytes, 150); stateBytes.writeBigInt64LE(overrides.pendingResume.executeAfter, 158); }
+  const stateBytes = Buffer.alloc(300); stateDiscriminator.copy(stateBytes); stateBytes[8] = 1; stateBytes[9] = poolStateBump; pool.toBuffer().copy(stateBytes, 10); (overrides.currentGovernance ?? governance).toBuffer().copy(stateBytes, 42); (overrides.currentGuardian ?? guardian).toBuffer().copy(stateBytes, 74); stateBytes[106] = overrides.lifecycle === "unseeded" ? 0 : overrides.lifecycle === "closed" ? 2 : 1; stateBytes[107] = overrides.riskPaused ? 1 : 0; u64(overrides.sequence ?? 8n).copy(stateBytes, 108);
+  let stateOffset = 116;
+  if (overrides.lastObservation) {
+    stateBytes[stateOffset++] = 1;
+    stateBytes.writeBigInt64LE(overrides.lastObservation.observedAt, stateOffset); stateOffset += 8;
+    u64(overrides.lastObservation.slot).copy(stateBytes, stateOffset); stateOffset += 8;
+    stateBytes.writeUInt16LE(overrides.lastObservation.deviationBps, stateOffset); stateOffset += 2;
+    stateBytes[stateOffset++] = overrides.lastObservation.eligible ? 1 : 0;
+    for (const publishTime of overrides.lastObservation.publishTimes) { stateBytes.writeBigInt64LE(publishTime, stateOffset); stateOffset += 8; }
+  } else stateOffset += 1;
+  if (overrides.pendingResume) {
+    stateBytes[stateOffset++] = 1;
+    overrides.pendingResume.proposer.toBuffer().copy(stateBytes, stateOffset); stateOffset += 32;
+    u64(overrides.pendingResume.nonce).copy(stateBytes, stateOffset); stateOffset += 8;
+    stateBytes.writeBigInt64LE(overrides.pendingResume.executeAfter, stateOffset); stateOffset += 8;
+  } else stateOffset += 1;
+  stateOffset += 1; // no pending authority handoff
+  stateBytes[stateOffset++] = overrides.schedulerEnabled ? 1 : 0;
+  u64(overrides.schedulerGeneration ?? 0n).copy(stateBytes, stateOffset);
   const shareMintBytes = Buffer.alloc(82); shareMintBytes.writeUInt32LE(1, 0); addresses.authority.toBuffer().copy(shareMintBytes, 4); u64(overrides.lifecycle === "unseeded" ? 0n : 1_000_000n).copy(shareMintBytes, 36); shareMintBytes[44] = 6; shareMintBytes[45] = 1; shareMintBytes.writeUInt32LE(0, 46);
   map.set(pool.toBase58(), overrides.missingPool ? null : account(programId, poolBytes));
   map.set(addresses.poolState.toBase58(), overrides.missingPoolState ? null : account(programId, stateBytes));
@@ -213,6 +230,9 @@ test("reads the exact deployment, pool, shares, custody, fees, and Full oracle s
   assert.equal(snapshot.assets[1]!.cumulativeFeeBaseUnits, "3");
   assert.equal(snapshot.assets[0]!.oracle.verification, "full");
   assert.equal(snapshot.assets[0]!.oracle.freshness, "within_approved_limits");
+  assert.equal(snapshot.state.schedulerEnabled, false);
+  assert.equal(snapshot.state.schedulerGeneration, "0");
+  assert.equal(snapshot.state.lastObservation, null);
   assert.match(snapshot.assets[1]!.label, /synthetic \/ unbacked/);
   const wrongOwner = buildTestDeployment({ feedOwner: SystemProgram.programId });
   const wrong = await readEtfSnapshot(wrongOwner.rpc, wrongOwner.context, { walletAddress: wrongOwner.wallet.toBase58() });
@@ -248,6 +268,32 @@ test("reads the exact deployment, pool, shares, custody, fees, and Full oracle s
   await assert.rejects(() => readEtfSnapshot(badProgramBinary.rpc, badProgramBinary.context), /deployed_program_binary_hash_mismatch/);
   const wrongGenesis = buildTestDeployment({ genesisHash: "not-devnet" });
   await assert.rejects(() => readEtfSnapshot(wrongGenesis.rpc, wrongGenesis.context), /genesis_mismatch/);
+});
+
+test("reads scheduler generation and eligibility only from verified pool state", async () => {
+  const observation = {
+    observedAt: 999_900n,
+    slot: 12_345n,
+    deviationBps: 725,
+    eligible: true,
+    publishTimes: [999_895n, 999_896n, 0n] as const,
+  };
+  const enabled = buildTestDeployment({ schedulerEnabled: true, schedulerGeneration: 4n, lastObservation: observation });
+  const snapshot = await readEtfSnapshot(enabled.rpc, enabled.context);
+  assert.equal(snapshot.state.schedulerEnabled, true);
+  assert.equal(snapshot.state.schedulerGeneration, "4");
+  assert.deepEqual(snapshot.state.lastObservation, {
+    observedAt: "999900",
+    slot: "12345",
+    deviationBps: 725,
+    eligible: true,
+    publishTimes: ["999895", "999896", "0"],
+  });
+
+  const malformed = buildTestDeployment();
+  const stateAddress = malformed.context.addresses.poolState.toBase58();
+  malformed.addressByKey.get(stateAddress)!.data[119] = 2;
+  await assert.rejects(() => readEtfSnapshot(malformed.rpc, malformed.context), /scheduler_enabled_invalid/);
 });
 
 test("encodes all S5E instruction discriminators, argument vectors, and account groups from the generated IDL", async () => {

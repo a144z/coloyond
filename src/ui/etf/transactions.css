@@ -18,6 +18,8 @@
 .tx-blocked-card { display: grid; gap: 11px; }
 .tx-candidate-feeds { margin-top: 15px; padding-top: 10px; padding-bottom: 10px; }
 .tx-candidate-feeds .etf-balance-row:last-child { border-bottom: 0; }
+.tx-scheduler-card { display: grid; gap: 13px; }
+.tx-scheduler-card .etf-fields > div { grid-template-columns: minmax(150px, .4fr) minmax(0, 1fr); }
 .tx-receipt-card { overflow: hidden; }
 .tx-receipt-card .etf-fields > div { grid-template-columns: minmax(110px, .35fr) minmax(0, 1fr); }
 .etf-refresh-link { display: inline-flex; align-items: center; justify-content: space-between; gap: 16px; color: #f1ecdd; text-decoration: none; }
