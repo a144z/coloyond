@@ -11,12 +11,12 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { SOLANA_DERIVATION_PATH, deriveEd25519Path } from './derivation';
 import { connection } from './connection';
 import { FAUCET_LAMPORTS } from './config';
-import { emptyTokens, mintOf, mintToAssetMap, type AssetId } from './assets';
+import { emptyTokens, mintOf, mintToAssetMap } from './assets';
 
 export interface Balances {
   solLamports: number;
   /** Raw SPL balance per asset id (WSOL included). Zero when no account exists. */
-  tokens: Record<AssetId, number>;
+  tokens: Record<string, number>;
 }
 
 export function generateMnemonicPhrase(): string {

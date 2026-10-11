@@ -1,7 +1,7 @@
 import { useStore } from '../lib/store';
 import { bookStatus, priceEntryOf, pricesFromBook } from '../lib/solana/price';
 import { reserveKeypair, reserveDepthUsd } from '../lib/solana/reserve';
-import { assetList } from '../lib/solana/assets';
+import { ASSET_IDS, assetList } from '../lib/solana/assets';
 import {
   CURVE_BASE_PCT,
   CURVE_CAP_PCT,
@@ -29,6 +29,8 @@ export function SystemScreen() {
   const logs = useStore((s) => s.logs);
 
   const status = bookStatus(price, PRICE_MAX_AGE_MS);
+  const specs = assetList();
+  const universeCount = specs.length - ASSET_IDS.length;
   const keysReady = Boolean(
     keysJson.reserveSecretB58 &&
     ['tusd', 'tbtc', 'teth'].every((id) => keysJson.mints?.[id]?.address),
@@ -68,22 +70,26 @@ export function SystemScreen() {
           {price ? (
             <KeyValue
               rows={[
-                ...assetList().map((spec) => {
-                  const entry = priceEntryOf(price, spec.id);
-                  return {
-                    k: (
-                      <span className="flex items-center gap-2">
-                        <AssetSwatch color={spec.color} /> {spec.symbol}
-                      </span>
-                    ),
-                    v: entry
-                      ? `${fmtUsd(entry.usd)} · ${
-                          entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
-                        }`
-                      : 'unavailable',
-                  };
-                }),
-                { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
+                // core assets always; extended assets only once priced
+                ...specs
+                  .filter((spec) => spec.core || priceEntryOf(price, spec.id) !== null)
+                  .map((spec) => {
+                    const entry = priceEntryOf(price, spec.id);
+                    return {
+                      k: (
+                        <span className="flex items-center gap-2">
+                          <AssetSwatch color={spec.color} /> {spec.symbol}
+                        </span>
+                      ),
+                      v: entry
+                        ? `${fmtUsd(entry.usd)} · ${
+                            entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
+                          }`
+                        : 'unavailable',
+                    };
+                  }),
+                  { k: 'Coinbase universe', v: `${universeCount} listed assets · one batched call` },
+                  { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
                 { k: 'Age limit', v: `${PRICE_MAX_AGE_MS / 1000} seconds` },
                 {
                   k: 'Status',
@@ -102,9 +108,9 @@ export function SystemScreen() {
             </p>
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            One book covers every asset: SOL, BTC and ETH mids come from Coinbase (Binance
-            fallback), tUSD is fixed $1. Stale or missing observations block automation trades by
-            design. Holdings stay withdrawable in kind.
+            One batched Coinbase call prices the whole universe; the per-asset spot endpoints and
+            Binance backfill anything missing, and tUSD is fixed $1. Stale or missing observations
+            block automation trades by design. Holdings stay withdrawable in kind.
           </p>
         </LedgerPanel>
       </div>
@@ -128,14 +134,16 @@ export function SystemScreen() {
                       </a>
                     ),
                   },
-                  ...assetList().map((spec) => ({
-                    k: (
-                      <span className="flex items-center gap-2">
-                        <AssetSwatch color={spec.color} /> {spec.symbol} inventory
-                      </span>
-                    ),
-                    v: reserve ? fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2) : '…',
-                  })),
+                  ...specs
+                    .filter((spec) => spec.core || (reserve?.tokens[spec.id] ?? 0) > 0)
+                    .map((spec) => ({
+                      k: (
+                        <span className="flex items-center gap-2">
+                          <AssetSwatch color={spec.color} /> {spec.symbol} inventory
+                        </span>
+                      ),
+                      v: reserve ? fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2) : '…',
+                    })),
                   { k: 'Depth at live mids', v: reserveDepth !== null ? fmtUsd(reserveDepth) : '…' },
                   { k: 'SOL for fees', v: reserve ? `${fmtSol(reserve.solLamports, 4)} SOL` : '…' },
                   { k: 'Spread', v: `${RESERVE_SPREAD_PCT.toFixed(2)}% flat` },
@@ -146,9 +154,10 @@ export function SystemScreen() {
                 ]}
               />
               <p className="mt-3 text-[11px] leading-relaxed text-iron">
-                Shared, finite, devnet-only inventory. The reserve keypair co-signs every swap;
-                traders pay their own fees. The curve fee scales with trade size against total
-                depth across all assets.
+                Shared, devnet-only inventory. Synthetic inventory is minted on demand when a
+                trade needs it; WSOL inventory is finite. The reserve keypair co-signs every
+                swap; traders pay their own fees. The curve fee scales with trade size against
+                total depth across all assets.
               </p>
             </>
           ) : (
@@ -232,7 +241,10 @@ export function SystemScreen() {
           <KeyValue
             rows={[
               { k: 'Build', v: 'coloyond 0.2.0 · devnet demo' },
-              { k: 'Assets', v: assetList().map((s) => s.symbol).join(' · ') },
+              {
+                k: 'Assets',
+                v: `${ASSET_IDS.map((id) => specs.find((s) => s.id === id)?.symbol ?? id).join(' · ')} + ${universeCount} from Coinbase`,
+              },
               { k: 'Design', v: 'lacquerboard system · monumental stencil' },
               { k: 'Stack', v: 'React · Tailwind v4 · Solana web3.js' },
               { k: 'Android', v: 'Capacitor shell (see README)' },

@@ -5,9 +5,10 @@ import { describeTxError, signSendConfirm, type TxResult } from './solana/tx';
 import { fetchBalances, keypairFromMnemonic, decodeSecret, encodeSecret, requestAirdrop, buildWrapTx } from './solana/wallet';
 import { fetchRpcStatus, type RpcStatus } from './solana/connection';
 import { fetchPriceBook, pricesFromBook, priceOf, type PriceBook } from './solana/price';
-import { fetchReserveState, executeReserveSwap, type ReserveState } from './solana/reserve';
+import { fetchReserveState, executeReserveSwap, ensureMint, type ReserveState } from './solana/reserve';
 import { buildFundTx, buildProvisionTx, buildWithdrawTx, buildCloseTx, fetchVaultBalances } from './solana/vault';
-import { assetSpec, type AssetId } from './solana/assets';
+import { assetSpec, registerCoinbaseAssets, type AssetId } from './solana/assets';
+import { fetchCoinbaseUniverse, type UniverseAsset } from './solana/coinbase';
 import { fmtToken } from './format';
 
 /* ---------------- types ---------------- */
@@ -154,6 +155,9 @@ interface ColoyondState {
   vaultBalances: Record<string, Awaited<ReturnType<typeof fetchBalances>>>;
   price: PriceBook | null;
   priceError: string | null;
+  /** The live Coinbase universe backing the extended asset registry. */
+  universe: UniverseAsset[];
+  universeError: string | null;
   reserve: ReserveState | null;
   rpc: RpcStatus | null;
   toasts: ToastItem[];
@@ -175,6 +179,7 @@ interface ColoyondState {
 
   // refreshers
   refreshPrice: () => Promise<void>;
+  refreshUniverse: () => Promise<void>;
   refreshReserve: () => Promise<void>;
   refreshBalances: () => Promise<void>;
   refreshRpc: () => Promise<void>;
@@ -215,6 +220,8 @@ export const useStore = create<ColoyondState>()(
       vaultBalances: {},
       price: null,
       priceError: null,
+      universe: [],
+      universeError: null,
       reserve: null,
       rpc: null,
       toasts: [],
@@ -256,6 +263,16 @@ export const useStore = create<ColoyondState>()(
           set({ price, priceError: null });
         } catch (err) {
           set({ priceError: err instanceof Error ? err.message : 'price feed failed' });
+        }
+      },
+
+      refreshUniverse: async () => {
+        try {
+          const universe = await fetchCoinbaseUniverse();
+          registerCoinbaseAssets(universe);
+          set({ universe, universeError: null });
+        } catch (err) {
+          set({ universeError: err instanceof Error ? err.message : 'coinbase universe unavailable' });
         }
       },
 
@@ -454,6 +471,21 @@ export const useStore = create<ColoyondState>()(
           {
             label: 'Generate vault custody keypair',
             run: async () => ({ note: 'separate custody, budget and automation authority' }),
+          },
+          {
+            label: 'Ensure the devnet mints exist',
+            run: async () => {
+              let created = 0;
+              for (const id of input.assets) {
+                if (assetSpec(id).synthetic && (await ensureMint(id))) created += 1;
+              }
+              return {
+                note:
+                  created > 0
+                    ? `${created} stand-in mint${created === 1 ? '' : 's'} created by the reserve`
+                    : 'every mint in the mix is already live',
+              };
+            },
           },
           {
             label: 'Build the setup transaction',
@@ -672,7 +704,7 @@ export const useStore = create<ColoyondState>()(
           kind: 'owner',
           summary: `Weights set to ${Object.entries(targets)
             .filter(([, pct]) => pct > 0)
-            .map(([id, pct]) => `${pct.toFixed(0)} ${assetSpec(id as AssetId).symbol}`)
+            .map(([id, pct]) => `${pct.toFixed(0)} ${assetSpec(id).symbol}`)
             .join(' · ')}`,
           detail: 'scheduler and budget kept; a 120 second cooldown applies',
         });
@@ -684,9 +716,9 @@ export const useStore = create<ColoyondState>()(
     }),
     {
       name: 'coloyond.v1',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
-      partialize: (st) => ({ wallet: st.wallet, vaults: st.vaults, logs: st.logs }),
+      partialize: (st) => ({ wallet: st.wallet, vaults: st.vaults, logs: st.logs, universe: st.universe }),
       migrate: (persisted, version) => {
         const p = persisted as { vaults?: Record<string, unknown>[] } | undefined;
         if (p && version < 2 && Array.isArray(p.vaults)) {
@@ -707,11 +739,21 @@ export const useStore = create<ColoyondState>()(
             return v;
           });
         }
-        return p as unknown as { wallet: ColoyondState['wallet']; vaults: VaultConfig[]; logs: LogEntry[] };
+        return p as unknown as {
+          wallet: ColoyondState['wallet'];
+          vaults: VaultConfig[];
+          logs: LogEntry[];
+          universe: UniverseAsset[];
+        };
       },
     },
   ),
 );
+
+/* Join the persisted Coinbase universe into the asset registry immediately,
+ * so extended asset ids resolve before the first live fetch returns. */
+const persistedUniverse = useStore.getState().universe;
+if (persistedUniverse && persistedUniverse.length > 0) registerCoinbaseAssets(persistedUniverse);
 
 /* ---------------- derived helpers ---------------- */
 

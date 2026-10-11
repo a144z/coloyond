@@ -2,10 +2,10 @@ import { assetList, type AssetId } from '../../lib/solana/assets';
 import { AssetSwatch } from './primitives';
 
 /**
- * Proportional weight editor. Each asset gets an independent share slider
- * (0-100); the displayed weights are the shares normalized to 100, so the
- * target mix is always valid while editing. A share of zero removes the
- * asset from the portfolio.
+ * Proportional weight editor. Renders one slider per selected asset (share
+ * > 0 — a share of zero removes the asset from the portfolio); the displayed
+ * weights are the shares normalized to 100, so the target mix is always
+ * valid while editing. Scales from the core four to the full Coinbase list.
  */
 export function WeightSliders({
   shares,
@@ -16,7 +16,7 @@ export function WeightSliders({
   onChange: (next: Record<AssetId, number>) => void;
   ariaLabel?: string;
 }) {
-  const specs = assetList();
+  const specs = assetList().filter((s) => (shares[s.id] ?? 0) > 0);
   const total = specs.reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
   const pctOf = (id: AssetId): number => (total > 0 ? ((shares[id] ?? 0) / total) * 100 : 0);
 
@@ -51,8 +51,8 @@ export function WeightSliders({
         );
       })}
       <div className="flex items-baseline justify-between gap-3 border-t border-hairline pt-3 text-[11px] text-iron">
-        <span>{total > 0 ? 'Total target' : 'No assets selected'}</span>
-        <strong className="font-mono">{total > 0 ? '100.0%' : '—'}</strong>
+        <span>{specs.length > 0 ? `Total target · ${specs.length} asset${specs.length === 1 ? '' : 's'}` : 'No assets selected'}</span>
+        <strong className="font-mono">{specs.length > 0 ? '100.0%' : '—'}</strong>
       </div>
     </div>
   );

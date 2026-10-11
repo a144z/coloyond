@@ -5,7 +5,7 @@ import {
   createTransferInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
-import { assetList, assetSpec, isAssetId, mintOf, type AssetId } from './assets';
+import { assetList, assetSpec, knownAsset, mintOf } from './assets';
 import { fetchBalances, wrapSolInstructions, type Balances } from './wallet';
 
 /**
@@ -22,7 +22,7 @@ import { fetchBalances, wrapSolInstructions, type Balances } from './wallet';
  */
 
 export interface ProvisionPlan {
-  assets: AssetId[];
+  assets: string[];
   budgetLamports: number;
   /** Raw deposit per asset id. */
   deposits: Record<string, number>;
@@ -34,17 +34,17 @@ export interface FundPlan {
   deposits: Record<string, number>;
 }
 
-export function vaultAta(vault: PublicKey, id: AssetId): PublicKey {
+export function vaultAta(vault: PublicKey, id: string): PublicKey {
   return getAssociatedTokenAddressSync(mintOf(id), vault);
 }
 
-export function walletAta(wallet: PublicKey, id: AssetId): PublicKey {
+export function walletAta(wallet: PublicKey, id: string): PublicKey {
   return getAssociatedTokenAddressSync(mintOf(id), wallet);
 }
 
 function depositInstructions(
   wallet: Keypair,
-  destAta: (id: AssetId) => PublicKey,
+  destAta: (id: string) => PublicKey,
   deposits: Record<string, number>,
 ): Transaction['instructions'] {
   const ix: Transaction['instructions'] = [];
@@ -144,7 +144,7 @@ export function buildWithdrawTx(
  * for its whole asset set (rent recovered), and sweep the remaining
  * automation budget back to the wallet. Assets move first; cleanup follows.
  */
-export function buildCloseTx(wallet: Keypair, vault: Keypair, bal: Balances, assets: AssetId[]): Transaction {
+export function buildCloseTx(wallet: Keypair, vault: Keypair, bal: Balances, assets: string[]): Transaction {
   const tx = new Transaction();
   for (const id of assets) {
     const out = bal.tokens[id] ?? 0;
@@ -179,7 +179,7 @@ export async function fetchVaultBalances(vault: Keypair): Promise<Balances> {
 /* ---------------- weight math (pure) ---------------- */
 
 export interface AssetRow {
-  assetId: AssetId;
+  assetId: string;
   raw: number;
   usd: number;
   pct: number;
@@ -195,9 +195,9 @@ export function computeAssetRows(
   prices: Record<string, number>,
   order?: readonly string[],
 ): { rows: AssetRow[]; totalUsd: number } {
-  const ids: AssetId[] = [];
+  const ids: string[] = [];
   for (const id of order ?? []) {
-    if (isAssetId(id) && !ids.includes(id)) ids.push(id);
+    if (knownAsset(id) && !ids.includes(id)) ids.push(id);
   }
   for (const spec of assetList()) {
     if ((tokens[spec.id] ?? 0) > 0 && !ids.includes(spec.id)) ids.push(spec.id);
@@ -230,9 +230,9 @@ export function maxDriftPct(rows: AssetRow[], targets: Record<string, number>): 
 
 export interface TradePlan {
   /** Asset the vault sells (overweight side). */
-  inAsset: AssetId;
+  inAsset: string;
   /** Asset the vault buys (underweight side). */
-  outAsset: AssetId;
+  outAsset: string;
   inRaw: number;
   usdValue: number;
 }
@@ -249,7 +249,7 @@ export function planRebalance(
   prices: Record<string, number>,
   maxTrades = 8,
 ): TradePlan[] {
-  const assetIds = Object.keys(targets).filter(isAssetId);
+  const assetIds = Object.keys(targets).filter(knownAsset);
   const vals: Record<string, number> = {};
   let total = 0;
   for (const id of assetIds) {
@@ -267,8 +267,8 @@ export function planRebalance(
   const holdings = { ...tokens };
   const trades: TradePlan[] = [];
   for (let round = 0; round < maxTrades; round++) {
-    let buyId: AssetId | null = null;
-    let sellId: AssetId | null = null;
+    let buyId: string | null = null;
+    let sellId: string | null = null;
     for (const id of assetIds) {
       if (deltas[id] > 0.01 && (buyId === null || deltas[id] > deltas[buyId])) buyId = id;
       if (deltas[id] < -0.01 && (sellId === null || deltas[id] < deltas[sellId])) sellId = id;

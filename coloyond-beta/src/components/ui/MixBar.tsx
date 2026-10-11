@@ -27,7 +27,7 @@ export function MixBar({
       aria-label={
         ariaLabel ??
         `Mix: ${segments
-          .map((s) => `${assetSpec(s.key as AssetId).symbol} ${Math.min(100, Math.max(0, s.pct)).toFixed(0)}%`)
+          .map((s) => `${assetSpec(s.key).symbol} ${Math.min(100, Math.max(0, s.pct)).toFixed(0)}%`)
           .join(', ')}`
       }
       className={`relative w-full overflow-visible border border-ink bg-pulp-shade ${className}`}

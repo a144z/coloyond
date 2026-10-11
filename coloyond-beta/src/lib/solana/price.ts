@@ -1,16 +1,19 @@
 import { assetList } from './assets';
+import { fetchCoinbaseStats } from './coinbase';
 
 /**
- * The price book: one live observation covering every tradable asset.
+ * The price book: one live observation covering every registered asset —
+ * the core four and the whole Coinbase universe.
  *
  * The product design requires a real observation with an age limit:
  * "The required price is older than the configured limit. Automation cannot
  * exchange tokens using that observation."
  *
- * Per asset: Coinbase spot is primary (CORS-open, US reachable), Binance
- * spot ticker is the fallback. tUSD is fixed $1 (synthetic dollar). If both
- * feeds fail for an asset, its entry is null and any trade involving it is
- * blocked by design.
+ * Pricing, in order: one batched Coinbase Exchange stats call covers every
+ * USD pair in the universe; the per-asset Coinbase spot endpoint and the
+ * Binance spot ticker backfill anything the batch is missing; tUSD is fixed
+ * $1 (synthetic dollar). If all feeds fail for an asset, its entry is null
+ * and any trade involving it is blocked by design.
  */
 
 export type PriceSource = 'coinbase' | 'binance' | 'fixed';
@@ -62,10 +65,15 @@ export function assetsPriced(book: PriceBook | null, assetIds: string[], maxAgeM
 export async function fetchPriceBook(): Promise<PriceBook> {
   const observedAt = Date.now();
   const specs = assetList();
+  const stats = await fetchCoinbaseStats();
   const entries = await Promise.all(
     specs.map(async (spec) => {
       if (spec.priceSymbol === null) {
         return [spec.id, { usd: 1, source: 'fixed' as const }] as const;
+      }
+      const statsMid = stats?.[spec.priceSymbol];
+      if (statsMid !== undefined) {
+        return [spec.id, { usd: statsMid, source: 'coinbase' as const }] as const;
       }
       const e = (await tryCoinbase(spec.priceSymbol)) ?? (spec.binanceSymbol ? await tryBinance(spec.binanceSymbol) : null);
       return [spec.id, e] as const;

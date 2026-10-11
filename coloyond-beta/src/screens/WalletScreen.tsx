@@ -105,14 +105,17 @@ export function WalletScreen() {
               <KeyValue
                 rows={[
                   { k: 'SOL · unwrapped', v: `${fmtSol(balances.solLamports, 6)}` },
-                  ...assetList().map((spec) => ({
-                    k: (
-                      <span className="flex items-center gap-2">
-                        <AssetSwatch color={spec.color} /> {spec.symbol}
-                      </span>
-                    ),
-                    v: fmtToken(balances.tokens[spec.id] ?? 0, spec.decimals, 6),
-                  })),
+                  // core assets always; extended assets only when actually held
+                  ...assetList()
+                    .filter((spec) => spec.core || (balances.tokens[spec.id] ?? 0) > 0)
+                    .map((spec) => ({
+                      k: (
+                        <span className="flex items-center gap-2">
+                          <AssetSwatch color={spec.color} /> {spec.symbol}
+                        </span>
+                      ),
+                      v: fmtToken(balances.tokens[spec.id] ?? 0, spec.decimals, 6),
+                    })),
                   { k: 'Total value', v: solValue !== null ? fmtUsd(solValue) : '—' },
                 ]}
               />
@@ -251,6 +254,7 @@ export function WalletScreen() {
               <StatusSwatch tone="petrol" />
               Reserve holds{' '}
               {assetList()
+                .filter((spec) => spec.core || (reserve.tokens[spec.id] ?? 0) > 0)
                 .map((spec) => `${fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2)} ${spec.symbol}`)
                 .join(' · ')}
             </p>

@@ -12,6 +12,7 @@ import {
   PRICE_POLL_MS,
   RESERVE_POLL_MS,
   RPC_POLL_MS,
+  UNIVERSE_POLL_MS,
 } from './solana/config';
 
 /**
@@ -25,6 +26,7 @@ const inFlightVaults = new Set<string>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let ticking = false;
 let lastPriceFetch = 0;
+let lastUniverseFetch = 0;
 let lastBalanceFetch = 0;
 let lastReserveFetch = 0;
 let lastRpcFetch = 0;
@@ -65,6 +67,10 @@ async function tick(): Promise<void> {
     if (now - lastPriceFetch >= PRICE_POLL_MS) {
       lastPriceFetch = now;
       void st.refreshPrice();
+    }
+    if (now - lastUniverseFetch >= UNIVERSE_POLL_MS) {
+      lastUniverseFetch = now;
+      void st.refreshUniverse();
     }
     if (now - lastRpcFetch >= RPC_POLL_MS) {
       lastRpcFetch = now;

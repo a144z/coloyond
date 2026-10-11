@@ -280,8 +280,9 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            Network execution costs are separate from token fees. Reserve inventory is shared and
-            finite; below 0.002 SOL the vault halts trades instead of trapping assets.
+            Network execution costs are separate from token fees. Synthetic reserve inventory is
+            minted on demand; WSOL inventory is finite. Below 0.002 SOL the vault halts trades
+            instead of trapping assets.
           </p>
         </LedgerPanel>
       </div>
@@ -587,8 +588,8 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
   const changed = JSON.stringify(nextTargets) !== JSON.stringify(vault.targets);
   const nextLabel =
     Object.entries(nextTargets)
-      .filter(([, pct]) => pct > 0)
-      .map(([id, pct]) => `${pct.toFixed(0)} ${assetSpec(id as AssetId).symbol}`)
+      .filter(([, pct]) => (pct ?? 0) > 0)
+      .map(([id, pct]) => `${(pct ?? 0).toFixed(0)} ${assetSpec(id).symbol}`)
       .join(' / ') || '—';
 
   return (

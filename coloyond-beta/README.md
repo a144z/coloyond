@@ -7,8 +7,9 @@ weights, and let scheduled execution maintain the allocation with real
 on-chain transactions. Mobile-first React app (430px lacquerboard column),
 built to wrap into an Android app via Capacitor.
 
-Everything shown in the UI comes from the live devnet RPC and a live
-SOL/USD price feed — there is no sample data anywhere.
+Everything shown in the UI comes from the live devnet RPC, the live Coinbase
+price feed, and the live Coinbase asset list — there is no sample data
+anywhere.
 
 ---
 
@@ -89,7 +90,9 @@ src/
       derivation.ts         SLIP-0010 ed25519 (hand-rolled, browser-clean)
       wallet.ts             Mnemonic lifecycle, balances, wrap, faucet
       connection.ts         Shared Connection, explorer URLs, RPC health
-      price.ts              Coinbase spot → Binance fallback, age → status
+      price.ts              Batched Coinbase stats pricing → per-asset spot
+                            → Binance fallback, age → status
+      coinbase.ts           The listed-asset universe: discovery + batched mids
       tx.ts                 Blockhash sign/send/confirm, readable tx errors
       reserve.ts            Funded counterparty: inventory, curve quotes,
                             atomic two-transfer swaps, mint/bootstrap
@@ -144,6 +147,17 @@ and pays their fees from its own budget.
   staleness gate (60s) is enforced before any automated trade.
 - **tUSD is synthetic.** Six decimals, fixed address, mint authority = the
   demo reserve. Not backed by dollars, not redeemable as USDC.
+- **The asset universe is Coinbase's full list.** The core assets (WSOL,
+  tUSD, tBTC, tETH) ship with pre-generated devnet keys; every other
+  Coinbase listing with a live USD market joins at runtime as its own
+  devnet stand-in — decimals fixed at 8, mint address derived
+  deterministically from the reserve secret. Picking Bitcoin trades the
+  demo's tBTC rails; USDC/USDT/DAI map to the demo dollar. Prices are real
+  Coinbase mids; the tokens are stand-ins, not redeemable.
+- **Synthetic reserve inventory is minted on demand.** When a trade wants
+  more of a stand-in than the reserve holds, the reserve mints the shortfall
+  first (a real devnet transaction, same unlimited-faucet reality as tUSD).
+  WSOL inventory is finite and still blocks for real.
 
 ## Production migration sketch
 

@@ -12,6 +12,7 @@ import { Sheet } from '../components/ui/Sheet';
 import { Field, inputClass, selectClass } from '../components/ui/Field';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
+import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
 
 const cadenceLabels: Record<number, string> = {
   75: 'Every 75 seconds · demo cadence',
@@ -38,6 +39,7 @@ export function CreateVault() {
   const [budget, setBudget] = useState('0.05');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -142,11 +144,18 @@ export function CreateVault() {
         <WeightSliders shares={shares} onChange={setShares} />
       </LedgerPanel>
 
+      <div className="mt-2.5">
+        <Button variant="secondary" full onClick={() => setPickerOpen(true)}>
+          Add asset · search the full Coinbase list
+        </Button>
+      </div>
+
       <div className="mt-4">
         <Notice tone="brass">
-          Test USD, Test BTC and Test ETH are synthetic devnet assets. Their prices are live market
-          mids (or fixed $1 for tUSD); their supply is minted by the demo reserve. They are not
-          redeemable for real dollars, BTC or ETH.
+          Every asset here trades as a devnet stand-in. Test USD, Test BTC and Test ETH ship with
+          the demo; anything added from the Coinbase list gets its own stand-in mint, created by
+          the reserve on setup. Prices are live Coinbase mids (fixed $1 for tUSD) — none of it is
+          redeemable for the real asset.
         </Notice>
       </div>
 
@@ -294,6 +303,7 @@ export function CreateVault() {
           <ul className="mt-2 space-y-1.5 text-[11.5px] leading-relaxed text-iron">
             <li>· Generates a separate vault custody keypair on this device.</li>
             <li>· Creates the vault's token accounts for all {selected.length} selected assets.</li>
+            <li>· Creates a devnet stand-in mint for any Coinbase-listed pick that lacks one.</li>
             <li>· Moves the fee budget and every deposit in one atomic transfer.</li>
             <li>· Counterparty for future swaps: the funded devnet reserve (spread 0.30% + curve fee, capped at 3.00%).</li>
             <li>· Scheduler: in-app stand-in. It signs with the vault key while the app is open.</li>
@@ -315,6 +325,15 @@ export function CreateVault() {
           </Notice>
         </div>
       </Sheet>
+
+      <AssetPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        exclude={selectedIds}
+        onSelect={(id) => {
+          setShares((prev) => ((prev[id] ?? 0) > 0 ? prev : { ...prev, [id]: 8 }));
+        }}
+      />
     </Screen>
   );
 }

@@ -11,7 +11,7 @@ import {
 import { base58 } from '@scure/base';
 import { connection } from './connection';
 import { assertDemoKeys, keysJson } from './demo-keys';
-import { SYNTHETIC_ASSET_IDS, assetList, assetSpec, mintOf, type AssetId } from './assets';
+import { SYNTHETIC_ASSET_IDS, assetList, assetSpec, extendedMintKeypair, mintOf, type AssetId } from './assets';
 import {
   CURVE_BASE_PCT,
   CURVE_CAP_PCT,
@@ -57,9 +57,13 @@ export interface SwapQuote {
 }
 
 export class ReserveInventoryError extends Error {
-  constructor(needed: string, available: string) {
+  /** Raw units of the requested out asset the reserve was short. */
+  readonly neededRaw: number;
+
+  constructor(needed: string, available: string, neededRaw: number) {
     super(`reserve inventory insufficient: needs ${needed}, holds ${available}`);
     this.name = 'ReserveInventoryError';
+    this.neededRaw = neededRaw;
   }
 }
 
@@ -77,7 +81,9 @@ export function mintKeypair(id: AssetId): Keypair {
   let kp = mintKeyCache.get(id);
   if (!kp) {
     const mk = keysJson.mints[id];
-    kp = Keypair.fromSecretKey(base58.decode(mk.secretB58));
+    // Core synthetics use the pre-generated keys; extended Coinbase assets
+    // derive the same stand-in mint every device computes for that id.
+    kp = mk ? Keypair.fromSecretKey(base58.decode(mk.secretB58)) : extendedMintKeypair(id);
     mintKeyCache.set(id, kp);
   }
   return kp;
@@ -141,6 +147,7 @@ export function quoteSwap(params: {
     throw new ReserveInventoryError(
       `${fmtRaw(outRaw, outSpec.decimals)} ${outSpec.symbol} out`,
       `${fmtRaw(reserveOutRaw, outSpec.decimals)} ${outSpec.symbol}`,
+      outRaw - reserveOutRaw,
     );
   }
 
@@ -188,6 +195,14 @@ export function buildSwapTransaction(owner: Keypair, quote: SwapQuote): Transact
   return tx;
 }
 
+/**
+ * Atomic swap driven end-to-end: quote, on-demand inventory, transaction.
+ *
+ * Synthetic inventory is minted on demand when a trade wants more of an
+ * out asset than the reserve holds (devnet stand-ins have an unlimited
+ * faucet by design). WSOL inventory is real wrapped SOL and stays finite:
+ * a genuine inventory block there.
+ */
 export async function executeReserveSwap(params: {
   owner: Keypair;
   inAsset: AssetId;
@@ -195,8 +210,18 @@ export async function executeReserveSwap(params: {
   inRaw: number;
   prices: Record<string, number>;
 }): Promise<{ result: TxResult; quote: SwapQuote }> {
-  const reserve = await fetchReserveState();
-  const quote = quoteSwap({ ...params, reserve });
+  let reserve = await fetchReserveState();
+  let quote: SwapQuote;
+  try {
+    quote = quoteSwap({ ...params, reserve });
+  } catch (err) {
+    const short = err instanceof ReserveInventoryError ? err.neededRaw : 0;
+    if (short <= 0 || !assetSpec(params.outAsset).synthetic) throw err;
+    await ensureMint(params.outAsset);
+    await mintToReserve(params.outAsset, short);
+    reserve = await fetchReserveState();
+    quote = quoteSwap({ ...params, reserve });
+  }
   const tx = buildSwapTransaction(params.owner, quote);
   const result = await signSendConfirm(tx, [params.owner, reserveKeypair()]);
   return { result, quote };
