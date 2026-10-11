@@ -6,7 +6,7 @@ use coloyond_etf_identity::EtfPoolConfigV1;
 use super::InitializePool;
 use crate::{
     account_validation::{create_pda_account, save_program_account, unpack_mint},
-    config::decode_inert_config,
+    config::decode_supported_config,
     errors::EtfError,
     pda,
     state::{
@@ -20,7 +20,7 @@ pub fn initialize_pool<'info>(
     config_hash: [u8; 32],
     config_bytes: Vec<u8>,
 ) -> Result<()> {
-    let config: EtfPoolConfigV1 = decode_inert_config(&config_bytes)?;
+    let config: EtfPoolConfigV1 = decode_supported_config(&config_bytes)?;
     let computed_hash = config
         .config_hash()
         .map_err(|_| error!(EtfError::InvalidConfig))?;

@@ -28,6 +28,12 @@ const SOL_USD_FEED_ID = Buffer.from("ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c
 const USDC_USD_FEED_ID = Buffer.from("eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a", "hex");
 const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 const ZERO32 = Buffer.alloc(32);
+const DEVNET_PROFILE_FEE_POLICY_ID = Buffer.from("a4d6a53f3e088f435965c8e032346a018ac908a775398cfb714e94412b79edb1", "hex");
+const DEVNET_PROFILE_RISK_POLICY_ID = Buffer.from("da9f6b20a4ece49e997acf4095760f153985487f8365029b51d861c8ff3ff2a8", "hex");
+const DEVNET_PROFILE_MINTS = [
+  new PublicKey("So11111111111111111111111111111111111111112"),
+  new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+];
 
 function u16(value) {
   const buffer = Buffer.alloc(2);
@@ -67,7 +73,7 @@ function encodeAsset({ mint, decimals, oracleMode, oracleAccount, feedId, weight
   ]);
 }
 
-function encodeConfig({ mints, governance, guardian, invalidFirstFeed = false }) {
+function encodeConfig({ mints, governance, guardian, invalidFirstFeed = false, devnetProfile = false }) {
   const assets = [
     {
       mint: mints[0].publicKey,
@@ -90,9 +96,9 @@ function encodeConfig({ mints, governance, guardian, invalidFirstFeed = false })
     Buffer.from([1]),
     u32(assets.length),
     ...assets.map(encodeAsset),
-    u16(0), // Draft math version.
-    ZERO32, u32(0), // Unconfigured fee schema.
-    ZERO32, u32(0), // Unconfigured risk schema.
+    u16(devnetProfile ? 1 : 0), // Math v1 for the exact Devnet test profile; zero remains inert draft fixture.
+    devnetProfile ? DEVNET_PROFILE_FEE_POLICY_ID : ZERO32, u32(0),
+    devnetProfile ? DEVNET_PROFILE_RISK_POLICY_ID : ZERO32, u32(0),
     governance.toBuffer(),
     guardian.toBuffer(),
     u64(86_400),
@@ -163,6 +169,28 @@ function tokenAccountData(mint, owner, amount) {
   data.writeBigUInt64LE(BigInt(amount), 64);
   data[108] = 1;
   return data;
+}
+
+function pythPriceUpdateData(feedId, publishTime, price = 100_000_000, confidence = 1_000) {
+  const discriminator = accountDiscriminator("PriceUpdateV2");
+  const message = Buffer.alloc(32 + 8 + 8 + 4 + 8 + 8 + 8 + 8);
+  feedId.copy(message, 0);
+  message.writeBigInt64LE(BigInt(price), 32);
+  message.writeBigUInt64LE(BigInt(confidence), 40);
+  message.writeInt32LE(-8, 48);
+  message.writeBigInt64LE(BigInt(publishTime), 52);
+  message.writeBigInt64LE(BigInt(publishTime - 1), 60);
+  message.writeBigInt64LE(BigInt(price), 68);
+  message.writeBigUInt64LE(BigInt(confidence), 76);
+  const body = Buffer.concat([
+    Keypair.generate().publicKey.toBuffer(),
+    Buffer.from([1]), // VerificationLevel::Full.
+    message,
+    u64(1), // posted_slot
+  ]);
+  const data = Buffer.concat([discriminator, body]);
+  ensure(data.length <= 134, `Pyth PriceUpdateV2 fixture exceeds its known allocation: ${data.length}`);
+  return Buffer.concat([data, Buffer.alloc(134 - data.length)]);
 }
 
 function poolAccountData(config, pdas, initializer) {
@@ -250,6 +278,17 @@ function prepareGenesisFixture(directory, manifestPath, walletPath) {
     files.push(writeGenesisAccount(directory, assetState, PROGRAM_ID, assetStateData(pdas.pool, index, assetBump)));
     files.push(writeGenesisAccount(directory, userTokens[index], TOKEN_PROGRAM_ID, tokenAccountData(mints[index].publicKey, payer.publicKey, userAmounts[index])));
   }
+  const profilePublishTime = Math.floor(Date.now() / 1000);
+  for (let index = 0; index < DEVNET_PROFILE_MINTS.length; index += 1) {
+    files.push(writeGenesisAccount(
+      directory,
+      DEVNET_PROFILE_MINTS[index],
+      TOKEN_PROGRAM_ID,
+      tokenMintData(payer.publicKey, 0, index === 0 ? 9 : 6),
+    ));
+  }
+  files.push(writeGenesisAccount(directory, SOL_USD_ACCOUNT, PYTH_RECEIVER_PROGRAM_ID, pythPriceUpdateData(SOL_USD_FEED_ID, profilePublishTime)));
+  files.push(writeGenesisAccount(directory, USDC_USD_ACCOUNT, PYTH_RECEIVER_PROGRAM_ID, pythPriceUpdateData(USDC_USD_FEED_ID, profilePublishTime)));
   fs.writeFileSync(walletPath, JSON.stringify(Array.from(payer.secretKey)), { mode: 0o600 });
   fs.chmodSync(walletPath, 0o600);
   fs.writeFileSync(manifestPath, JSON.stringify({
@@ -268,6 +307,7 @@ function prepareGenesisFixture(directory, manifestPath, walletPath) {
     initialUserTokens: userAmounts.map(String),
     initialShareSupply: String(userShareAmount + otherShareAmount),
     initialUserShares: String(userShareAmount),
+    devnetProfilePublishTime: profilePublishTime,
     fixtureFiles: files,
   }, null, 2));
   fs.chmodSync(manifestPath, 0o600);
@@ -425,6 +465,20 @@ function pauseRiskInstruction({ guardian, pool, poolState, shareMint, authority 
       { pubkey: authority, isSigner: false, isWritable: false },
     ],
     data: instructionDiscriminator("pause_risk"),
+  });
+}
+
+function pokeInstruction({ caller, pool, poolState, oracleFeeds }) {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: caller.publicKey, isSigner: true, isWritable: false },
+      { pubkey: pool, isSigner: false, isWritable: false },
+      { pubkey: poolState, isSigner: false, isWritable: true },
+      ...oracleFeeds.map((pubkey) => ({ pubkey, isSigner: false, isWritable: false })),
+      { pubkey: PROGRAM_ID, isSigner: false, isWritable: false }, // Optional feed 2 sentinel.
+    ],
+    data: instructionDiscriminator("poke"),
   });
 }
 
@@ -753,6 +807,51 @@ async function main() {
   const stateAfterSeed = await connection.getAccountInfo(pdas.poolState, "confirmed");
   ensure(stateAfterSeed && stateAfterSeed.data.equals(stateAccount.data), "Rejected seed changed pool state");
 
+  const profileGovernance = Keypair.generate().publicKey;
+  let profileGuardian = Keypair.generate().publicKey;
+  while (profileGuardian.equals(profileGovernance)) profileGuardian = Keypair.generate().publicKey;
+  const profileMints = DEVNET_PROFILE_MINTS.map((publicKey) => ({ publicKey }));
+  const profileConfig = encodeConfig({
+    mints: profileMints,
+    governance: profileGovernance,
+    guardian: profileGuardian,
+    devnetProfile: true,
+  });
+  const profilePdas = derivePdas(profileConfig.hash);
+  const profileInitReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(initInstruction(profileConfig, profilePdas, profileMints, payer)),
+  );
+  const [profilePoolAccount, profileStateAccount] = await connection.getMultipleAccountsInfo(
+    [profilePdas.pool, profilePdas.poolState],
+    "confirmed",
+  );
+  ensure(profilePoolAccount && profileStateAccount, "Exact Devnet test-profile initialization did not create its pool state");
+  parsePool(profilePoolAccount, profileConfig, profilePdas, payer);
+  parseState(profileStateAccount, profilePdas);
+  const profileFeedAccounts = await connection.getMultipleAccountsInfo(
+    [SOL_USD_ACCOUNT, USDC_USD_ACCOUNT],
+    "confirmed",
+  );
+  ensure(profileFeedAccounts.every((account) => account && account.owner.equals(PYTH_RECEIVER_PROGRAM_ID) && account.data.length === 134), "Synthetic Pyth profile fixtures do not match Receiver ownership/allocation");
+  const profileStateBeforePoke = profileStateAccount.data;
+  const profilePokeReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(pokeInstruction({
+      caller: payer,
+      pool: profilePdas.pool,
+      poolState: profilePdas.poolState,
+      oracleFeeds: [SOL_USD_ACCOUNT, USDC_USD_ACCOUNT],
+    })),
+    [],
+    "error",
+  );
+  ensure(customErrorCode(profilePokeReceipt.error) === 6002, `Fresh Full profile feeds did not pass validation to the fail-closed policy gate: ${JSON.stringify(profilePokeReceipt.error)}`);
+  const profileStateAfterPoke = await connection.getAccountInfo(profilePdas.poolState, "confirmed");
+  ensure(profileStateAfterPoke && profileStateAfterPoke.data.equals(profileStateBeforePoke), "Eligibility-only poke changed state before its policy gate");
+
   const activePool = new PublicKey(fixture.pool);
   const activePoolState = new PublicKey(fixture.poolState);
   const activeShareMint = new PublicKey(fixture.shareMint);
@@ -889,8 +988,24 @@ async function main() {
     shareMint: pdas.shareMint.toBase58(),
     custody: pdas.custodies.map((address) => address.toBase58()),
     assetState: pdas.assetStates.map((address) => address.toBase58()),
-    successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, createShareAtaReceipt, depositReceipt, pauseReceipt, redeemReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
-    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, lateInitReceipt, duplicateInitReceipt, seedReceipt, failedDepositReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, profileInitReceipt, createShareAtaReceipt, depositReceipt, pauseReceipt, redeemReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
+    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, lateInitReceipt, duplicateInitReceipt, seedReceipt, profilePokeReceipt, failedDepositReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    devnetTestProfileOraclePreflight: {
+      disclaimer: "Exact test-profile mint/feed identities and SDK-compatible Pyth PriceUpdateV2 data were synthetic genesis accounts owned by the Pyth Receiver address on Localnet. This does not prove authentic Devnet oracle updates or policy approval.",
+      pool: profilePdas.pool.toBase58(),
+      poolState: profilePdas.poolState.toBase58(),
+      feedAccounts: [SOL_USD_ACCOUNT, USDC_USD_ACCOUNT].map((address) => address.toBase58()),
+      publishTime: fixture.devnetProfilePublishTime,
+      feePolicyId: DEVNET_PROFILE_FEE_POLICY_ID.toString("hex"),
+      riskPolicyId: DEVNET_PROFILE_RISK_POLICY_ID.toString("hex"),
+      initializeSignature: profileInitReceipt.signature,
+      initializeSlot: profileInitReceipt.slot,
+      pokeSignature: profilePokeReceipt.signature,
+      pokeSlot: profilePokeReceipt.slot,
+      pokeError: profilePokeReceipt.error,
+      policyGateReachedAfterOracleValidation: customErrorCode(profilePokeReceipt.error) === 6002,
+      poolStateUnchanged: profileStateAfterPoke.data.equals(profileStateBeforePoke),
+    },
     syntheticActivePoolLifecycle: {
       disclaimer: "The Active pool and its reserves/share supply were injected into a disposable Localnet genesis. This proves the existing SPL lifecycle handlers against synthetic state only; it does not prove successful pool seed, a Devnet transaction, or a backed asset.",
       pool: activePool.toBase58(),
@@ -975,6 +1090,7 @@ async function main() {
       "Second asset-state PDA rejected after partial init allocations; transaction rollback removed all derived accounts, restored rent, and preserved token balances",
       "Duplicate initialization rejected with all existing account data unchanged",
       "Seed attempt rejected on incomplete Localnet oracle accounts; token/share balances and pool state unchanged",
+      "Exact Devnet test-profile config initialized on Localnet; synthetic Receiver-owned Full feeds passed on-chain identity, parser, freshness, confidence and exponent checks before the fail-closed PolicyNotFrozen gate",
       "Genesis-injected synthetic Active pool accepted a proportional SPL deposit with exact consumed/refund/share deltas",
       "Underfunded second SPL transfer failed and atomically rolled back the earlier transfer, share supply, and pool sequence",
       "Guardian pause confirmed, then in-kind redemption succeeded while risk-paused and preserved the pause",
