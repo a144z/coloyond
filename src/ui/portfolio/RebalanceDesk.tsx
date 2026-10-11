@@ -1,11 +1,13 @@
-// The Portfolio tab's rebalance desk: the drift check, editable targets, the
-// trade preview, and a simulated run that stands in for a keeper. Numbers
-// come from the pure engine in rebalance.ts; this file only draws them and
-// calls the desk's actions. A market-move button plays the part of prices,
-// and the fee reflow into the reserve follows the YieldBasis idea.
+// The Portfolio tab's rebalance desk: the drift check, an interactive
+// allocation editor, the trade preview, and a simulated run that stands in
+// for a keeper. Numbers come from the pure engine in rebalance.ts; this file
+// only draws them, drags them and calls the desk's actions. A market-move
+// button plays the part of prices, and the fee reflow into the reserve
+// follows the YieldBasis idea.
 import type * as React from "react";
+import { useRef, useState } from "react";
 import { DESK_STEPS, type RebalanceDeskView } from "./useRebalanceDesk.js";
-import { RESERVE_SHARE, fmtUsd } from "./rebalance.js";
+import { RESERVE_SHARE, fmtUsd, round1, sharesForSet, sharesForTransfer } from "./rebalance.js";
 
 function DeskSection({ area, index, title, children }: { area: string; index: string; title: string; children: React.ReactNode }) {
   return (
@@ -16,14 +18,167 @@ function DeskSection({ area, index, title, children }: { area: string; index: st
   );
 }
 
+// The percent text field keeps a local draft while typing, so mid-edit
+// values like an empty box never break the strict total; blur or Enter
+// commits through the engine's share algebra and the whole row resyncs.
+function TargetField({ desk, symbol, pct }: { desk: RebalanceDeskView; symbol: string; pct: number }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (raw: string) => {
+    setDraft(null);
+    const parsed = Number(raw);
+    if (raw.trim() !== "" && Number.isFinite(parsed)) {
+      for (const share of sharesForSet(desk.assets, symbol, parsed)) desk.setTarget(share.symbol, share.targetPct);
+    }
+  };
+  return (
+    <span className="cr-input-suffix">
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={100}
+        step={1}
+        aria-label={`Target percent for ${symbol}`}
+        value={draft ?? String(pct)}
+        onFocus={() => setDraft(String(pct))}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") setDraft(null);
+        }}
+      />
+      <span>%</span>
+    </span>
+  );
+}
+
+// The interactive allocation editor: one composite bar per basket with a
+// draggable handle on every boundary, ghosted live-allocation segments and
+// lines behind it, and per-asset slider and text field that all commit
+// through the same share algebra, so the shares always total 100%.
+function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ leftSymbol: string; rightSymbol: string; startX: number; startLeft: number; pair: number } | null>(null);
+  const total = Math.max(1, desk.targetsTotal);
+  const clampPct = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
+  let targetCursor = 0;
+  const targetBars = desk.assets.map((asset) => {
+    const width = (clampPct(asset.targetPct) / total) * 100;
+    targetCursor += width;
+    return { asset, width, end: targetCursor };
+  });
+  let liveCursor = 0;
+  const liveBars = desk.weights.map((weight, index) => {
+    const share = Math.min(100, Math.max(0, weight));
+    const start = liveCursor;
+    liveCursor += share;
+    return { symbol: desk.assets[index]?.symbol ?? `share-${index}`, start, end: liveCursor, color: desk.assets[index]?.color ?? "transparent" };
+  });
+  const commitShares = (shares: { symbol: string; targetPct: number }[]) => shares.forEach((share) => desk.setTarget(share.symbol, share.targetPct));
+  const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>, leftIndex: number) => {
+    const pairTotal = desk.assets[leftIndex].targetPct + desk.assets[leftIndex + 1].targetPct;
+    if (!barRef.current || pairTotal <= 0) return;
+    dragRef.current = {
+      leftSymbol: desk.assets[leftIndex].symbol,
+      rightSymbol: desk.assets[leftIndex + 1].symbol,
+      startX: event.clientX,
+      startLeft: desk.assets[leftIndex].targetPct,
+      pair: pairTotal,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    const bar = barRef.current;
+    if (!drag || !bar) return;
+    const rect = bar.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const current = desk.assets.find((asset) => asset.symbol === drag.leftSymbol)?.targetPct ?? 0;
+    const dragged = drag.startLeft + (((event.clientX - drag.startX) / rect.width) * 100);
+    const nextLeft = Math.max(0, Math.min(drag.pair, Math.round(dragged)));
+    if (nextLeft !== current) commitShares(sharesForTransfer(desk.assets, drag.leftSymbol, drag.rightSymbol, nextLeft));
+  };
+  const endPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragRef.current) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    dragRef.current = null;
+  };
+  const onBoundaryKey = (event: React.KeyboardEvent<HTMLButtonElement>, leftIndex: number) => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    commitShares(sharesForTransfer(desk.assets, desk.assets[leftIndex].symbol, desk.assets[leftIndex + 1].symbol, desk.assets[leftIndex].targetPct + step));
+  };
+  return (
+    <div className="cr-desk-allocation">
+      <div className="cr-desk-allocation-bar" ref={barRef}>
+        <div className="cr-desk-allocation-ghost" aria-hidden="true">
+          {liveBars.map((bar) => (bar.end > bar.start ? <span key={bar.symbol} data-allocation-ghost-segment={bar.symbol} style={{ left: `${bar.start}%`, width: `${Math.max(0, bar.end - bar.start)}%`, background: bar.color }} /> : null))}
+          {liveBars.slice(0, -1).map((bar) => (bar.end > 0 && bar.end < 100 ? <span key={`line-${bar.symbol}`} data-allocation-ghost-line={bar.symbol} style={{ left: `${bar.end}%` }} /> : null))}
+        </div>
+        {targetBars.map(({ asset, width }) => (
+          <span key={asset.symbol} data-allocation-segment={asset.symbol} title={`${asset.symbol} target ${asset.targetPct}%`} style={{ width: `${width}%`, background: asset.color }} />
+        ))}
+        {desk.assets.slice(0, -1).map((leftAsset, index) => {
+          const rightAsset = desk.assets[index + 1];
+          const pairTotal = leftAsset.targetPct + rightAsset.targetPct;
+          return (
+            <button
+              key={`${leftAsset.symbol}>${rightAsset.symbol}`}
+              className="cr-desk-allocation-handle"
+              data-allocation-handle={`${leftAsset.symbol}|${rightAsset.symbol}`}
+              type="button"
+              role="slider"
+              aria-label={`Drag to move share between ${leftAsset.symbol} and ${rightAsset.symbol}`}
+              aria-valuemin={0}
+              aria-valuemax={pairTotal}
+              aria-valuenow={leftAsset.targetPct}
+              aria-valuetext={`${leftAsset.symbol} ${leftAsset.targetPct}%, ${rightAsset.symbol} ${rightAsset.targetPct}%`}
+              style={{ left: `${targetBars[index].end}%` }}
+              onPointerDown={(event) => onPointerDown(event, index)}
+              onPointerMove={onPointerMove}
+              onPointerUp={endPointer}
+              onPointerCancel={endPointer}
+              onKeyDown={(event) => onBoundaryKey(event, index)}
+            />
+          );
+        })}
+      </div>
+      <div className="cr-desk-targets">
+        {desk.assets.map((asset, index) => {
+          const livePp = round1(Math.min(100, Math.max(0, desk.weights[index] ?? 0)) - asset.targetPct);
+          const shareTrack = `linear-gradient(to right, ${asset.color} 0%, ${asset.color} ${clampPct(asset.targetPct)}%, var(--field) ${clampPct(asset.targetPct)}%, var(--field) 100%)`;
+          return (
+            <label className="cr-desk-target" key={asset.symbol}>
+              <span className="cr-pt-dot" style={{ background: asset.color }} />
+              <span className="cr-desk-target-name"><strong>{asset.symbol}</strong><small>{asset.name} · {fmtUsd(asset.valueUsd)}</small></span>
+              <input
+                className="cr-desk-slider-input"
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={clampPct(asset.targetPct)}
+                style={{ "--cr-split-track": shareTrack } as React.CSSProperties}
+                aria-label={`Target slider for ${asset.symbol}`}
+                onChange={(event) => commitShares(sharesForSet(desk.assets, asset.symbol, Number(event.target.value)))}
+              />
+              <span className="cr-desk-target-delta">{livePp === 0 ? "on live" : `${livePp > 0 ? "+" : ""}${livePp} pp`}</span>
+              <TargetField desk={desk} symbol={asset.symbol} pct={asset.targetPct} />
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
   const running = desk.phase === "running";
   const atTarget = desk.plan.legs.length === 0;
   const targetsValid = desk.targetsTotal === 100;
   const driftBarWidth = Math.max(2, Math.min(100, desk.drift * 6));
-  const splitPair = desk.assets.length === 2 ? desk.assets : null;
-  const splitTotal = Math.max(1, desk.targetsTotal);
-  const splitShare = (targetPct: number) => (targetPct / splitTotal) * 100;
 
   return (
     <>
@@ -45,45 +200,7 @@ export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
           <p className="cr-desk-note">Basket at sample values: {fmtUsd(desk.totalUsd)}. The market-move button below moves the basket as prices would.</p>
         </DeskSection>
         <DeskSection area="cr-desk-targets-block" index="02" title="Target weights">
-          {splitPair !== null && (
-            <div className="cr-desk-split">
-              <div className="cr-desk-split-track" aria-hidden="true">
-                {splitPair.map((asset) => <span key={asset.symbol} title={`${asset.symbol} target ${asset.targetPct}%`} style={{ width: `${splitShare(asset.targetPct)}%`, background: asset.color }} />)}
-              </div>
-              <div className="cr-desk-split-legend" aria-hidden="true">
-                {splitPair.map((asset) => <span key={asset.symbol} style={{ color: asset.color }}>■ {asset.symbol} {Math.round(splitShare(asset.targetPct))}%</span>)}
-              </div>
-              <label className="cr-desk-slider">
-                <span>Slide to set the {splitPair[0].symbol} / {splitPair[1].symbol} split</span>
-                <input
-                  className="cr-desk-slider-input"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={Math.min(100, Math.max(0, splitPair[0].targetPct))}
-                  style={{ "--cr-split-track": `linear-gradient(to right, ${splitPair[0].color} 0%, ${splitPair[0].color} ${splitPair[0].targetPct}%, ${splitPair[1].color} ${splitPair[0].targetPct}%, ${splitPair[1].color} 100%)` } as React.CSSProperties}
-                  aria-label={`Target split percent for ${splitPair[0].symbol}`}
-                  onChange={(event) => {
-                    const leftPct = Number(event.target.value);
-                    desk.setTarget(splitPair[0].symbol, leftPct);
-                    desk.setTarget(splitPair[1].symbol, 100 - leftPct);
-                  }}
-                />
-                <output>{splitPair[0].symbol} {splitPair[0].targetPct}% · {splitPair[1].symbol} {splitPair[1].targetPct}%</output>
-              </label>
-              {!targetsValid && <p className="cr-desk-note">The bar and the slider read your values as shares of a {desk.targetsTotal}% total, so they stay proportional until you normalize.</p>}
-            </div>
-          )}
-          <div className="cr-desk-targets">
-            {desk.assets.map((asset) => (
-              <label className="cr-desk-target" key={asset.symbol}>
-                <span className="cr-pt-dot" style={{ background: asset.color }} />
-                <span className="cr-desk-target-name"><strong>{asset.symbol}</strong><small>{asset.name} · {fmtUsd(asset.valueUsd)}</small></span>
-                <span className="cr-input-suffix"><input type="number" inputMode="numeric" min={0} max={100} step={1} aria-label={`Target percent for ${asset.symbol}`} value={asset.targetPct} onChange={(event) => desk.setTarget(asset.symbol, Number(event.target.value))} /><span>%</span></span>
-              </label>
-            ))}
-          </div>
+          <AllocationEditor desk={desk} />
           <div className="cr-pt-total"><span>Targets total {targetsValid ? "exactly 100%" : `of ${desk.targetsTotal}%`}</span><strong>{desk.targetsTotal}%</strong></div>
           {!targetsValid && <p className="cr-error">Targets must total exactly 100% before the desk will swap. <button className="cr-pt-reset" onClick={desk.normalizeTargets}>normalize to 100</button></p>}
         </DeskSection>

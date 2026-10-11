@@ -161,3 +161,56 @@ export function normalizeTargets(assets: DeskAsset[]): DeskAsset[] {
   }
   return assets.map((asset, index) => ({ ...asset, targetPct: whole[index] }));
 }
+
+// Pure share algebra for the allocation editor. Every edit returns whole
+// percents summing to exactly 100, so the desk can never leave the strict
+// total: setting one share rescales the others with largest-remainder
+// rounding, and a boundary handle only trades between its two assets.
+export function sharesForSet(
+  shares: readonly { symbol: string; targetPct: number }[],
+  symbol: string,
+  nextPct: number,
+): { symbol: string; targetPct: number }[] {
+  const wanted = Number.isFinite(nextPct) ? Math.max(0, Math.min(100, Math.round(nextPct))) : 0;
+  const index = shares.findIndex((share) => share.symbol === symbol);
+  if (index < 0) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
+  const others = shares.filter((_, position) => position !== index);
+  const remaining = 100 - wanted;
+  const othersTotal = others.reduce((sum, share) => sum + share.targetPct, 0);
+  const scaled = others.map((share) => (othersTotal > 0 ? (share.targetPct * remaining) / othersTotal : remaining / Math.max(1, others.length)));
+  const whole = scaled.map(Math.floor);
+  let rest = remaining - whole.reduce((sum, value) => sum + value, 0);
+  const byFraction = scaled.map((value, position) => ({ position, fraction: value - Math.floor(value) })).sort((a, b) => b.fraction - a.fraction);
+  let at = 0;
+  while (rest > 0 && at < byFraction.length) {
+    whole[byFraction[at].position] += 1;
+    rest -= 1;
+    at += 1;
+  }
+  return shares.map((share, position) => ({
+    symbol: share.symbol,
+    targetPct: position === index ? wanted : whole[position > index ? position - 1 : position],
+  }));
+}
+
+// Moving a composite bar's boundary: the pair's combined share is fixed, so
+// every other asset keeps its share and the 100 total never moves.
+export function sharesForTransfer(
+  shares: readonly { symbol: string; targetPct: number }[],
+  leftSymbol: string,
+  rightSymbol: string,
+  nextLeftPct: number,
+): { symbol: string; targetPct: number }[] {
+  const left = shares.find((share) => share.symbol === leftSymbol);
+  const right = shares.find((share) => share.symbol === rightSymbol);
+  if (!left || !right) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
+  const pair = left.targetPct + right.targetPct;
+  const wanted = Number.isFinite(nextLeftPct) ? Math.max(0, Math.min(pair, Math.round(nextLeftPct))) : left.targetPct;
+  return shares.map((share) =>
+    share.symbol === leftSymbol
+      ? { symbol: share.symbol, targetPct: wanted }
+      : share.symbol === rightSymbol
+        ? { symbol: share.symbol, targetPct: pair - wanted }
+        : { symbol: share.symbol, targetPct: share.targetPct },
+  );
+}

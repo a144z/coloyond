@@ -485,15 +485,29 @@ a { color: inherit; }
   .cr-wallet-btn { min-height: 34px; padding: 0 12px; }
 }
 
-/* Rebalance desk: the split slider and its one-bar target composition. */
-.cr-desk-split { display: grid; gap: 8px; margin: 0 0 14px; }
-.cr-desk-split-track { display: flex; height: 14px; border: 1px solid var(--rule); border-radius: 7px; background: var(--canvas); overflow: hidden; }
-.cr-desk-split-track span { height: 100%; }
-.cr-desk-split-track span + span { border-left: 1px solid var(--paper); }
-.cr-desk-split-legend { display: flex; flex-wrap: wrap; gap: 14px; font: 11px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; }
-.cr-desk-slider { display: grid; gap: 5px; }
-.cr-desk-slider > span, .cr-desk-slider output { font: 10px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; color: var(--muted); }
-.cr-desk-slider-input { appearance: none; width: 100%; min-height: 44px; margin: 0; background: transparent; cursor: pointer; }
+/* Rebalance desk: the allocation editor's composite bar with draggable
+   boundary handles, the ghosted live-allocation overlay behind it, and the
+   per-asset sliders and delta readouts that sync with the percent fields. */
+.cr-desk-allocation { display: grid; gap: 12px; margin: 0 0 14px; }
+.cr-desk-allocation-bar { position: relative; display: flex; height: 26px; border: 1px solid var(--rule); border-radius: 7px; background: var(--canvas); }
+.cr-desk-allocation-bar > span[data-allocation-segment] { height: 100%; }
+.cr-desk-allocation-bar > span[data-allocation-segment] + span[data-allocation-segment] { border-left: 1px solid var(--paper); }
+.cr-desk-allocation-ghost { position: absolute; inset: 0; z-index: 1; opacity: 0.16; pointer-events: none; border-radius: inherit; overflow: hidden; }
+.cr-desk-allocation-ghost > span[data-allocation-ghost-segment] { position: absolute; top: 0; height: 100%; }
+.cr-desk-allocation-ghost > span[data-allocation-ghost-line] { position: absolute; top: -3px; height: 32px; border-left: 1px dashed var(--ink); }
+.cr-desk-allocation-handle { position: absolute; top: -6px; z-index: 2; width: 20px; height: 38px; margin: 0; padding: 0; transform: translateX(-50%); border: none; background: transparent; cursor: col-resize; touch-action: none; }
+.cr-desk-allocation-handle::before { content: ""; position: absolute; inset: 5px 7px; border: 1px solid var(--ink); border-radius: 4px; background: var(--paper); box-shadow: 0 0 0 2px var(--paper); }
+.cr-desk-allocation-handle:hover::before, .cr-desk-allocation-handle:focus-visible::before { background: var(--blue); border-color: var(--blue); }
+.cr-desk-allocation-handle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.cr-desk-target-delta { font: 11px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; color: var(--muted); white-space: nowrap; }
+.cr-desk-allocation .cr-desk-target { grid-template-columns: auto minmax(0, 1fr) minmax(140px, 2fr) auto auto; }
+@media (width <= 720px) {
+  .cr-desk-allocation .cr-desk-target { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .cr-desk-allocation .cr-desk-target .cr-desk-slider-input { grid-column: 1 / -1; }
+  .cr-desk-allocation .cr-desk-target .cr-desk-target-delta { grid-column: 2; }
+  .cr-desk-allocation .cr-desk-target .cr-input-suffix { grid-column: 3; grid-row: 1; }
+}
+.cr-desk-slider-input { appearance: none; flex: 1 1 140px; width: 100%; min-height: 44px; margin: 0; background: transparent; cursor: pointer; }
 .cr-desk-slider-input::-webkit-slider-runnable-track { height: 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--cr-split-track, var(--field)); }
 .cr-desk-slider-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border: 1px solid var(--ink); border-radius: 50%; background: var(--paper); }
 .cr-desk-slider-input::-moz-range-track { height: 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--cr-split-track, var(--field)); }
