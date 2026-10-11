@@ -31,6 +31,21 @@ All three passed only the diagnostic 60-second age check and permissive `u16::MA
 
 The Devnet basket failed the diagnostic 60-second age check on all three feeds. The Mainnet and Devnet observations were taken several minutes apart, so they are not a synchronized cross-cluster price comparison.
 
+## Follow-up finalized observation
+
+A second read was captured at 2026-10-11 01:49 UTC to check whether the prior Mainnet freshness result repeated and whether Devnet recovered. Replayable captures: [Mainnet-beta slot 455475245](../../../tools/rebalancing/etf-oracle-probe/snapshots/mainnet-beta-finalized-455475245-20261011T014914.291764Z.json), read at slot time `1791683346` (`2026-10-11 01:49:06 UTC`), and [Devnet slot 509741455](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-finalized-509741455-20261011T014915.779001Z.json), read at slot time `1791683354` (`2026-10-11 01:49:14 UTC`). Both were finalized and decoded through the same pinned SDK.
+
+| Cluster | Feed | Price ± confidence × 10^exponent | Publish age | Confidence | Diagnostic age check | Data SHA-256 |
+|---|---|---:|---:|---:|---|---|
+| Mainnet-beta | SOL/USD | `11003125948 ± 3361120`, exponent `-8` | 42 s | 4 bps | pass | `8e7388721d5dbc4ca619b24b7012ffcb869b2bc94f3fd2dce98dd7f221142d0f` |
+| Mainnet-beta | BTC/USD | `8294930625149 ± 6819522542`, exponent `-8` | 42 s | 9 bps | pass | `ba03b4b09a88eadc7177c8b9de1a761bbf6c46989d3609918a6c9ccba687e038` |
+| Mainnet-beta | USDC/USD | `99986057 ± 97342`, exponent `-8` | 42 s | 10 bps | pass | `67d670544078514c92c80da5453f115d0635d783d5f3fa4a24662a9ddc7202bd` |
+| Devnet | SOL/USD | `11000939454 ± 4555046`, exponent `-8` | 310 s | 5 bps | fail: stale | `73fe2200084043ed39c346cb19c793dd9f0a15b3ab4d34415fcb61708762f824` |
+| Devnet | BTC/USD | `8293832013480 ± 7228138354`, exponent `-8` | 310 s | 9 bps | fail: stale | `edcc67e3713785b7a83bd41fba10d804819038556a22f9c8702161c2993d6e64` |
+| Devnet | USDC/USD | `99987522 ± 87478`, exponent `-8` | 310 s | 9 bps | fail: stale | `c6e76e0d33703776afeb49a188c6a14a16373d527aab8145b4be7fa2ecec3e7c` |
+
+This second sample again found the entire Mainnet basket within the diagnostic age ceiling and the entire Devnet basket stale. Two point observations on Mainnet and repeated stale Devnet observations still do not establish a freshness service-level guarantee, an approved risk ceiling, or feed-publisher/operator independence.
+
 ## Limits and remaining admission work
 
 These snapshots show that the pinned account addresses exist and decode correctly at finalized commitment on both clusters. They do not establish continued feed delivery, two independent pusher operators, accepted confidence/exponent/freshness limits, USDC redemption/backing, a live ETF consumer transaction, or safe executable liquidity. The Devnet test-BTC and test-USD labels remain synthetic/unbacked. S0B remains held until the risk limits and repeated observations are reviewed, the updater path is demonstrated, the exact SBF integration rejects unsafe cases, and the required issuer/freeze/depeg disclosure is present. No transaction was sent.
