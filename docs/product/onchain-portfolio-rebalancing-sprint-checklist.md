@@ -375,4 +375,6 @@ Current local validation commands: `npm run typecheck`, `npm run build`; from `a
 | 9 | _pending_ | _pending_ | _pending_ | _pending_ |
 | 10 | _pending_ | _pending_ | _pending_ | _pending_ |
 
+**S5B audit addition:** the stored 58,212-row all-weight near-`u64` three-asset corpus now has a separate independent integer-boundary audit. It verifies the stored curve output and next-unit rejection against the exact reduced-weight invariant, repeats the check for gross-input custody bounds, and independently validates all anchor/weight/route combinations and output caps. See [audit evidence](../rebalancing/evidence/s5-three-asset-full-width-all-weights-audit.md). This strengthens the finite corpus evidence only; full-domain math, SBF/CPI custody and S5B acceptance remain open.
+
 **Plan-bound stop rule:** if a gate fails, record what fact failed, which package/assumption is affected and the smallest safe next experiment. Keep the current read-only/card behavior intact until a reviewed revision satisfies the gate. No agent may turn a failed gate into a passed one by replacing on-chain enforcement with a trusted backend, hiding a stale state, or silently changing a bound.
