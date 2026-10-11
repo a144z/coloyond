@@ -36,4 +36,6 @@ pub enum EtfError {
     InvalidShareMint,
     #[msg("Withdrawal would return less than the requested minimum")]
     SlippageExceeded,
+    #[msg("Initial seed composition exceeds the accepted test-profile tolerance")]
+    SeedCompositionOutOfRange,
 }

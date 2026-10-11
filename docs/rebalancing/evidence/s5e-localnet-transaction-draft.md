@@ -214,3 +214,21 @@ The S5E draft now recognizes one exact two-asset Devnet-test config and validate
 | Readback after rejection | `poolStateUnchanged = true` |
 
 `cargo fmt --all -- --check`, `cargo test --manifest-path programs/coloyond-etf/Cargo.toml --offline` (15/15), `node --check tools/etf-localnet/run.cjs`, `bash -n tools/etf-localnet/run.sh`, and the full offline SBF/Localnet harness passed. The harness printed `LOCALNET_ONLY_PASS` and stopped the validator. It also reran the existing synthetic init/rejection and Active-pool lifecycle cases. This proves only the Localnet parser/preflight path against fabricated account data; it does not prove a live Pyth update, Devnet address admission, accepted policy, seed, swap, dynamic fee, or frontend wallet transaction. No Devnet signature or production-policy decision is claimed.
+
+## Synthetic profile seed CPI follow-up — 11 October 2026
+
+The exact draft Devnet test-profile seed now reuses S5B's integer USD normalization, target-weight deviation, and initial-NAV share formulas. It enforces the profile's 50-bps composition tolerance, transfers each input through checked SPL Token CPIs, mints NAV-based shares using the pool-authority PDA, and activates the pool only after successful transfers and minting. This is not acceptance of the draft policy for Devnet or production.
+
+The offline SBF/Localnet harness passed on Localnet genesis `AbQeVYKhF7mGaxDDbZKiCYny4B2d8pXoNoanjivciFYg`, draft program `H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9`, and artifact SHA-256 `493f8808ea2a5b7c6e33a7b9caa4e43fdbfed40d48490db275844c8681da1c17`. It used synthetic candidate-address mints, fake Full Pyth updates, and a genesis-injected Unseeded/unpaused pool. The last fixture bypasses delayed governance resume solely to exercise seed CPIs. Test USD is synthetic and unbacked, not USDC.
+
+| Localnet seed case | Signature | Slot | Fee | RPC result |
+|---|---|---:|---:|---|
+| Out-of-range composition rejected | `5S6EzhuDTmgRndK5VDEZKLWB6fCop8U42UxP52PRKoPBtN9yPMwm6TKFjhZHpSxgtxcBbhYA5oRN12b8YQFpjmdj` | 14 | 5,000 lamports | Error 6017; wallet/custody/share balances and pool state unchanged |
+| Second token CPI failed | `5YpFGaGbBj772mgvXyyrRL1yHxwqyLwd49ZvTDvb97NMnyx3c2nKK9W3pJtkC5xYx45ASDZmE92Kfo5Mfa7Zo6Pi` | 15 | 5,000 lamports | SPL error 1; first transfer rolled back; balances, share supply `0`, and pool state unchanged |
+| Successful seed | `3L8dSxeBXvD5rttg35LNtPSJWCZ1oWYiW6kBqUuLNt23Qms1NLd7uUd4X5KGJvnb5goARbhdQ24LzBcaTbT2s1sG` | 16 | 5,000 lamports | Inputs `[100,000,000, 100,000]`; NAV `200,000,000,000` Q; shares/supply `200,000`; Active lifecycle; sequence 1 |
+
+Confirmed Localnet RPC reconciled wallet balances `[0, 0]`, custody `[100,000,000, 100,000]`, and share balance/supply `200,000`. These are local-validator receipts, not Devnet signatures.
+
+Validation passed: `cargo fmt --all -- --check`; `cargo test --manifest-path programs/coloyond-etf/Cargo.toml --offline` (15/15); `node --check tools/etf-localnet/run.cjs`; `bash -n tools/etf-localnet/run.sh`; full offline SBF/Localnet harness (`LOCALNET_ONLY_PASS`); and `git diff --check`.
+
+This closes only synthetic Localnet SBF seed-transfer/mint, composition-rejection, and second-CPI rollback evidence. No authentic live Pyth update, accepted policy/manifest, delayed resume, deployed Devnet program/pool, Devnet wallet transaction, weighted swap, dynamic-fee behavior, or scheduler execution is proven. `swap_exact_in` and `poke` remain fail-closed.

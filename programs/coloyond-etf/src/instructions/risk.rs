@@ -1,5 +1,7 @@
 use anchor_lang::{prelude::*, solana_program::program_option::COption};
+use anchor_spl::token::{self, MintTo, TransferChecked};
 use coloyond_etf_identity::EtfPoolConfigV1;
+use coloyond_etf_math::{deviation_bps, initial_shares_from_nav, normalize_usd_value};
 
 use super::{PauseRisk, Poke, SeedPool, SwapExactIn};
 use crate::{
@@ -57,7 +59,7 @@ pub fn seed_pool<'info>(
         &ctx.accounts.authority.to_account_info(),
     )?;
     let (config, mechanics) = decode_devnet_mechanics_config(&pool.config_bytes)?;
-    validate_devnet_oracle_prices(
+    let prices = validate_devnet_oracle_prices(
         &config,
         oracle_accounts(ctx.accounts),
         &Clock::get()?,
@@ -82,9 +84,81 @@ pub fn seed_pool<'info>(
     );
     require!(min_shares_out > 0, EtfError::SlippageExceeded);
 
-    // The initial seed tolerance, oracle/risk limits, share-NAV issuance
-    // policy and fee policy are still drafts. Never consume tokens with them.
-    err!(EtfError::PolicyNotFrozen)
+    let mut marked_values = Vec::with_capacity(config.assets.len());
+    let mut nav = 0_u128;
+    for (index, (asset, price)) in config.assets.iter().zip(&prices).enumerate() {
+        let amount = amounts[index];
+        let price_mantissa = i64::try_from(price.mantissa).map_err(|_| error!(EtfError::Arithmetic))?;
+        let value = normalize_usd_value(
+            amount,
+            asset.decimals,
+            price_mantissa,
+            price.exponent,
+        )
+        .map_err(|_| error!(EtfError::Arithmetic))?;
+        nav = nav.checked_add(value).ok_or(error!(EtfError::Arithmetic))?;
+        marked_values.push(value);
+    }
+    let weights: Vec<u16> = config.assets.iter().map(|asset| asset.target_weight_bps).collect();
+    let seed_deviation = deviation_bps(&marked_values, &weights)
+        .map_err(|_| error!(EtfError::Arithmetic))?;
+    require!(
+        seed_deviation <= mechanics.maximum_seed_deviation_bps,
+        EtfError::SeedCompositionOutOfRange
+    );
+    let shares_out = initial_shares_from_nav(nav).map_err(|_| error!(EtfError::Arithmetic))?;
+    require!(shares_out >= min_shares_out, EtfError::SlippageExceeded);
+
+    let token_program = ctx.accounts.token_program.to_account_info();
+    for (index, asset) in config.assets.iter().enumerate() {
+        let offset = 1 + index * 4;
+        token::transfer_checked(
+            CpiContext::new(
+                token_program.clone(),
+                TransferChecked {
+                    from: ctx.remaining_accounts[offset + 2].clone(),
+                    mint: ctx.remaining_accounts[offset].clone(),
+                    to: ctx.remaining_accounts[offset + 1].clone(),
+                    authority: ctx.accounts.seed.to_account_info(),
+                },
+            ),
+            amounts[index],
+            asset.decimals,
+        )?;
+    }
+    let pool_key = ctx.accounts.pool.key();
+    let authority_bump = [pda::authority(&pool_key).1];
+    let authority_seeds: &[&[u8]] = &[pda::AUTHORITY_SEED, pool_key.as_ref(), &authority_bump];
+    token::mint_to(
+        CpiContext::new_with_signer(
+            token_program,
+            MintTo {
+                mint: ctx.accounts.share_mint.to_account_info(),
+                to: ctx.remaining_accounts[0].clone(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+            &[authority_seeds],
+        ),
+        shares_out,
+    )?;
+
+    let mut state = state;
+    state.lifecycle = PoolLifecycleV1::Active;
+    state.sequence = state
+        .sequence
+        .checked_add(1)
+        .ok_or(error!(EtfError::Arithmetic))?;
+    save_program_account(&ctx.accounts.pool_state.to_account_info(), &state)?;
+    emit!(PoolSeededEvent {
+        pool: pool_key,
+        seed: ctx.accounts.seed.key(),
+        amounts: amounts.clone(),
+        shares_out,
+        nav_q: nav,
+        deviation_bps: seed_deviation,
+        sequence: state.sequence,
+    });
+    Ok(())
 }
 
 /// The ordered per-asset remaining-account groups are:
@@ -362,5 +436,16 @@ fn validate_asset_group(
 pub struct RiskPausedEvent {
     pub pool: Pubkey,
     pub guardian: Pubkey,
+    pub sequence: u64,
+}
+
+#[event]
+pub struct PoolSeededEvent {
+    pub pool: Pubkey,
+    pub seed: Pubkey,
+    pub amounts: Vec<u64>,
+    pub shares_out: u64,
+    pub nav_q: u128,
+    pub deviation_bps: u16,
     pub sequence: u64,
 }

@@ -220,6 +220,13 @@ function activePoolStateData(pdas, governance, guardian) {
   return data;
 }
 
+function unseededUnpausedPoolStateData(pdas, governance, guardian) {
+  const data = activePoolStateData(pdas, governance, guardian);
+  data[106] = 0; // Unseeded. This Localnet fixture assumes the delayed resume was already executed.
+  data[107] = 0;
+  return data;
+}
+
 function assetStateData(pool, index, bump) {
   const data = Buffer.alloc(59);
   accountDiscriminator("EtfAssetStateV1").copy(data, 0);
@@ -289,6 +296,35 @@ function prepareGenesisFixture(directory, manifestPath, walletPath) {
   }
   files.push(writeGenesisAccount(directory, SOL_USD_ACCOUNT, PYTH_RECEIVER_PROGRAM_ID, pythPriceUpdateData(SOL_USD_FEED_ID, profilePublishTime)));
   files.push(writeGenesisAccount(directory, USDC_USD_ACCOUNT, PYTH_RECEIVER_PROGRAM_ID, pythPriceUpdateData(USDC_USD_FEED_ID, profilePublishTime)));
+
+  // A separate synthetic pre-state lets the SBF harness exercise the real
+  // seed SPL CPIs. It does not claim to prove the 24-hour governance delay.
+  const profileGovernance = payer.publicKey;
+  const profileGuardian = Keypair.generate().publicKey;
+  const profileMints = DEVNET_PROFILE_MINTS.map((publicKey) => ({ publicKey }));
+  const profileConfig = encodeConfig({
+    mints: profileMints,
+    governance: profileGovernance,
+    guardian: profileGuardian,
+    devnetProfile: true,
+  });
+  const profilePdas = derivePdas(profileConfig.hash);
+  files.push(writeGenesisAccount(directory, profilePdas.pool, PROGRAM_ID, poolAccountData(profileConfig, profilePdas, payer.publicKey)));
+  files.push(writeGenesisAccount(directory, profilePdas.poolState, PROGRAM_ID, unseededUnpausedPoolStateData(profilePdas, profileGovernance, profileGuardian)));
+  files.push(writeGenesisAccount(directory, profilePdas.shareMint, TOKEN_PROGRAM_ID, tokenMintData(profilePdas.authority, 0, 6)));
+  const profileUserTokens = profileMints.map(({ publicKey }) => associatedTokenAddress(payer.publicKey, publicKey));
+  const profileUserShares = associatedTokenAddress(payer.publicKey, profilePdas.shareMint);
+  for (let index = 0; index < profileMints.length; index += 1) {
+    const [assetState, assetBump] = PublicKey.findProgramAddressSync([
+      Buffer.from("etf_asset_v1"), profilePdas.pool.toBuffer(), Buffer.from([index]),
+    ], PROGRAM_ID);
+    files.push(writeGenesisAccount(directory, profilePdas.custodies[index], TOKEN_PROGRAM_ID, tokenAccountData(profileMints[index].publicKey, profilePdas.authority, 0)));
+    files.push(writeGenesisAccount(directory, assetState, PROGRAM_ID, assetStateData(profilePdas.pool, index, assetBump)));
+  }
+  files.push(writeGenesisAccount(directory, profileUserTokens[0], TOKEN_PROGRAM_ID, tokenAccountData(profileMints[0].publicKey, payer.publicKey, 100_000_000)));
+  files.push(writeGenesisAccount(directory, profileUserTokens[1], TOKEN_PROGRAM_ID, tokenAccountData(profileMints[1].publicKey, payer.publicKey, 100_000)));
+  files.push(writeGenesisAccount(directory, profileUserShares, TOKEN_PROGRAM_ID, tokenAccountData(profilePdas.shareMint, payer.publicKey, 0)));
+
   fs.writeFileSync(walletPath, JSON.stringify(Array.from(payer.secretKey)), { mode: 0o600 });
   fs.chmodSync(walletPath, 0o600);
   fs.writeFileSync(manifestPath, JSON.stringify({
@@ -308,6 +344,17 @@ function prepareGenesisFixture(directory, manifestPath, walletPath) {
     initialShareSupply: String(userShareAmount + otherShareAmount),
     initialUserShares: String(userShareAmount),
     devnetProfilePublishTime: profilePublishTime,
+    devnetProfilePool: profilePdas.pool.toBase58(),
+    devnetProfilePoolState: profilePdas.poolState.toBase58(),
+    devnetProfileShareMint: profilePdas.shareMint.toBase58(),
+    devnetProfileAuthority: profilePdas.authority.toBase58(),
+    devnetProfileCustody: profilePdas.custodies.map((address) => address.toBase58()),
+    devnetProfileAssetState: profilePdas.assetStates.map((address) => address.toBase58()),
+    devnetProfileUserTokens: profileUserTokens.map((address) => address.toBase58()),
+    devnetProfileUserShares: profileUserShares.toBase58(),
+    devnetProfileGovernance: profileGovernance.toBase58(),
+    devnetProfileGuardian: profileGuardian.toBase58(),
+    devnetProfileStatePrecondition: "synthetic Localnet genesis-only unpaused Unseeded state; delayed governance resume is not tested",
     fixtureFiles: files,
   }, null, 2));
   fs.chmodSync(manifestPath, 0o600);
@@ -397,7 +444,7 @@ function initInstruction(config, pdas, mints, payer, badState = null, badAssetSt
   return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
 }
 
-function seedInstruction({ payer, config, pdas, mints, userTokenAccounts, shareAccount }) {
+function seedInstruction({ payer, config, pdas, mints, userTokenAccounts, shareAccount, amounts = [1_000, 1_000], minShares = 1 }) {
   const keys = [
     { pubkey: payer.publicKey, isSigner: true, isWritable: false },
     { pubkey: pdas.pool, isSigner: false, isWritable: true },
@@ -422,7 +469,7 @@ function seedInstruction({ payer, config, pdas, mints, userTokenAccounts, shareA
   }
   const data = Buffer.concat([
     instructionDiscriminator("seed_pool"),
-    u32(2), u64(1_000), u64(1_000), u64(1),
+    u32(amounts.length), ...amounts.map(u64), u64(minShares),
   ]);
   return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
 }
@@ -852,6 +899,87 @@ async function main() {
   const profileStateAfterPoke = await connection.getAccountInfo(profilePdas.poolState, "confirmed");
   ensure(profileStateAfterPoke && profileStateAfterPoke.data.equals(profileStateBeforePoke), "Eligibility-only poke changed state before its policy gate");
 
+  const seedProfileMints = DEVNET_PROFILE_MINTS.map((publicKey) => ({ publicKey }));
+  const seedProfileConfig = encodeConfig({
+    mints: seedProfileMints,
+    governance: new PublicKey(fixture.devnetProfileGovernance),
+    guardian: new PublicKey(fixture.devnetProfileGuardian),
+    devnetProfile: true,
+  });
+  const seedProfilePdas = derivePdas(seedProfileConfig.hash);
+  ensure(seedProfilePdas.pool.toBase58() === fixture.devnetProfilePool, "Synthetic seed pre-state pool/config identity mismatch");
+  const seedProfileUserTokens = fixture.devnetProfileUserTokens.map((address) => new PublicKey(address));
+  const seedProfileShareAccount = new PublicKey(fixture.devnetProfileUserShares);
+  const seedBalanceAccounts = [...seedProfileUserTokens, ...seedProfilePdas.custodies, seedProfileShareAccount];
+  const seedBalancesBefore = await Promise.all(seedBalanceAccounts.map((address) => tokenAmount(connection, address)));
+  const seedProfileStateBefore = await connection.getAccountInfo(seedProfilePdas.poolState, "confirmed");
+  ensure(seedProfileStateBefore && seedProfileStateBefore.data[106] === 0 && seedProfileStateBefore.data[107] === 0, "Synthetic seed fixture must start unpaused and Unseeded");
+
+  const unbalancedSeedReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(seedInstruction({
+      payer,
+      config: seedProfileConfig,
+      pdas: seedProfilePdas,
+      mints: seedProfileMints,
+      userTokenAccounts: seedProfileUserTokens,
+      shareAccount: seedProfileShareAccount,
+      amounts: [100_000_000, 50_000],
+      minShares: 1,
+    })),
+    [],
+    "error",
+  );
+  const seedBalancesAfterUnbalanced = await Promise.all(seedBalanceAccounts.map((address) => tokenAmount(connection, address)));
+  const seedStateAfterUnbalanced = await connection.getAccountInfo(seedProfilePdas.poolState, "confirmed");
+  ensure(JSON.stringify(seedBalancesBefore) === JSON.stringify(seedBalancesAfterUnbalanced), "Out-of-range seed changed wallet, custody, or share balances");
+  ensure(seedStateAfterUnbalanced && seedStateAfterUnbalanced.data.equals(seedProfileStateBefore.data), "Out-of-range seed changed pool state");
+
+  const seedFailureReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(seedInstruction({
+      payer,
+      config: seedProfileConfig,
+      pdas: seedProfilePdas,
+      mints: seedProfileMints,
+      userTokenAccounts: seedProfileUserTokens,
+      shareAccount: seedProfileShareAccount,
+      amounts: [100_000_000, 100_001],
+      minShares: 1,
+    })),
+    [],
+    "error",
+  );
+  const seedBalancesAfterFailure = await Promise.all(seedBalanceAccounts.map((address) => tokenAmount(connection, address)));
+  const seedStateAfterFailure = await connection.getAccountInfo(seedProfilePdas.poolState, "confirmed");
+  const seedSupplyAfterFailure = await shareSupply(connection, seedProfilePdas.shareMint);
+  ensure(JSON.stringify(seedBalancesBefore) === JSON.stringify(seedBalancesAfterFailure), "Failed second seed CPI did not roll back the first transfer");
+  ensure(seedStateAfterFailure && seedStateAfterFailure.data.equals(seedProfileStateBefore.data), "Failed seed changed pool lifecycle/sequence");
+  ensure(seedSupplyAfterFailure === "0", "Failed seed changed share supply");
+
+  const successfulSeedReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(seedInstruction({
+      payer,
+      config: seedProfileConfig,
+      pdas: seedProfilePdas,
+      mints: seedProfileMints,
+      userTokenAccounts: seedProfileUserTokens,
+      shareAccount: seedProfileShareAccount,
+      amounts: [100_000_000, 100_000],
+      minShares: 200_000,
+    })),
+  );
+  const seedBalancesAfterSuccess = await Promise.all(seedBalanceAccounts.map((address) => tokenAmount(connection, address)));
+  const seedSupplyAfterSuccess = await shareSupply(connection, seedProfilePdas.shareMint);
+  const seedStateAfterSuccess = await connection.getAccountInfo(seedProfilePdas.poolState, "confirmed");
+  ensure(JSON.stringify(seedBalancesAfterSuccess) === JSON.stringify(["0", "0", "100000000", "100000", "200000"]), "Successful seed token/share balances do not match the S5B NAV quote");
+  ensure(seedSupplyAfterSuccess === "200000", "Successful seed share supply mismatch");
+  ensure(seedStateAfterSuccess && seedStateAfterSuccess.data[106] === 1 && seedStateAfterSuccess.data[107] === 0 && seedStateAfterSuccess.data.readBigUInt64LE(108) === 1n, "Successful seed did not activate the pool at sequence 1");
+
   const activePool = new PublicKey(fixture.pool);
   const activePoolState = new PublicKey(fixture.poolState);
   const activeShareMint = new PublicKey(fixture.shareMint);
@@ -1006,6 +1134,50 @@ async function main() {
       policyGateReachedAfterOracleValidation: customErrorCode(profilePokeReceipt.error) === 6002,
       poolStateUnchanged: profileStateAfterPoke.data.equals(profileStateBeforePoke),
     },
+    devnetTestProfileSeedCpi: {
+      disclaimer: "This actual SBF seed path used a synthetic Localnet genesis pool pre-state marked Unseeded and unpaused. It proves seed math and SPL CPI/rollback only; the 24-hour governance transition, authentic Devnet oracles, admitted policy, and Devnet deployment are not proven.",
+      pool: seedProfilePdas.pool.toBase58(),
+      poolState: seedProfilePdas.poolState.toBase58(),
+      shareMint: seedProfilePdas.shareMint.toBase58(),
+      walletTokenAccounts: seedProfileUserTokens.map((address) => address.toBase58()),
+      custody: seedProfilePdas.custodies.map((address) => address.toBase58()),
+      shareAccount: seedProfileShareAccount.toBase58(),
+      oracleAccounts: [SOL_USD_ACCOUNT, USDC_USD_ACCOUNT].map((address) => address.toBase58()),
+      syntheticTestMints: DEVNET_PROFILE_MINTS.map((mint) => ({ address: mint.toBase58(), label: "Synthetic Localnet account at Devnet candidate address; unbacked test token" })),
+      initialBalances: seedBalancesBefore,
+      outOfRangeComposition: {
+        signature: unbalancedSeedReceipt.signature,
+        slot: unbalancedSeedReceipt.slot,
+        feeLamports: unbalancedSeedReceipt.feeLamports,
+        error: unbalancedSeedReceipt.error,
+        tokenBalancesUnchanged: JSON.stringify(seedBalancesBefore) === JSON.stringify(seedBalancesAfterUnbalanced),
+        poolStateUnchanged: seedStateAfterUnbalanced.data.equals(seedProfileStateBefore.data),
+      },
+      secondTransferFailureRollback: {
+        signature: seedFailureReceipt.signature,
+        slot: seedFailureReceipt.slot,
+        feeLamports: seedFailureReceipt.feeLamports,
+        error: seedFailureReceipt.error,
+        requestedAmounts: ["100000000", "100001"],
+        expectedFailure: "The second seed input is one base unit short after the first token CPI would have succeeded.",
+        tokenBalancesUnchanged: JSON.stringify(seedBalancesBefore) === JSON.stringify(seedBalancesAfterFailure),
+        shareSupplyAfter: seedSupplyAfterFailure,
+        poolStateUnchanged: seedStateAfterFailure.data.equals(seedProfileStateBefore.data),
+      },
+      successfulSeed: {
+        signature: successfulSeedReceipt.signature,
+        slot: successfulSeedReceipt.slot,
+        feeLamports: successfulSeedReceipt.feeLamports,
+        amounts: ["100000000", "100000"],
+        expectedNavQ: "200000000000",
+        expectedShares: "200000",
+        shareSupplyAfter: seedSupplyAfterSuccess,
+        balancesAfter: seedBalancesAfterSuccess,
+        lifecycleAfter: "Active",
+        riskPausedAfter: false,
+        sequenceAfter: "1",
+      },
+    },
     syntheticActivePoolLifecycle: {
       disclaimer: "The Active pool and its reserves/share supply were injected into a disposable Localnet genesis. This proves the existing SPL lifecycle handlers against synthetic state only; it does not prove successful pool seed, a Devnet transaction, or a backed asset.",
       pool: activePool.toBase58(),
@@ -1077,6 +1249,9 @@ async function main() {
       { action: "late second-asset-state rejection after partial PDA/SPL allocation", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeLateInit[index], after: tokenAfterLateInit[index] })) },
       { action: "duplicate initialization rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeDuplicate[index], after: duplicateTokenAfter[index] })) },
       { action: "seed rejected on absent Localnet oracle data", accounts: [...userTokenAccounts, ...pdas.custodies, shareAta].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeSeed[index], after: balancesAfterSeed[index] })) },
+      { action: "synthetic profile seed rejected for out-of-range composition", accounts: seedBalanceAccounts.map((address, index) => ({ address: address.toBase58(), before: seedBalancesBefore[index], after: seedBalancesAfterUnbalanced[index] })) },
+      { action: "synthetic profile seed second-CPI rollback", accounts: seedBalanceAccounts.map((address, index) => ({ address: address.toBase58(), before: seedBalancesBefore[index], after: seedBalancesAfterFailure[index] })) },
+      { action: "synthetic profile successful seed", accounts: seedBalanceAccounts.map((address, index) => ({ address: address.toBase58(), before: seedBalancesBefore[index], after: seedBalancesAfterSuccess[index] })) },
       { action: "synthetic Active-pool successful proportional deposit", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeDeposit[index], after: balancesAfterDeposit[index] })) },
       { action: "synthetic Active-pool failed second-token deposit rollback", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeFailedDeposit[index], after: balancesAfterFailedDeposit[index] })) },
       { action: "synthetic Active-pool in-kind redemption while risk-paused", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeRedeem[index], after: balancesAfterRedeem[index] })) },
@@ -1091,6 +1266,9 @@ async function main() {
       "Duplicate initialization rejected with all existing account data unchanged",
       "Seed attempt rejected on incomplete Localnet oracle accounts; token/share balances and pool state unchanged",
       "Exact Devnet test-profile config initialized on Localnet; synthetic Receiver-owned Full feeds passed on-chain identity, parser, freshness, confidence and exponent checks before the fail-closed PolicyNotFrozen gate",
+      "Synthetic Localnet test-profile seed rejected out-of-range composition with unchanged token/share/pool state",
+      "Synthetic Localnet seed second-token CPI failure atomically rolled back the first transfer, share supply, and pool state",
+      "SBF seed CPI succeeded against a synthetic unpaused Unseeded profile pre-state; wallet inputs, custody amounts, NAV shares, Active lifecycle and sequence reconciled from RPC",
       "Genesis-injected synthetic Active pool accepted a proportional SPL deposit with exact consumed/refund/share deltas",
       "Underfunded second SPL transfer failed and atomically rolled back the earlier transfer, share supply, and pool sequence",
       "Guardian pause confirmed, then in-kind redemption succeeded while risk-paused and preserved the pause",
@@ -1098,7 +1276,7 @@ async function main() {
     gaps: [
       "No confirmed Devnet transaction or program deployment.",
       "No genuine Pyth feed update/Full verification was used; the Localnet seed rejection is caused by absent feed data.",
-      "The synthetic genesis fixture does not prove a successful seed. Valid seed and swap still return PolicyNotFrozen after policy/account validation; this harness does not bypass those gates.",
+      "The successful seed uses a synthetic Localnet genesis pre-state that starts unpaused, so it does not prove the 24-hour governance resume transition. `swap_exact_in` remains fail-closed behind PolicyNotFrozen.",
       "The deposit/refund, failed-CPI rollback, guardian pause, and pause-safe redemption results apply only to a pre-seeded synthetic Localnet Active pool. They do not prove a real Devnet pool lifecycle.",
       "This harness does not validate fee/economic policy, approved mint/feed manifest, governance, or scheduler behavior.",
     ],
