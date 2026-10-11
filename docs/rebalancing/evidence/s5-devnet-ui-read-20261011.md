@@ -45,3 +45,15 @@ The current read used observed chain time `1791695910` and feed publish time `17
 5. If using the wallet-read portion, connect a wallet set to Devnet and verify its address and candidate-token balances are read from RPC. Wallet connection was not exercised in this evidence run.
 
 There is no transaction button on this screen. No wallet signature is requested and no submitted, timed-out, or confirmed transaction state is claimed here.
+
+## Follow-up browser snapshot
+
+At `2026-10-11 13:49:03 Asia/Hong_Kong`, the app-shell **Real ETF Devnet read** link opened this route and its live RPC refresh completed at slot `509801777`. The actual and expected genesis again matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The connected wallet was still `None`; program and pool were still unconfigured; no transaction or signature existed.
+
+| Fixed feed account | Verification | Age at observed chain time `1791697743` | Confidence / price |
+|---|---|---:|---:|
+| SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Full | 21 seconds | 3 bps |
+| BTC/USD `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Full | 277 seconds | 9 bps |
+| USD/USD `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Full | 231 seconds | 11 bps |
+
+The page showed the same exact embedded feed IDs, Receiver owner, and 134-byte layout as the expected accounts. Freshness/confidence policy remains unconfigured, so even the 21-second SOL observation is not an approved eligibility result. The Test USD mint remained labeled synthetic, unbacked, and not redeemable as USDC. This is one additional read snapshot, not evidence of continuous freshness, wallet connection, or transaction behavior.
