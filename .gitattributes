@@ -1,0 +1,2 @@
+# The hash-pinned Cron IDL must keep its committed bytes on every checkout.
+tools/rebalancing/etf-scheduler-probe/fixtures/helium-cron-idl-0.3.0.json text eol=lf

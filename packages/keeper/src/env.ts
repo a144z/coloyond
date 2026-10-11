@@ -1,8 +1,10 @@
+import { executionSelectionFromEnvironment } from "./executionLayer.js";
+import type { ExecutionSelection } from "./executionLayer.js";
 import { KeeperService } from "./keeper.js";
 import { loadRuntimeSignerFromEnvironment, SolanaKeeperRuntime } from "./solana.js";
 import type { ActionProposalSource, KeeperConfig } from "./types.js";
 
-export function keeperConfigFromEnvironment(env: NodeJS.ProcessEnv = process.env): KeeperConfig & { rpcUrl: string } {
+export function keeperConfigFromEnvironment(env: NodeJS.ProcessEnv = process.env): KeeperConfig & { rpcUrl: string; execution: ExecutionSelection } {
   const cluster = env.COLOYOND_KEEPER_CLUSTER;
   if (cluster !== "localnet" && cluster !== "devnet") throw new Error("COLOYOND_KEEPER_CLUSTER must be localnet or devnet; mainnet is not supported");
   const rpcUrl = required(env, "COLOYOND_KEEPER_RPC_URL");
@@ -16,7 +18,7 @@ export function keeperConfigFromEnvironment(env: NodeJS.ProcessEnv = process.env
   const maxFeeText = env.COLOYOND_KEEPER_MAX_FEE_LAMPORTS;
   const maxFeeLamports = maxFeeText === undefined ? undefined : parsePositiveBigint(maxFeeText, "COLOYOND_KEEPER_MAX_FEE_LAMPORTS");
   if (!dryRun && maxFeeLamports === undefined) throw new Error("Submission requires COLOYOND_KEEPER_MAX_FEE_LAMPORTS");
-  return { cluster, rpcUrl, expectedGenesisHash, vaultAddress, callerPublicKey, dryRun, maxFeeLamports };
+  return { cluster, rpcUrl, expectedGenesisHash, vaultAddress, callerPublicKey, dryRun, maxFeeLamports, execution: executionSelectionFromEnvironment(env) };
 }
 
 export function createKeeperFromEnvironment(proposals: ActionProposalSource = {}, observe?: ConstructorParameters<typeof KeeperService>[3]): KeeperService {
