@@ -448,6 +448,15 @@ mod tests {
             .confidence_interval(USD_FIXED_DECIMALS)
             .is_err());
 
+        let negative_lower = ValidatedPrice {
+            mantissa: 100,
+            confidence: 101,
+            ..no_positive_lower
+        };
+        assert!(negative_lower
+            .confidence_interval(USD_FIXED_DECIMALS)
+            .is_err());
+
         let unrepresentable_bound = ValidatedPrice {
             mantissa: 100,
             confidence: 1,
@@ -567,6 +576,39 @@ mod tests {
             NOW,
         );
         assert!(check(&wide, 100).is_err());
+    }
+
+    #[test]
+    fn rejects_each_other_pinned_feed_id_for_every_feed() {
+        let feeds = [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd];
+        for expected_feed in feeds {
+            for embedded_feed in feeds {
+                if expected_feed == embedded_feed {
+                    continue;
+                }
+                let value = update(
+                    embedded_feed,
+                    VerificationLevel::Full,
+                    100_000_000,
+                    1_000,
+                    NOW,
+                );
+                assert!(
+                    validate_fixed_feed(
+                        expected_feed,
+                        expected_feed.address(),
+                        PYTH_RECEIVER_PROGRAM_ID,
+                        &value,
+                        &clock(),
+                        limits(),
+                    )
+                    .is_err(),
+                    "embedded {:?} must not validate as {:?}",
+                    embedded_feed,
+                    expected_feed
+                );
+            }
+        }
     }
 
     #[test]
@@ -875,6 +917,8 @@ mod tests {
 
         assert!(raw_to_fixed(u128::MAX, 1, 0).is_err());
         assert!(raw_to_fixed(101, -1, 0).is_err());
+        assert!(raw_to_fixed(1, i32::MIN, 0).is_err());
+        assert!(raw_to_fixed(1, i32::MAX, 1).is_err());
         let interval_overflow = ValidatedPrice {
             mantissa: u64::MAX,
             confidence: 0,
