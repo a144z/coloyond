@@ -4,6 +4,11 @@ import type { VerifiedEtfManifest } from "../../../packages/etf-client/src/index
 
 const UPGRADEABLE_LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
 
+/** The accepted-deployment resources every Devnet surface shares. */
+export const ETF_DEPLOYMENT_MANIFEST_URL = "/etf-devnet/deployment-manifest.json";
+export const ETF_DEPLOYMENT_MANIFESTS_URL = "/etf-devnet/deployment-manifests.json";
+export const ETF_IDL_URL = "/idl/coloyond_etf.json";
+
 export type DeploymentProbe = Readonly<{
   program: "verified" | "missing" | "invalid";
   pool: "uninitialized" | "initialized" | "partial";

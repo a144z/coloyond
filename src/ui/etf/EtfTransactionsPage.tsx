@@ -36,7 +36,7 @@ import {
 } from "../../../packages/etf-client/src/index.js";
 import { ConnectButton } from "../wallet/ConnectButton.js";
 import { IndexedDbSubmissionJournal } from "./IndexedDbSubmissionJournal.js";
-import { probeEtfDeployment, type DeploymentProbe } from "./deploymentProbe.js";
+import { ETF_DEPLOYMENT_MANIFEST_URL as MANIFEST_URL, ETF_IDL_URL as IDL_URL, probeEtfDeployment, type DeploymentProbe } from "./deploymentProbe.js";
 import "./devnet-read.css";
 import "./transactions.css";
 
@@ -81,8 +81,6 @@ type PageData = Readonly<{
   checkedAt: string | null;
 }>;
 
-const MANIFEST_URL = "/etf-devnet/deployment-manifest.json";
-const IDL_URL = "/idl/coloyond_etf.json";
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 

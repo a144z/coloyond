@@ -8,6 +8,7 @@ import type * as React from "react";
 import { useRef, useState } from "react";
 import { DESK_STEPS, type RebalanceDeskView } from "./useRebalanceDesk.js";
 import { RESERVE_SHARE, fmtUsd, round1, sharesForSet, sharesForTransfer } from "./rebalance.js";
+import { EtfLiveSection } from "./EtfLiveSection.js";
 
 function DeskSection({ area, index, title, children }: { area: string; index: string; title: string; children: React.ReactNode }) {
   return (
@@ -191,6 +192,7 @@ export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
         </div>
         <div className="cr-side-note">The desk plays the keeper's part in the browser. No swap is signed, and a real vault may use its own rules and fee split.</div>
       </div>
+      <EtfLiveSection />
       <section className="cr-desk" aria-label="Rebalance desk">
         <DeskSection area="cr-desk-drift" index="01" title="Drift check · live">
           <div className="cr-desk-number">{desk.drift}<span> pp from target</span></div>
