@@ -19,7 +19,7 @@ export type ConditionSchedulerConfig = {
 };
 
 export type ConditionSchedulerResult =
-  | { status: "idle" | "stale" | "rejected" | "simulated" | "submitted" | "confirmed" | "pending" | "error"; reason?: string; action?: ConditionAction; signature?: string; feeLamports?: bigint | null; slot?: bigint };
+  | { status: "idle" | "stale" | "rejected" | "simulated" | "submitted" | "confirmed" | "observed" | "pending" | "error"; reason?: string; action?: ConditionAction; signature?: string; feeLamports?: bigint | null; slot?: bigint };
 
 export type ConditionSchedulerObserver = (result: ConditionSchedulerResult) => void;
 
@@ -86,7 +86,13 @@ export class ConditionScheduler {
       const after = await this.runtime.readState();
       if (conditionActionApplied(pending.action, pending.before, after)) {
         this.pending = null;
-        this.emit({ status: "confirmed", action: pending.action, signature: pending.signature, reason: confirmation.status === "confirmed" ? undefined : "Chain state confirms the action despite an uncertain signature status", slot: after.slot });
+        if (confirmation.status === "confirmed") {
+          this.emit({ status: "confirmed", action: pending.action, signature: pending.signature, slot: after.slot });
+        } else if (confirmation.status === "failed") {
+          this.emit({ status: "rejected", action: pending.action, signature: pending.signature, reason: `${confirmation.reason ?? "Condition transaction failed"}; matching action is visible on-chain, but this signature did not apply it`, slot: after.slot });
+        } else {
+          this.emit({ status: "observed", action: pending.action, signature: pending.signature, reason: "Matching action is visible on-chain, but this signature remains unconfirmed; attribution is unknown", slot: after.slot });
+        }
         return;
       }
       if (confirmation.status === "failed") {
@@ -149,10 +155,20 @@ export class ConditionScheduler {
     } catch (error) {
       if (error instanceof UncertainConditionSubmissionError) {
         this.pending = { action: selected, before: beforeSend, signature: error.signature };
+        const confirmation = await this.runtime.confirm(error.signature);
         const afterSend = await this.runtime.readState();
         if (conditionActionApplied(selected, beforeSend, afterSend)) {
           this.pending = null;
-          this.emit({ status: "confirmed", action: selected, signature: error.signature, reason: "RPC response was lost; reread confirms the on-chain transition", slot: afterSend.slot });
+          if (confirmation.status === "confirmed") {
+            this.emit({ status: "confirmed", action: selected, signature: error.signature, reason: "RPC response was lost; this signature is confirmed and the on-chain transition is visible", slot: afterSend.slot });
+          } else if (confirmation.status === "failed") {
+            this.emit({ status: "rejected", action: selected, signature: error.signature, reason: `${confirmation.reason ?? "Condition transaction failed"}; matching action is visible on-chain, but this signature did not apply it`, slot: afterSend.slot });
+          } else {
+            this.emit({ status: "observed", action: selected, signature: error.signature, reason: "RPC response was lost; matching action is visible on-chain, but this signature remains unconfirmed and attribution is unknown", slot: afterSend.slot });
+          }
+        } else if (confirmation.status === "failed") {
+          this.pending = null;
+          this.emit({ status: "rejected", action: selected, signature: error.signature, reason: confirmation.reason ?? "Condition transaction failed", slot: afterSend.slot });
         } else {
           this.emit({ status: "pending", action: selected, signature: error.signature, reason: safeError(error), slot: afterSend.slot });
         }
@@ -167,7 +183,13 @@ export class ConditionScheduler {
     const confirmation = await this.runtime.confirm(signature);
     const after = await this.runtime.readState();
     if (conditionActionApplied(action, before, after)) {
-      this.emit({ status: "confirmed", action, signature, slot: after.slot });
+      if (confirmation.status === "confirmed") {
+        this.emit({ status: "confirmed", action, signature, slot: after.slot });
+      } else if (confirmation.status === "failed") {
+        this.emit({ status: "rejected", action, signature, reason: `${confirmation.reason ?? "Condition transaction failed"}; matching action is visible on-chain, but this signature did not apply it`, slot: after.slot });
+      } else {
+        this.emit({ status: "observed", action, signature, reason: "Matching action is visible on-chain, but this signature remains unconfirmed; attribution is unknown", slot: after.slot });
+      }
       return;
     }
     if (confirmation.status === "failed") {

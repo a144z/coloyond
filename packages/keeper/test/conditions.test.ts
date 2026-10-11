@@ -121,9 +121,53 @@ test("uncertain submission rereads chain and accepts an already-applied transiti
   await service.reconcile();
   assert.equal(runtime.submissions, 1);
   assert.equal(results.at(-1)?.status, "confirmed");
+  assert.deepEqual(runtime.confirmedSignatures, ["uncertain-signature"]);
   assert.equal(runtime.state.condition?.pending, null);
   assert.equal(runtime.state.condition?.activeRule?.nonce, 5n);
 });
+
+test("uncertain response with an observed transition and unknown signature is not attributed", async () => {
+  const runtime = new FakeConditionRuntime(pendingSnapshot(900n));
+  runtime.submitErrorAfterApply = true;
+  runtime.confirmations = [{ status: "unknown" }];
+  const results: Array<{ status: string; signature?: string; reason?: string }> = [];
+  const service = new ConditionScheduler({ dryRun: false, maxFeeLamports: 1_000n }, runtime, (result) => results.push(result));
+
+  await service.reconcile();
+  assert.equal(results.at(-1)?.status, "observed");
+  assert.equal(results.at(-1)?.signature, "uncertain-signature");
+  assert.match(results.at(-1)?.reason ?? "", /attribution is unknown/);
+  assert.equal(runtime.state.condition?.pending, null);
+  assert.equal(runtime.submittedActions.filter(({ kind }) => kind === "execute").length, 1);
+  await service.reconcile();
+  assert.equal(runtime.submittedActions.filter(({ kind }) => kind === "execute").length, 1);
+});
+
+for (const loserStatus of ["failed", "unknown"] as const) {
+  test(`competing keepers attribute only the confirmed winner when loser status is ${loserStatus}`, async () => {
+    const runtime = new SharedConditionRaceRuntime(pendingSnapshot(900n), loserStatus);
+    const keeperAEvents: Array<{ status: string; signature?: string; reason?: string }> = [];
+    const keeperBEvents: Array<{ status: string; signature?: string; reason?: string }> = [];
+    const schedulerA = new ConditionScheduler({ dryRun: false, maxFeeLamports: 1_000n }, runtime.forKeeper("keeper-a"), (event) => keeperAEvents.push(event));
+    const schedulerB = new ConditionScheduler({ dryRun: false, maxFeeLamports: 1_000n }, runtime.forKeeper("keeper-b"), (event) => keeperBEvents.push(event));
+
+    await Promise.all([schedulerA.reconcile(), schedulerB.reconcile()]);
+
+    const events = [...keeperAEvents, ...keeperBEvents];
+    const confirmed = events.filter((event) => event.status === "confirmed");
+    assert.equal(confirmed.length, 1);
+    assert.equal(confirmed[0]?.signature, runtime.winnerSignature);
+    const loserEvents = events.filter((event) => event.signature === runtime.loserSignature);
+    assert.equal(loserEvents.some((event) => event.status === "confirmed"), false);
+    const loserOutcome = loserEvents.at(-1);
+    assert.equal(loserOutcome?.status, loserStatus === "failed" ? "rejected" : "observed");
+    assert.match(loserOutcome?.reason ?? "", /visible on-chain/i);
+    assert.equal(runtime.submittedActions.filter(({ kind }) => kind === "execute").length, 2);
+
+    await Promise.all([schedulerA.reconcile(), schedulerB.reconcile()]);
+    assert.equal(runtime.submittedActions.filter(({ kind }) => kind === "execute").length, 2, "neither keeper may resend the completed action after the chain transition is observed");
+  });
+}
 
 test("a pre-send drop is reconciled before the still-eligible action is retried", async () => {
   const runtime = new FakeConditionRuntime(pendingSnapshot(900n));
@@ -165,17 +209,20 @@ test("failed WebSocket setup still runs bounded polling reconciliation", async (
 class FakeConditionRuntime implements ConditionRuntime {
   simulations = 0;
   submissions = 0;
+  submittedActions: ConditionAction[] = [];
   reads = 0;
   submitErrorAfterApply = false;
   dropBeforeSendOnce = false;
   subscriptionError: Error | null = null;
   confirmations: ConditionConfirmation[] = [{ status: "confirmed" }];
+  confirmedSignatures: string[] = [];
   constructor(public state: ConditionSnapshot) {}
   async readState(): Promise<ConditionSnapshot> { this.reads++; return structuredClone(this.state); }
   async subscribe(): Promise<() => void> { if (this.subscriptionError) throw this.subscriptionError; return () => {}; }
   async simulate(): Promise<ConditionSimulation> { this.simulations++; return { ok: true, feeLamports: 50n }; }
   async submit(action: ConditionAction): Promise<string> {
     this.submissions++;
+    this.submittedActions.push(action);
     if (this.dropBeforeSendOnce) {
       this.dropBeforeSendOnce = false;
       throw new Error("injected send drop before transaction submission");
@@ -187,12 +234,54 @@ class FakeConditionRuntime implements ConditionRuntime {
     this.lastAction = action;
     return `signature-${this.submissions}`;
   }
-  async confirm(): Promise<ConditionConfirmation> {
+  async confirm(signature: string): Promise<ConditionConfirmation> {
+    this.confirmedSignatures.push(signature);
     const confirmation = this.confirmations.shift() ?? { status: "unknown" as const };
     if (confirmation.status === "confirmed" && this.lastAction) apply(this.state, this.lastAction);
     return confirmation;
   }
   private lastAction: ConditionAction | null = null;
+}
+
+class SharedConditionRaceRuntime {
+  submissions = 0;
+  readonly submittedActions: ConditionAction[] = [];
+  winnerSignature: string | null = null;
+  loserSignature: string | null = null;
+  private simulations = 0;
+  private releaseSimulations!: () => void;
+  private readonly simulationBarrier = new Promise<void>((resolve) => { this.releaseSimulations = resolve; });
+  private readonly confirmations = new Map<string, ConditionConfirmation>();
+
+  constructor(public readonly state: ConditionSnapshot, private readonly loserStatus: "failed" | "unknown") {}
+
+  forKeeper(keeper: string): ConditionRuntime {
+    return {
+      readState: async () => structuredClone(this.state),
+      subscribe: async () => () => {},
+      simulate: async () => {
+        this.simulations++;
+        if (this.simulations === 2) this.releaseSimulations();
+        await this.simulationBarrier;
+        return { ok: true, feeLamports: 50n };
+      },
+      submit: async (action) => {
+        this.submissions++;
+        this.submittedActions.push(action);
+        const signature = `${keeper}-signature`;
+        if (this.winnerSignature === null) {
+          this.winnerSignature = signature;
+          this.confirmations.set(signature, { status: "confirmed" });
+          apply(this.state, action);
+        } else {
+          this.loserSignature = signature;
+          this.confirmations.set(signature, { status: this.loserStatus, reason: this.loserStatus === "failed" ? "competing action already consumed the condition nonce" : undefined });
+        }
+        return signature;
+      },
+      confirm: async (signature) => this.confirmations.get(signature) ?? { status: "unknown" },
+    };
+  }
 }
 
 function pendingSnapshot(slot = 899n): ConditionSnapshot {
