@@ -22,6 +22,28 @@ programs:
     devnet_account_observed: true
     devnet_programdata_sha256: a2ee82589b7241bcdc167921e4121b7bd5e0aaebcd22c09101a525dfcf036fa1
     source_binary_match: unverified
+cron_client_surface:
+  upstream_source_commit: 77dabc07580496517b6c390446daf4962fb3c39a
+  idl_path: tuktuk-program/idls/cron.json
+  idl_sha256: 81958444d1719ce410e1007db279d8eace274387c5b803b5eaed5aa4b6026954
+  idl_program_version: 0.3.0
+  checked_in_fixture: ../../../tools/rebalancing/etf-scheduler-probe/fixtures/helium-cron-idl-0.3.0.json
+  npm_packages:
+    cron_sdk:
+      name: "@helium/cron-sdk"
+      version: 0.1.1
+      declared_git_head: 5a8bf0b7b88e5934ef8d774e686f7c95804fbb8d
+      anchor_dependency: "^0.31.0"
+      source_surface: init, getCronJobForName, PDA helpers, createCronJob
+      wraps: initialize_cron_job_v0
+      note: The published package gitHead differs from the reviewed repository HEAD; do not equate package metadata with the pinned source revision or Devnet binary.
+    tuktuk_idls:
+      name: "@helium/tuktuk-idls"
+      version: 0.1.1
+      declared_git_head: 5a8bf0b7b88e5934ef8d774e686f7c95804fbb8d
+      anchor_dependency: "^0.31.0"
+      note: Package tarball/IDL provenance was not independently compared; the checked-in pinned-revision IDL fixture is the reviewed ABI input.
+  source_binary_match: unverified
 latest_devnet_read:
   commitment: confirmed
   genesis_hash: EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG
@@ -60,6 +82,9 @@ source_files:
   - path: solana-programs/programs/tuktuk/src/instructions/run_task_v0.rs
     sha256: 725c09e129d0c8c93b9fa9e7b86fc7faff3d1a2c13ea28e71abc2ddc80b31fd7
     review: task execution, returned-child processing and task-queue funding behavior
+  - path: solana-programs/programs/tuktuk/src/instructions/dequeue_task_v0.rs
+    sha256: 7af0d811a0e0b0a0e206347c3f32d2b700b9f00861d901d2218d429a76314167
+    review: queue-authority task cancellation and in-flight task bitmap guard
   - path: solana-programs/programs/cron/src/lib.rs
     sha256: 28ddd17591317f4b959876c64bb0e9b3b94d5ece63f534cad541df96e642f129
     review: declared Cron program ID and versioned instruction surface
@@ -89,7 +114,31 @@ source_files:
     review: Cron job close checks and cleanup
   - path: solana-programs/programs/cron/src/instructions/remove_cron_transaction_v0.rs
     sha256: 3487fae64e6c5c8ce0f25554a279683829213811c87e7f8a411983a9ae654010
-    review: transaction-record removal/close lifecycle
+    review: closes only the Cron record and does not address or cancel TukTuk task accounts
+  - path: tuktuk-program/idls/cron.json
+    sha256: 81958444d1719ce410e1007db279d8eace274387c5b803b5eaed5aa4b6026954
+    review: Anchor 0.3.0 Cron instruction discriminators, argument types and ordered account metas
+  - path: solana-programs/packages/cron-sdk/package.json
+    sha256: 29ffbccf2ab15cb31b1e664b6e6732d2a9ee0667e20b406a49066c7a0a12832e
+    review: published package version, declared gitHead and Anchor dependency
+  - path: solana-programs/packages/cron-sdk/src/index.ts
+    sha256: 7f1ed5e55b025a0d5bba08766dcd54027c6ff80d49a4e86f892d473414b7471f
+    review: public wrapper API; only createCronJob constructs an initialize instruction
+  - path: solana-programs/packages/cron-sdk/src/pdas.ts
+    sha256: c20df2347172292c3b999e4c4616c30caa5964d2cfe05554199add2e38f3ca1b
+    review: Cron user/job/name/transaction PDA seeds and derivation
+  - path: solana-programs/packages/cron-sdk/src/constants.ts
+    sha256: 9cd9857ec9c8b029320b696246f8651a47b03e26804d54b9db51ff963731f6a0
+    review: Cron SDK program ID
+  - path: solana-programs/packages/cron-sdk/src/init.ts
+    sha256: 453a50516901faabe8d1d3e9102c6a94ea1b8fff8da1f8fd3e0ec9027c1ec3b3
+    review: Anchor provider and IDL program initialization
+  - path: solana-programs/packages/tuktuk-idls/package.json
+    sha256: 2e3c065ac37591c209392030431667e5b3ba2d4872adb94d18db573e668600e5
+    review: published IDL package version, declared gitHead and Anchor dependency
+  - path: solana-programs/programs/cron/src/instructions/add_cron_transaction_v0.rs
+    sha256: 981bcefdba076c7abeb3fabd2a0e1633e33be2362402d4bc9aa2491117478f5b
+    review: scheduled transaction record storage and deletion semantics
 reviewed_source_facts:
   task_trigger:
     variants: [Now, Timestamp(i64)]
@@ -104,11 +153,22 @@ reviewed_source_facts:
     recovery_path: requeue_cron_task_v1
     legacy_requeue_v0: deprecated_and_fails
     close_order: remove_or_close_each_cron_transaction_before_closing_job
+    cron_sdk_wraps_full_lifecycle: false
+    queued_action_cancellation_on_record_removal_or_job_close: false
+    closed_job_coordinator_behavior: returns_no_tasks_when_cron_job_data_is_empty
+    already_materialized_action_behavior: remains_an_independent_tuktuk_task_and_may_still_execute
+    safe_stop_requires:
+      - enumerate_and_dequeue_pending_coordinator_and_action_tasks_with_queue_authority
+      - protocol_level_scheduler_epoch_or_disabled_guard_on_every_action_payload
+      - remove_cron_transactions_then_close_only_after_queue_cleanup_is_read_back
+    tuktuk_dequeue_requires_queue_authority_signer: true
+    dequeue_rejects_task_whose_exists_bit_is_already_clear: true
     executor: external_crank_turner_required
     price_condition: evaluated_by_the_called_coloyond_instruction_not_by_cron
 limitations:
   - These source hashes identify one upstream source revision; no reproducible upstream build was performed.
   - Earlier Devnet ProgramData hashes are not matched to this commit or a release artifact.
   - No ETF task or Cron job was registered and no crank-run transaction was sent.
+  - Removing Cron records and closing the job is not an immediate stop for already materialized TukTuk action tasks.
   - Queue funding, task rent/reward, exact compiled ETF payload, CPI/packet/compute fit, recurrence recovery, and independent crank-turner availability remain unproven.
 immutable_source_base: https://github.com/helium/tuktuk/blob/77dabc07580496517b6c390446daf4962fb3c39a/
