@@ -6,16 +6,16 @@
 
 | Cluster | Asset | Mint | Token program | Decimals / authorities |
 |---|---|---|---|---|
-| Mainnet and Devnet | WSOL | `So11111111111111111111111111111111111111112` | Classic SPL `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Must read finalized account on each cluster |
-| Mainnet | Circle-native USDC | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | Classic SPL `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | 6 decimals per source; current mint/freeze authority not verified |
-| Devnet | Circle test USDC | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | Expected classic SPL; verify | Must read finalized account; no redemption value |
+| Mainnet and Devnet | WSOL | `So11111111111111111111111111111111111111112` | Classic SPL `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized observations: initialized 82-byte mint, 9 decimals, no mint/freeze authority on both clusters. See [S0B snapshots](evidence/s0b-mint-observations-20261011.md). |
+| Mainnet | Circle-native USDC candidate | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | Classic SPL `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized observation: 6 decimals; mint authority `BJE5MMbqXjVwjAF7oxwPYXnTXDyspzYzt4vwenNw5ruG`; freeze authority `7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar`. Authority review pending. |
+| Devnet | Test-USDC candidate | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | Classic SPL `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized observation: 6 decimals; mint authority `GrNg1XM2ctzeE2mXxXCfhcTUbejM8Z4z4wNVTy2FjMEz`; freeze authority `CJtyoKSLrktozQzjERTiK3btQtiTK3nN4QrqGHLidyCT`; observed supply near `u64::MAX`. Authority/range review pending; no redemption value. |
 
 | Pair | Feed ID | Pyth shard-0 account (source-listed) | Live account verification |
 |---|---|---|---|
-| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Not fetched on either cluster |
-| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Not fetched on either cluster |
+| SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | S5C has a confirmed Devnet read; no finalized S0B feed observation or Mainnet read yet. See [S5C evidence](evidence/s5-oracle.md#latest-replayable-current-cluster-feed-read--11-october-2026). |
+| USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | S5C has a confirmed Devnet read; no finalized S0B feed observation or Mainnet read yet. See [S5C evidence](evidence/s5-oracle.md#latest-replayable-current-cluster-feed-read--11-october-2026). |
 
-The source report records that finalized `getAccountInfo` requests failed DNS resolution for both public Solana endpoints. This is missing evidence, not evidence that accounts are absent. Before admission, record per cluster: genesis hash, RPC/provider, finalized slot/time, account owner/executable/data length; mint decimals/supply/mint authority/freeze authority; feed owner/type/decoded ID, price/confidence/exponent/publish time/age and verification. Confirm feed PDA derivation and exact program owner. Two separately operated pusher configurations and current Hermes credential requirements must be demonstrated without committing credentials.
+The earlier source report records finalized `getAccountInfo` requests failing DNS resolution for both public Solana endpoints; later read-only mint captures succeeded. The latest Devnet feed capture is confirmed rather than finalized and applies only to Devnet. Before admission, complete per-cluster finalized feed observations, verify feed PDA derivation and exact program owner, review the observed mint/freeze authorities and Devnet amount range, and demonstrate two separately operated pusher configurations without committing credentials. Full mint and feed capture details are in [S0B evidence](evidence/s0b-mint-observations-20261011.md) and [S5C evidence](evidence/s5-oracle.md#latest-replayable-current-cluster-feed-read--11-october-2026).
 
 ## Program and operations fields
 

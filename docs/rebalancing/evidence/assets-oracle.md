@@ -1,6 +1,6 @@
 # S0B — WSOL/USDC asset and Pyth oracle evidence
 
-**Checked:** 2026-10-10 (UTC)
+**Checked:** 2026-10-11 (UTC)
 
 **Scope:** evidence for the provisional first WSOL/USDC vault on Solana mainnet and Devnet. No transactions, signatures, or changes to chain state were made.
 
@@ -8,19 +8,19 @@
 
 ## Decision
 
-Keep classic SPL WSOL/USDC as the provisional first pair. Pyth's current Solana sponsored-push-feed list includes both SOL/USD and USDC/USD on mainnet and Devnet; it specifies 55-second heartbeat / 0.5% price-deviation update criteria. This supports the design choice of fixed Pyth Core feed accounts plus a permissionless Pyth Price Pusher as a liveness backup. It does **not** prove current account state, update freshness, market depth, or safe executable fills.
+Keep classic SPL WSOL/USDC as the provisional first pair. Finalized reads now confirm the candidate mint addresses, classic Token Program ownership, decimals, and current mint/freeze authority keys on both clusters; both USDC candidates have active mint and freeze authorities. Pyth's current Solana sponsored-push-feed list includes both SOL/USD and USDC/USD on mainnet and Devnet; it specifies 55-second heartbeat / 0.5% price-deviation update criteria. A separate confirmed Devnet feed snapshot decoded all three candidate ETF feeds, but Mainnet feed reads and finalized feed observations on both clusters remain open. These observations do **not** prove issuer control, backing, market depth, freshness guarantees, or safe executable fills. See [finalized mint observations](s0b-mint-observations-20261011.md) and [the latest Devnet feed observation](s5-oracle.md#latest-replayable-current-cluster-feed-read--11-october-2026).
 
-**S0B technical admission is not yet passed.** The sandbox could not resolve either public Solana RPC hostname, so no mint or feed account was read from finalized mainnet or Devnet state. The manifest must not freeze authorities or claim live account verification from this report. Keep funded UI/entry unavailable until the S0B pass criteria below are met by an operator with RPC access. This is an evidence/network limitation, not evidence that a mint or feed is absent.
+**S0B technical admission is not yet passed.** The earlier sandbox DNS failure left accounts unread at that time. Read-only finalized mint captures are now recorded for Mainnet and Devnet. The later S5C feed capture is confirmed Devnet only; it is not a finalized four-feed/two-cluster S0B capture. Authority-policy review, repeated oracle observations under approved limits, pusher liveness, the consumer build/proof, and disclosure remain open. Keep funded UI/entry unavailable until every S0B pass criterion below is met.
 
 ## Asset identifiers and issuer constraints
 
 | Asset | Network | Exact mint | Expected token program | Source status |
 |---|---|---|---|---|
-| WSOL | Mainnet and Devnet | `So11111111111111111111111111111111111111112` | Classic SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Solana docs identify this as the native mint for the original Token Program. Verify account owner/decimals/authority directly on both clusters before manifest freeze. |
-| Circle-native USDC | Mainnet | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | Classic SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Circle identifies this as its Solana mainnet mint; Solana documents 6 decimals and shows a mint-account example. Current authorities were not RPC-verified here. |
-| Circle test USDC | Devnet | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | Expected classic SPL Token; verify account owner directly | Solana's official Devnet payment example uses this as the USDC mint; Circle also lists the abbreviated address. Account state, decimals and authorities were not RPC-verified here. Devnet units have no mainnet redemption value. |
+| WSOL | Mainnet and Devnet | `So11111111111111111111111111111111111111112` | Classic SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized snapshots show owner match, initialized 82-byte mint, 9 decimals, and no mint/freeze authority on both clusters. See [capture details](s0b-mint-observations-20261011.md). |
+| Circle-native USDC candidate | Mainnet | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | Classic SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized snapshot shows 6 decimals, mint authority `BJE5...5ruG`, freeze authority `7dG...RCrar`; review and acceptance remain open. Address identity/source is separate from raw mint metadata. |
+| Circle test-USDC candidate | Devnet | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | Classic SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Finalized snapshot shows 6 decimals, mint authority `GrNg...jMEz`, freeze authority `CJty...idyCT`; supply is near `u64::MAX`. Review, safe amount bounds, and asset identity remain open. Devnet units have no mainnet redemption value. |
 
-Solana's mint layout has separate optional `mint_authority` and `freeze_authority` fields. The current Solana USDC example shows both populated on its observed example account, but it is not a current RPC observation for this report and must not be copied into the manifest as authoritative. **Exact mainnet and Devnet mint/freeze authorities remain unverified.** Record the live values (including `None`/revoked state) and block funded admission if the observed authority/control does not match the reviewed risk policy.
+Solana's mint layout has separate optional `mint_authority` and `freeze_authority` fields. The finalized captures now record the exact values (including `None` for WSOL); both observed USDC candidates have both authorities populated. The values and account bytes are in the [replayable mint evidence](s0b-mint-observations-20261011.md). **Authority/control acceptance is still pending** and must match a reviewed risk policy before manifest freeze or funded admission. The Devnet test-USDC observed supply is near the `u64` maximum and needs bounded amount tests before use.
 
 Circle is an external USDC issuer. A freeze authority can freeze token accounts; Solana's token docs state frozen accounts cannot transfer or burn. Therefore in-kind redemption is not guaranteed against an issuer freeze, USDC depeg, or chain/RPC outage. Disclose issuer, redemption, freeze, depeg, and external transfer limitations before deposit. A Pyth USDC/USD price cannot establish Circle redemption availability or prevent a freeze. WSOL avoids the USDC issuer, but wrapping/unwrapping and its native mint behavior still depend on the Solana Token Program.
 
@@ -33,7 +33,7 @@ Sources: [Solana native mint / WSOL](https://solana.com/docs/tokens/basics/sync-
 | SOL/USD | `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Mainnet and Devnet |
 | USDC/USD | `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Mainnet and Devnet |
 
-Pyth's sponsored-feed page lists the same feed addresses for Solana mainnet and Devnet and labels the listed addresses as shard 0. The SOL address is also used in Pyth's SDK example; the USDC full address above is derived from the documented Pyth PDA scheme (price-feed program ID + shard 0 + feed ID) and matches the official list's `Dpw1EA...eFbX` abbreviation. **Neither feed account was fetched over RPC in this check**, so existence, owner, decoded feed ID, last publish time, confidence and current freshness on either network remain unverified.
+Pyth's sponsored-feed page lists the same feed addresses for Solana mainnet and Devnet and labels the listed addresses as shard 0. The SOL address is also used in Pyth's SDK example; the USDC full address above is derived from the documented Pyth PDA scheme (price-feed program ID + shard 0 + feed ID) and matches the official list's `Dpw1EA...eFbX` abbreviation. In the original 2026-10-10 check, neither account was fetched. The later S5C probe confirms the Devnet account owner, embedded feed ID, layout, and verification at **confirmed** commitment; it does not satisfy finalized S0B evidence. Mainnet feed accounts and finalized observations on both clusters remain unverified. See [S5C evidence](s5-oracle.md#latest-replayable-current-cluster-feed-read--11-october-2026).
 
 Pyth's Solana docs distinguish fixed `PriceFeed` accounts from ephemeral `PriceUpdateV2` pull accounts. The program must accept only the pinned account address/program owner and expected feed ID. Pyth's `PriceUpdateV2::get_price_no_older_than` checks `Full` verification, feed ID and maximum publish age; the SDK defines `Full` as at least two-thirds of current Wormhole guardian signatures verified. The method does not by itself impose Coloyond's maximum confidence/price ratio, depeg threshold, cross-feed sanity checks, or policy-specific maximum update age; implement those explicitly. Reject zero/negative or malformed values and fail closed for new risk. An on-chain check cannot fetch HTTP data.
 
@@ -54,7 +54,7 @@ Sources: [Pyth Solana integration compatibility note](https://docs.pyth.network/
 
 ## Checks performed and open evidence
 
-Read-only account check attempted against both public endpoints using finalized `getAccountInfo` with `jsonParsed`:
+Historical read-only account checks attempted against both public endpoints using finalized `getAccountInfo` with `jsonParsed` on 2026-10-10:
 
 ```sh
 curl --silent --show-error --max-time 10 https://api.mainnet-beta.solana.com \
@@ -68,7 +68,7 @@ curl --silent --show-error --max-time 10 https://api.devnet.solana.com \
 # curl: (6) Could not resolve host: api.devnet.solana.com
 ```
 
-The same check must be repeated for all three mints and both feed accounts on **each** target network from a working RPC. Save cluster/genesis identity, RPC provider, finalized slot, timestamp, account owner, executable flag, data length, decoded mint decimals/supply/mint authority/freeze authority, and for feeds decoded account type/ID, verification level where applicable, price/conf/exponent/publish time, and age. Independently compare the feed's decoded ID and deriving program/PDA to the pinned manifest. Then inspect Price Pusher build/config and demonstrate two independent operators can update the shard-0 feeds; documentation presence alone is not liveness evidence.
+The mint queries were subsequently completed for both target clusters; see the [finalized captures](s0b-mint-observations-20261011.md). Remaining live reads: fetch both feed accounts for each cluster at finalized commitment, record cluster/genesis identity, provider, slot/time, owner, executable flag, data length, decoded type/feed ID, verification level, price/confidence/exponent/publish time and age. Independently compare feed ID and derivation program/PDA to the pinned manifest. Then inspect Price Pusher build/config and demonstrate two independent operators can update the shard-0 feeds; documentation presence alone is not liveness evidence.
 
 ## S0B pass/fail criteria
 
