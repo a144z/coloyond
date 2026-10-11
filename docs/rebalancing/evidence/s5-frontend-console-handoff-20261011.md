@@ -26,15 +26,16 @@ The already-integrated weighted-math module was reused unchanged.
 
 ## Follow-up safety fix
 
-Commit `b2ed9e1dafac7f3870653b24ef45f5e05779a054` is pushed to `origin/feature/portfolio-rebalancing` (authored and committed by `wlkit <114655923+wlkit@users.noreply.github.com>`). It adds a same-origin Web Locks gate scoped by genesis, pool, and wallet. The gate re-reads the durable IndexedDB journal while holding the lock and blocks the wallet path if any operation has an unresolved latest signature; browsers without Web Locks fail closed. The lock covers the wallet request, pre-send journal write, RPC submission, and reconciliation. This protects cooperating tabs in the same browser profile; it is not a cross-device lock, and no concurrent-tab wallet transaction test has been run.
+Commit `b2ed9e1dafac7f3870653b24ef45f5e05779a054` is pushed to `origin/feature/portfolio-rebalancing` (authored and committed by `wlkit <114655923+wlkit@users.noreply.github.com>`). It adds a same-origin Web Locks gate scoped by genesis, pool, and wallet. The gate re-reads the durable IndexedDB journal while holding the lock and blocks the wallet path if any operation has an unresolved latest signature; browsers without Web Locks fail closed. The lock covers the wallet request, pre-send journal write, RPC submission, and reconciliation. It protects cooperating tabs in the same browser profile; it is not a cross-device lock. Three deterministic tests cover missing lock support, blocking on an existing unknown signature, and journal recheck after a second caller waits for the first lock. No real browser multi-tab wallet transaction test has been run.
 
 The ATA receipt now shows each planned account's pre-balance, post-balance, and RPC-derived lamport delta. It no longer labels the account's total post-balance as rent. Solana's network fee remains a separate receipt field.
 
-The fix changed `src/ui/etf/EtfTransactionsPage.tsx` and `src/ui/etf/IndexedDbSubmissionJournal.ts`. After it:
+The fix changed `src/ui/etf/EtfTransactionsPage.tsx` and `src/ui/etf/IndexedDbSubmissionJournal.ts`; the focused regression lives at `src/ui/etf/test/IndexedDbSubmissionJournal.test.ts`. After it:
 
 - `npm run typecheck` — passed.
 - `npm run build` — passed; the existing large JavaScript chunk warning remains.
 - `node --import tsx --test packages/etf-client/test/*.test.ts` — **73/73 passed**.
+- `node --import tsx --test src/ui/etf/test/IndexedDbSubmissionJournal.test.ts` — **3/3 passed**.
 - `git diff --check` — passed.
 - `git fetch origin --prune` at approximately 07:02 UTC — no incoming branch changes; local feature branch was pushed through `b2ed9e1`.
 
@@ -74,7 +75,7 @@ The historical blueprint's three-asset 40/40/20 example and dynamic 500/1,000-bp
 
 ## Latest browser read after the follow-up
 
-At approximately 2026-10-11 07:01 UTC, the live page read Devnet at confirmed slot `509820015`. The genesis remained `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; no wallet was connected, and the accepted manifest/program/pool remained unavailable. The SOL/USD candidate was `Full`, 5 seconds old, and 4 bps confidence; the BTC/USD and USD/USD candidates were `Full`, about 481 seconds old, with 10 bps confidence, and stale against the draft 60-second diagnostic. These are candidate observations only and do not override the missing feed admission or deployment gate. No transaction was prepared, signed, submitted, or confirmed.
+At 2026-10-11 07:02:18 UTC, the live page read Devnet at confirmed slot `509820212`. The genesis remained `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; no wallet was connected, and the accepted manifest/program/pool remained unavailable. The SOL/USD candidate was `Full`, 13 seconds old, and 4 bps confidence; the BTC/USD and USD/USD candidates were `Full`, about 529 seconds old, with 10 bps confidence, and stale against the draft 60-second diagnostic. These are candidate observations only and do not override the missing feed admission or deployment gate. No transaction was prepared, signed, submitted, or confirmed.
 
 ## Colleague and developer steps
 
