@@ -12,9 +12,9 @@
 | `assets` | `Vec<EtfAssetConfigV1>` | `u32` little-endian count followed by ordered entries; current contract admits two or three assets. |
 | `math_version` | `u16` | Little-endian. |
 | `fee_policy_id` | `[u8; 32]` | Raw bytes, not base58 or hex text. |
-| `fee_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. Inner schema and bounds must be frozen by the reviewed S5D2 amendment before S5E. |
+| `fee_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. S5D2 supplies reviewed economics evidence and a candidate amendment; S5A freezes the accepted inner schema and bounds before S5E. |
 | `risk_policy_id` | `[u8; 32]` | Raw bytes, not base58 or hex text. |
-| `risk_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. Inner schema and bounds must be frozen by the reviewed S5C/S5A amendment before S5E. |
+| `risk_policy_params` | `Vec<u8>` | `u32` little-endian byte length followed by opaque bytes. S5C supplies oracle-mode/parser evidence and identifies risk-policy inputs; S5A freezes the accepted inner schema and bounds after reviewing those inputs before S5E. |
 | `initial_governance_authority` | `[u8; 32]` | Initial governance pubkey bytes. Must be nonzero and distinct from the guardian. |
 | `initial_emergency_guardian` | `[u8; 32]` | Initial guardian pubkey bytes. Must be nonzero and distinct from governance. |
 | `governance_delay_seconds` | `u64` | Little-endian. |
@@ -32,7 +32,7 @@ Each `EtfAssetConfigV1` is encoded in the following order:
 | `feed_id` | `[u8; 32]` | Raw Pyth feed ID bytes, not hexadecimal text. |
 | `target_weight_bps` | `u16` | Little-endian basis points. |
 
-Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. The identity baseline enforces v1, two or three assets, unique mints, a 10,000-bps weight sum, and two nonzero, distinct initial authority keys. It deliberately imposes no per-asset minimum weight; the separate S5B math candidate's 100-bps floor remains subject to review. Decoders must reject unsupported versions, invalid asset count/weight/authority constraints, malformed enum tags, truncation, and trailing bytes. The Rust decoder requires each caller to supply an explicit input-size ceiling; S5A has not selected the production account/config size limit.
+Struct fields concatenate without names, alignment, padding, or terminators. No strings, maps, floats, booleans, options, base58 address text, or duplicated asset count are serialized. The identity baseline enforces v1, two or three assets, unique mints, a 10,000-bps weight sum, and two nonzero, distinct initial authority keys. It deliberately imposes no per-asset minimum weight; the separate S5B math candidate's 100-bps floor remains subject to review. Parameterized S5B core-math review may proceed before final S5A policy freeze; it does not choose the production weight floor or other config values. Decoders must reject unsupported versions, invalid asset count/weight/authority constraints, malformed enum tags, truncation, and trailing bytes. The Rust decoder requires each caller to supply an explicit input-size ceiling; S5A has not selected the production account/config size limit.
 
 ## Content identity
 
