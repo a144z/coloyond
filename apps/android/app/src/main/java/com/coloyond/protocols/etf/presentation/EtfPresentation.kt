@@ -73,6 +73,31 @@ enum class EtfWalletActionState { DRAFT, AWAITING_SIGNATURE, SUBMITTED, CONFIRME
 /** Small pure helpers shared by the provisional Compose screen and JVM tests. */
 object EtfPresentationText {
     const val SYNTHETIC_NOTICE = "SYNTHETIC FIXTURE · NO RPC · NO WALLET ACTIONS"
+    const val ORACLE_BLOCKED = "Unavailable · required oracle blocked"
+
+    /** Presentation guard only; upstream S5A validation must establish source authenticity. */
+    fun canDisplayValuation(assets: List<EtfAssetPresentation>): Boolean =
+        assets.isNotEmpty() && assets.all { asset ->
+            val oracle = asset.oracle
+            val price = oracle.price?.toBigDecimalOrNull()
+            val confidence = oracle.confidence?.toBigDecimalOrNull()
+
+            oracle.state == EtfOracleState.FRESH &&
+                oracle.mode != EtfOracleMode.UNKNOWN &&
+                !oracle.feedId.isNullOrBlank() &&
+                price != null && price.signum() > 0 &&
+                oracle.publishTime?.toLongOrNull() != null &&
+                oracle.ageSeconds != null && oracle.ageSeconds >= 0 &&
+                confidence != null && confidence.signum() >= 0 &&
+                !oracle.owner.isNullOrBlank() &&
+                !oracle.layoutEvidence.isNullOrBlank()
+        }
+
+    fun guardedValuation(value: String, assets: List<EtfAssetPresentation>): String =
+        guardedValuation(value, canDisplayValuation(assets))
+
+    fun guardedValuation(value: String, canDisplay: Boolean): String =
+        if (canDisplay) value else ORACLE_BLOCKED
 
     fun weightBps(value: Int?): String = when {
         value == null -> "Unknown"

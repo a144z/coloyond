@@ -1,6 +1,8 @@
 package com.coloyond.protocols.etf.presentation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EtfPresentationTest {
@@ -58,4 +60,80 @@ class EtfPresentationTest {
     fun everyScreenStateCarriesAnUnambiguousSyntheticWarning() {
         assertEquals("SYNTHETIC FIXTURE · NO RPC · NO WALLET ACTIONS", EtfPresentationText.SYNTHETIC_NOTICE)
     }
+
+    @Test
+    fun anyBlockedRequiredOracleHidesNavWeightsAndPriceDependentPreview() {
+        val fresh = asset()
+        for (blockedState in listOf(
+            EtfOracleState.STALE,
+            EtfOracleState.UNAVAILABLE,
+            EtfOracleState.INVALID,
+            EtfOracleState.UNKNOWN,
+        )) {
+            val assets = listOf(fresh, asset(state = blockedState))
+            assertFalse(EtfPresentationText.canDisplayValuation(assets))
+            assertEquals(EtfPresentationText.ORACLE_BLOCKED, EtfPresentationText.guardedValuation("\$125.00", assets))
+            assertEquals(EtfPresentationText.ORACLE_BLOCKED, EtfPresentationText.guardedValuation("40.00%", assets))
+        }
+    }
+
+    @Test
+    fun valuationRequiresACompleteNonemptySetOfFreshKnownOracleModes() {
+        assertFalse(EtfPresentationText.canDisplayValuation(emptyList()))
+        assertTrue(EtfPresentationText.canDisplayValuation(listOf(asset(mode = EtfOracleMode.RECEIVER_FULL))))
+        assertTrue(EtfPresentationText.canDisplayValuation(listOf(asset(mode = EtfOracleMode.PUSH_FEED))))
+        assertFalse(EtfPresentationText.canDisplayValuation(listOf(asset(mode = EtfOracleMode.UNKNOWN))))
+    }
+
+    @Test
+    fun freshOracleWithMissingOrMalformedEvidenceCannotDisplayValuation() {
+        val complete = asset()
+        val invalidOracles = listOf(
+            complete.oracle.copy(feedId = null),
+            complete.oracle.copy(price = null),
+            complete.oracle.copy(price = "0"),
+            complete.oracle.copy(price = "not-a-price"),
+            complete.oracle.copy(publishTime = null),
+            complete.oracle.copy(publishTime = "not-a-time"),
+            complete.oracle.copy(ageSeconds = null),
+            complete.oracle.copy(ageSeconds = -1),
+            complete.oracle.copy(confidence = null),
+            complete.oracle.copy(confidence = "-0.01"),
+            complete.oracle.copy(owner = " "),
+            complete.oracle.copy(layoutEvidence = null),
+        )
+
+        invalidOracles.forEach { oracle ->
+            val assets = listOf(complete.copy(oracle = oracle))
+            assertFalse("Unexpectedly accepted $oracle", EtfPresentationText.canDisplayValuation(assets))
+            assertEquals(
+                EtfPresentationText.ORACLE_BLOCKED,
+                EtfPresentationText.guardedValuation("$125.00", assets),
+            )
+        }
+    }
+
+    private fun asset(
+        state: EtfOracleState = EtfOracleState.FRESH,
+        mode: EtfOracleMode = EtfOracleMode.RECEIVER_FULL,
+    ) = EtfAssetPresentation(
+        symbol = "SOL",
+        mint = "synthetic-mint",
+        decimals = 9,
+        targetWeightBps = 4_000,
+        actualValueWeightBps = 4_000,
+        custodyAmountBaseUnits = "1000000000",
+        walletAmountBaseUnits = "0",
+        oracle = EtfOraclePresentation(
+            feedId = "synthetic-feed",
+            mode = mode,
+            state = state,
+            price = "100",
+            publishTime = "1",
+            ageSeconds = 1,
+            confidence = "1",
+            owner = "synthetic-owner",
+            layoutEvidence = "fixture",
+        ),
+    )
 }

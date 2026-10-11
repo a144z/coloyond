@@ -56,8 +56,14 @@ fun EtfPoolOperationsScreen(
             Fact("Observed slot", EtfPresentationText.optional(state.observedSlot), code = true)
         }
 
+        val showValuation = EtfPresentationText.canDisplayValuation(state.assets)
+        val swapPreview = state.swapPreview
+
         Section("Pool overview · estimates only") {
-            Fact("Estimated NAV · not an execution quote", EtfPresentationText.usd(state.estimatedNavUsd))
+            Fact(
+                "Estimated NAV · not an execution quote",
+                EtfPresentationText.guardedValuation(EtfPresentationText.usd(state.estimatedNavUsd), state.assets),
+            )
             Fact("Share mint", EtfPresentationText.optional(state.shareMint), code = true)
             Fact("Total shares · sample base units", EtfPresentationText.tokenAmount(state.totalShareSupplyBaseUnits, 6), code = true)
             Fact("Wallet shares · sample base units", EtfPresentationText.tokenAmount(state.walletShareBalanceBaseUnits, 6), code = true)
@@ -66,11 +72,15 @@ fun EtfPoolOperationsScreen(
 
         Section("Assets · synthetic / unbacked test mints") {
             if (state.assets.isEmpty()) Fact("Asset list", "Unknown")
-            state.assets.forEach { AssetCard(it) }
+            state.assets.forEach { AssetCard(it, showValuation) }
         }
 
         Section("Swap preview · not a fill guarantee") {
-            state.swapPreview?.let { SwapPreview(it) } ?: Fact("Preview", "Unavailable · no quote supplied")
+            when {
+                !showValuation -> Fact("Preview", EtfPresentationText.ORACLE_BLOCKED)
+                swapPreview != null -> SwapPreview(swapPreview)
+                else -> Fact("Preview", "Unavailable · no quote supplied")
+            }
         }
 
         Section("Wallet action status · sample only") {
@@ -102,13 +112,19 @@ fun EtfPoolOperationsScreen(
 }
 
 @Composable
-private fun AssetCard(asset: EtfAssetPresentation) {
+private fun AssetCard(asset: EtfAssetPresentation, showValuation: Boolean) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(asset.symbol, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
             Fact("Mint · synthetic / unbacked", EtfPresentationText.optional(asset.mint), code = true)
             Fact("Target weight", EtfPresentationText.weightBps(asset.targetWeightBps))
-            Fact("Actual value weight", EtfPresentationText.weightBps(asset.actualValueWeightBps))
+            Fact(
+                "Actual value weight",
+                EtfPresentationText.guardedValuation(
+                    EtfPresentationText.weightBps(asset.actualValueWeightBps),
+                    showValuation,
+                ),
+            )
             Fact("Custody · sample", EtfPresentationText.tokenAmount(asset.custodyAmountBaseUnits, asset.decimals))
             Fact("Wallet · sample", EtfPresentationText.tokenAmount(asset.walletAmountBaseUnits, asset.decimals))
             OracleFacts(asset.oracle)
