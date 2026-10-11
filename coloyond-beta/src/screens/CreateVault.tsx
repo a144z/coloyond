@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
-import { CADENCE_OPTIONS_SEC } from '../lib/solana/config';
-import { assetList, type AssetId } from '../lib/solana/assets';
+import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
+import { assetList, type AssetId, type AssetSpec } from '../lib/solana/assets';
 import { bookStatus, priceOf } from '../lib/solana/price';
-import { PRICE_MAX_AGE_MS } from '../lib/solana/config';
-import { fmtSol, fmtToken, fmtUsd, lamportsFromSol, parseAmount, parseAmountOrZero, rawFromToken } from '../lib/format';
+import { fmtSol, fmtUsd, lamportsFromSol, parseAmount, parseAmountOrZero } from '../lib/format';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { Button } from '../components/ui/Button';
 import { LedgerPanel } from '../components/ui/LedgerPanel';
@@ -21,9 +20,7 @@ const cadenceLabels: Record<number, string> = {
 const SETUP_FEE_SOL = 0.02;
 
 const defaultShares: Record<AssetId, number> = { wsol: 60, tusd: 40, tbtc: 0, teth: 0 };
-const defaultDeposits: Record<AssetId, string> = { wsol: '0.20', tusd: '', tbtc: '', teth: '' };
-
-/** 02 / Create a portfolio — assets, weights, deposits, cadence, budget, review. */
+/** 02 / Create a portfolio — assets, weights, SOL investment, cadence, budget, review. */
 export function CreateVault() {
   const walletBalances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
@@ -33,7 +30,7 @@ export function CreateVault() {
 
   const [name, setName] = useState('Everyday mix');
   const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
-  const [depositStr, setDepositStr] = useState<Record<AssetId, string>>(defaultDeposits);
+  const [investmentSol, setInvestmentSol] = useState('0.20');
   const [budget, setBudget] = useState('0.05');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
@@ -41,70 +38,54 @@ export function CreateVault() {
   const [submitting, setSubmitting] = useState(false);
 
   const solAvail = walletBalances ? walletBalances.solLamports : null;
-  const tokensAvail = walletBalances?.tokens ?? null;
-
   const targets = normalizeShares(shares);
   const selected = assetList().filter((s) => (shares[s.id] ?? 0) > 0);
   const selectedIds = selected.map((s) => s.id);
   const targetLabel = selected.map((s) => `${(targets[s.id] ?? 0).toFixed(0)} ${s.symbol}`).join(' · ');
 
-  const depositUnits: Partial<Record<AssetId, number | null>> = {};
-  for (const spec of selected) {
-    depositUnits[spec.id] = parseAmountOrZero(depositStr[spec.id] ?? '');
-  }
+  const investmentSolUnits = parseAmountOrZero(investmentSol);
   const budgetSol = parseAmount(budget);
+  const priceOk = bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && price !== null;
+  const solUsd = priceOk ? priceOf(price, 'wsol') : null;
+  const estimatedTotalUsd = investmentSolUnits !== null && solUsd !== null ? investmentSolUnits * solUsd : null;
 
   const errors = useMemo(() => {
     const errs: string[] = [];
     if (!name.trim()) errs.push('Portfolio name is required.');
     if (selected.length < 2) errs.push('Pick at least two assets for the mix.');
-    if (selected.some((s) => depositUnits[s.id] === null)) {
-      errs.push('One of the deposit amounts is not valid.');
-    }
+    if (investmentSolUnits === null) errs.push('Enter a valid SOL investment amount.');
+    else if (lamportsFromSol(investmentSolUnits) <= 0) errs.push('Invest at least 0.000000001 SOL.');
     if (budgetSol === null) errs.push('Automation budget is not a valid amount.');
-    const anyDeposit = selected.some((s) => (depositUnits[s.id] ?? 0) > 0);
-    if (!anyDeposit) errs.push('Deposit at least one asset.');
-    if (solAvail !== null && budgetSol !== null) {
-      const wsolUnits = depositUnits.wsol ?? 0;
-      const need = budgetSol + wsolUnits + SETUP_FEE_SOL;
+    if (solAvail === null) errs.push('Waiting for your wallet SOL balance.');
+    if (solAvail !== null && budgetSol !== null && investmentSolUnits !== null) {
+      const need = budgetSol + investmentSolUnits + SETUP_FEE_SOL;
       if (lamportsFromSol(need) > solAvail) {
         errs.push(
-          `Wallet needs about ${need.toFixed(2)} SOL (budget + WSOL deposit + fees). Available: ${fmtSol(solAvail)} SOL. Use the faucet from the Wallet tab.`,
+          `Wallet needs about ${need.toFixed(2)} SOL (investment + budget + setup fees). Available: ${fmtSol(solAvail)} SOL.`,
         );
-      }
-    }
-    if (tokensAvail) {
-      for (const spec of selected) {
-        const units = depositUnits[spec.id] ?? 0;
-        if (units > 0 && rawFromToken(units, spec.decimals) > (tokensAvail[spec.id] ?? 0)) {
-          errs.push(
-            `${spec.symbol} deposit exceeds your balance of ${fmtToken(tokensAvail[spec.id] ?? 0, spec.decimals)} ${spec.symbol}.`,
-          );
-        }
       }
     }
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, shares, depositStr, budget, solAvail, tokensAvail]);
-
-  const priceOk = bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && price !== null;
+  }, [name, shares, investmentSol, budget, solAvail]);
 
   async function onConfirm() {
     if (submitting || errors.length > 0 || budgetSol === null) return;
     setSubmitting(true);
     try {
-      const deposits: Record<string, number> = {};
-      for (const spec of selected) {
-        deposits[spec.id] = rawFromToken(depositUnits[spec.id] ?? 0, spec.decimals);
-      }
+      const solDepositLamports = lamportsFromSol(investmentSolUnits ?? 0);
+      const assets = assetList()
+        .filter((spec) => selectedIds.includes(spec.id) || (spec.id === 'wsol' && solDepositLamports > 0))
+        .map((spec) => spec.id);
+      const assetTargets = Object.fromEntries(assets.map((id) => [id, targets[id] ?? 0]));
       const id = await createVault({
         name: name.trim(),
-        assets: selectedIds,
-        targets: targets as Record<string, number>,
+        assets,
+        targets: assetTargets,
         thresholdPct: threshold,
         cadenceSec,
         budgetLamports: lamportsFromSol(budgetSol),
-        deposits,
+        deposits: { wsol: solDepositLamports },
       });
       if (id) {
         setReviewOpen(false);
@@ -120,7 +101,7 @@ export function CreateVault() {
       <ScreenHeading
         micro="02 / Create a portfolio"
         title="Set the balance."
-        sub="Pick the assets and their weights. One wallet signature sets up custody, budget and deposits. The vault keypair trades; your owner key stays out of it."
+        sub="Pick the assets and their weights, then invest from your SOL balance. The vault starts with wrapped SOL and rebalances toward your mix on schedule."
       />
 
       <Field label="Portfolio name" error={name.trim() === '' ? 'Portfolio name is required.' : undefined}>
@@ -150,33 +131,32 @@ export function CreateVault() {
       </div>
 
       <div className="mt-4">
-        <MicroLabel>Deposits · the assets you picked</MicroLabel>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          {selected.map((spec) => (
-            <Field
-              key={spec.id}
-              label={`Deposit ${spec.symbol}`}
-              hint={
-                spec.id === 'wsol'
-                  ? solAvail !== null
-                    ? `Wraps SOL · you hold ${fmtSol(solAvail)}`
-                    : 'Wraps SOL from your wallet'
-                  : tokensAvail && (tokensAvail[spec.id] ?? 0) > 0
-                    ? `you hold ${fmtToken(tokensAvail[spec.id] ?? 0, spec.decimals)} ${spec.symbol}`
-                    : '0 is fine — automation buys in at the target weight'
-              }
-            >
-              <input
-                inputMode="decimal"
-                value={depositStr[spec.id] ?? ''}
-                onChange={(e) => setDepositStr({ ...depositStr, [spec.id]: e.target.value })}
-                className={inputClass}
-                aria-label={`${spec.symbol} deposit`}
-                placeholder="0.00"
-              />
-            </Field>
-          ))}
+        <Field
+          label="Invest from wallet · SOL"
+          hint={solAvail !== null ? `Available: ${fmtSol(solAvail)} SOL` : 'Checking your wallet SOL balance…'}
+          error={
+            investmentSolUnits === null
+              ? 'Enter a valid SOL amount.'
+              : lamportsFromSol(investmentSolUnits) <= 0
+                ? 'Minimum investment is 0.000000001 SOL.'
+                : undefined
+          }
+        >
+          <input
+            inputMode="decimal"
+            value={investmentSol}
+            onChange={(e) => setInvestmentSol(e.target.value)}
+            className={inputClass}
+            aria-label="SOL to invest"
+            placeholder="0.00"
+          />
+        </Field>
+        <div className="mt-3">
+          <InvestmentEstimate assets={selected} targets={targets} totalUsd={estimatedTotalUsd} />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-iron">
+          SOL is wrapped as WSOL in the vault first. If WSOL is not in your target mix, it is tracked at 0% until the scheduled rebalance moves toward your targets.
+        </p>
       </div>
 
       <div className="mt-4">
@@ -216,7 +196,7 @@ export function CreateVault() {
 
       <div className="mt-4">
         <Field
-          label="Automation budget · separate from tokens"
+          label="Automation budget · separate from investment"
           hint={`Pays devnet fees for automated trades. 0.05 SOL ≈ 60+ swaps. You hold ${fmtSol(solAvail ?? 0)} SOL.`}
         >
           <input
@@ -275,13 +255,11 @@ export function CreateVault() {
           rows={[
             { k: 'Portfolio', v: name.trim() || '—' },
             { k: 'Target mix', v: targetLabel || '—' },
+            { k: 'SOL investment', v: `${(investmentSolUnits ?? 0).toString()} SOL → WSOL` },
+            { k: 'Wallet SOL balance', v: solAvail !== null ? `${fmtSol(solAvail)} SOL` : 'Loading' },
             {
-              k: 'Deposits',
-              v:
-                selected
-                  .filter((s) => (depositUnits[s.id] ?? 0) > 0)
-                  .map((s) => `${(depositUnits[s.id] ?? 0).toString()} ${s.symbol}`)
-                  .join(' · ') || '—',
+              k: 'Estimated vault value',
+              v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a fresh SOL/USD price',
             },
             { k: 'Automation budget', v: `${(budgetSol ?? 0).toFixed(4)} SOL (separate)` },
             { k: 'Cadence', v: cadenceLabels[cadenceSec] ?? `every ${cadenceSec}s` },
@@ -292,28 +270,56 @@ export function CreateVault() {
           <MicroLabel>What setup does</MicroLabel>
           <ul className="mt-2 space-y-1.5 text-[11.5px] leading-relaxed text-iron">
             <li>· Generates a separate vault custody keypair on this device.</li>
-            <li>· Creates the vault's token accounts for all {selected.length} selected assets.</li>
-            <li>· Moves the fee budget and deposits to the new vault.</li>
+            <li>· Creates the vault's token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus WSOL as the SOL funding asset'}.</li>
+            <li>· Wraps your SOL as WSOL, then moves it and the separate fee budget to the vault.</li>
             <li>· Counterparty for future swaps: the program-authorized devnet reserve (spread 0.30% + curve fee, capped at 3.00%).</li>
             <li>· Execution: delegated to MagicBlock Ephemeral Rollups on a 60-second schedule.</li>
           </ul>
         </div>
         <div className="mt-4">
-          <Notice tone="petrol" title="Expected effect">
-            The vault values every asset at{' '}
-            {priceOk
-              ? selected.length > 1
-                ? 'live Coinbase/Binance mids'
-                : 'the live mid'
-              : 'the next fresh price observation'}{' '}
-            and trades back onto {targetLabel} whenever drift passes {threshold.toFixed(1)}%.
-            {priceOk && price ? ` Current mids: ${assetList()
-              .filter((s) => (shares[s.id] ?? 0) > 0)
-              .map((s) => `${s.symbol} ${fmtUsd(priceOf(price, s.id) ?? 0)}`)
-              .join(' · ')}.` : ''}
+          <InvestmentEstimate assets={selected} targets={targets} totalUsd={estimatedTotalUsd} />
+        </div>
+        <div className="mt-4">
+          <Notice tone="petrol" title="How the investment is executed">
+            This is an allocation estimate, not an instant swap quote. After funding, the MagicBlock Ephemeral Rollups program checks the vault on its 60-second schedule and trades toward {targetLabel} when drift passes {threshold.toFixed(1)}%. Actual fills can differ because of fees and slippage. Scheduled trades wait for fresh required asset prices.
           </Notice>
         </div>
       </Sheet>
     </Screen>
+  );
+}
+
+function InvestmentEstimate({
+  assets,
+  targets,
+  totalUsd,
+}: {
+  assets: AssetSpec[];
+  targets: Partial<Record<AssetId, number>>;
+  totalUsd: number | null;
+}) {
+  return (
+    <LedgerPanel
+      stripe="Estimated allocation"
+      meta={totalUsd !== null ? `Total · ${fmtUsd(totalUsd)}` : 'Total · unavailable'}
+      bodyClassName="pt-3"
+    >
+      <div className="space-y-2">
+        {assets.map((spec) => (
+          <div key={spec.id} className="flex items-baseline justify-between gap-3 text-[12px]">
+            <span className="font-bold">{spec.symbol}</span>
+            <span className="font-mono text-iron">{(targets[spec.id] ?? 0).toFixed(1)}%</span>
+            <strong className="ml-auto font-mono">
+              {totalUsd !== null ? fmtUsd((totalUsd * (targets[spec.id] ?? 0)) / 100) : '—'}
+            </strong>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 border-t border-hairline pt-2 text-[10.5px] leading-relaxed text-iron">
+        {totalUsd !== null
+          ? 'Estimated from your SOL amount and the fresh SOL/USD price. Target dollars are not guaranteed token quantities.'
+          : 'A fresh SOL/USD price is unavailable. The estimate will appear when the price book refreshes.'}
+      </p>
+    </LedgerPanel>
   );
 }
