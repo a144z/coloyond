@@ -63,4 +63,15 @@ Mainnet again passed only the diagnostic 60-second age ceiling; Devnet again had
 
 ## Limits and remaining admission work
 
+The full finalized series is reproducibly checked by the offline
+[series auditor](../../../tools/rebalancing/etf-oracle-probe/audit_series.py),
+with its generated [machine-readable report](s0b-finalized-series-20261011.json).
+It confirms three captures per cluster, monotonically increasing finalized
+slots and cluster times, all three expected feed IDs in every capture, and
+publish-time deltas derived through the pinned SDK. The latest cross-cluster
+account-context times differ by three seconds while corresponding feed publish
+times differ by 136 seconds; therefore this pair is not a synchronized price
+comparison. The audit is offline and read-only and does not change the
+admission status below.
+
 These snapshots show that the pinned account addresses exist and decode correctly at finalized commitment on both clusters. They do not establish continued feed delivery, two independent pusher operators, accepted confidence/exponent/freshness limits, USDC redemption/backing, a live ETF consumer transaction, or safe executable liquidity. The Devnet test-BTC and test-USD labels remain synthetic/unbacked. S0B remains held until the risk limits and repeated observations are reviewed, the updater path is demonstrated, the exact SBF integration rejects unsafe cases, and the required issuer/freeze/depeg disclosure is present. No transaction was sent.
