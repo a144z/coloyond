@@ -22,6 +22,25 @@ programs:
     devnet_account_observed: true
     devnet_programdata_sha256: a2ee82589b7241bcdc167921e4121b7bd5e0aaebcd22c09101a525dfcf036fa1
     source_binary_match: unverified
+latest_devnet_read:
+  commitment: confirmed
+  genesis_hash: EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG
+  queue_snapshot_block_time_utc: "2026-10-11T02:01:47Z"
+  tuktuk_program_context_slot: 509744577
+  tuktuk_programdata_context_slot: 509744581
+  cron_program_context_slot: 509744592
+  cron_programdata_context_slot: 509744596
+  config_context_slot: 509744604
+  queue_census_context_slot: 509744609
+  queue_census:
+    total_queues: 312
+    queues_with_tasks: 98
+    occupied_task_ids: 676
+    minimum_crank_reward_lamports: 0
+    maximum_crank_reward_lamports: 1000000000
+    bounded_task_sample_race: true
+  programdata_fingerprints_unchanged_from_prior_capture: true
+  transaction_sent: false
 source_files:
   - path: README.md
     sha256: a8bced8f5a6276dd3c1e5684e197a8ff6f401d99beb9dcd054c9fedb28bef1ff
