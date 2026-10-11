@@ -145,6 +145,9 @@ function amountList(raws: Record<string, number>): string {
 interface ColoyondState {
   // persisted
   wallet: { mnemonic: string; publicKey: string; createdAt: number } | null;
+  /** All vaults grouped by wallet public key for per-wallet isolation. */
+  allVaults: Record<string, VaultConfig[]>;
+  /** Active wallet's vaults (derived from allVaults). */
   vaults: VaultConfig[];
   logs: LogEntry[];
 
@@ -211,6 +214,7 @@ export const useStore = create<ColoyondState>()(
   persist(
     (set, get) => ({
       wallet: null,
+      allVaults: {},
       vaults: [],
       logs: [],
 
@@ -247,13 +251,27 @@ export const useStore = create<ColoyondState>()(
         const kp = keypairFromMnemonic(mnemonic);
         cachedMnemonic = mnemonic;
         cachedWalletKp = kp;
-        set({ wallet: { mnemonic, publicKey: kp.publicKey.toBase58(), createdAt: Date.now() } });
+        const publicKey = kp.publicKey.toBase58();
+        // Batch wallet + tab in one set to avoid subscription race
+        set({
+          wallet: { mnemonic, publicKey, createdAt: Date.now() },
+          activeTab: 'portfolios',
+          stack: [{ id: 'portfolios' }],
+          vaults: [],
+        });
         get().log({ vaultId: null, kind: 'owner', summary: 'Wallet created on this device' });
-        get().setTab('portfolios');
       },
 
       resetApp: () => {
-        set({ wallet: null, vaults: [], logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'onboarding' }] });
+        set({
+          wallet: null,
+          allVaults: {},
+          vaults: [],
+          logs: [],
+          vaultBalances: {},
+          walletBalances: null,
+          stack: [{ id: 'onboarding' }],
+        });
         useStore.persist.clearStorage();
       },
 
@@ -537,7 +555,15 @@ export const useStore = create<ColoyondState>()(
           tradeCount: 0,
         };
 
-        set((st) => ({ vaults: [cfg, ...st.vaults] }));
+        set((st) => {
+          const walletId = st.wallet?.publicKey;
+          if (!walletId) return { vaults: [cfg, ...st.vaults] };
+          const walletVaults = [cfg, ...(st.allVaults[walletId] ?? [])];
+          return {
+            vaults: walletVaults,
+            allVaults: { ...st.allVaults, [walletId]: walletVaults },
+          };
+        });
         get().log({
           vaultId: id,
           kind: 'owner',
@@ -712,23 +738,35 @@ export const useStore = create<ColoyondState>()(
       },
 
       patchVault: (vaultId, patch) =>
-        set((st) => ({ vaults: st.vaults.map((v) => (v.id === vaultId ? { ...v, ...patch } : v)) })),
+        set((st) => {
+          const walletId = st.wallet?.publicKey;
+          const vaults = st.vaults.map((v) => (v.id === vaultId ? { ...v, ...patch } : v));
+          if (!walletId) return { vaults };
+          return {
+            vaults,
+            allVaults: { ...st.allVaults, [walletId]: vaults },
+          };
+        }),
     }),
     {
       name: 'coloyond.v1',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
-      partialize: (st) => ({ wallet: st.wallet, vaults: st.vaults, logs: st.logs, universe: st.universe }),
+      partialize: (st) => ({
+        wallet: st.wallet,
+        allVaults: st.allVaults,
+        logs: st.logs,
+        universe: st.universe,
+      }),
       migrate: (persisted, version) => {
-        const p = persisted as { vaults?: Record<string, unknown>[] } | undefined;
-        if (p && version < 2 && Array.isArray(p.vaults)) {
-          p.vaults = p.vaults.map((v) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p: any = persisted ?? {};
+
+        // v2 migration: old single-asset vault format → multi-asset
+        if (version < 2 && Array.isArray(p.vaults)) {
+          p.vaults = p.vaults.map((v: any) => {
             if (v && typeof v.targetWsolPct === 'number' && !v.targets) {
-              const { targetWsolPct, depositedWsolLamports, depositedUsdRaw, ...rest } = v as {
-                targetWsolPct: number;
-                depositedWsolLamports?: number;
-                depositedUsdRaw?: number;
-              } & Record<string, unknown>;
+              const { targetWsolPct, depositedWsolLamports, depositedUsdRaw, ...rest } = v;
               return {
                 ...rest,
                 assets: ['wsol', 'tusd'],
@@ -739,11 +777,24 @@ export const useStore = create<ColoyondState>()(
             return v;
           });
         }
-        return p as unknown as {
-          wallet: ColoyondState['wallet'];
-          vaults: VaultConfig[];
-          logs: LogEntry[];
-          universe: UniverseAsset[];
+
+        // v4 migration: flat vaults array → per-wallet grouping
+        if (version < 4) {
+          const walletId = p.wallet?.publicKey;
+          if (walletId && Array.isArray(p.vaults)) {
+            p.allVaults = { [walletId]: p.vaults };
+          } else if (!p.allVaults) {
+            p.allVaults = {};
+          }
+          delete p.vaults;
+        }
+
+        return {
+          wallet: p.wallet ?? null,
+          allVaults: p.allVaults ?? {},
+          vaults: p.wallet?.publicKey ? (p.allVaults?.[p.wallet.publicKey] ?? []) : [],
+          logs: p.logs ?? [],
+          universe: p.universe ?? [],
         };
       },
     },
@@ -754,6 +805,33 @@ export const useStore = create<ColoyondState>()(
  * so extended asset ids resolve before the first live fetch returns. */
 const persistedUniverse = useStore.getState().universe;
 if (persistedUniverse && persistedUniverse.length > 0) registerCoinbaseAssets(persistedUniverse);
+
+/* Per-wallet vault sync: when the wallet changes, load its vaults from allVaults.
+ * When vaults are edited, save them back to allVaults[walletId]. */
+let prevWalletId = useStore.getState().wallet?.publicKey ?? null;
+
+useStore.subscribe((state, prevState) => {
+  const walletId = state.wallet?.publicKey ?? null;
+  const vaultsChanged = state.vaults !== prevState.vaults;
+
+  // Wallet switched → load the new wallet's vaults
+  if (walletId && walletId !== prevWalletId) {
+    const walletVaults = state.allVaults[walletId] ?? [];
+    if (walletVaults !== state.vaults) {
+      useStore.setState({ vaults: walletVaults });
+    }
+  }
+  // Vaults edited → save back to allVaults under current wallet
+  else if (walletId && vaultsChanged) {
+    if (state.allVaults[walletId] !== state.vaults) {
+      useStore.setState({
+        allVaults: { ...state.allVaults, [walletId]: state.vaults },
+      });
+    }
+  }
+
+  prevWalletId = walletId;
+});
 
 /* ---------------- derived helpers ---------------- */
 

@@ -19,9 +19,9 @@ import type { UniverseAsset } from './coinbase';
  * stand-ins whose *price* is real (or fixed $1 for tUSD) while their *supply*
  * is minted by the reserve.
  *
- * Segment colors: core assets use the lacquerboard palette
- *   petrol #13343B · brass #C66E22 · ink #14171A · iron #384551
- * extended assets derive a stable, muted hue from their id.
+ * Segment colors: a curated lacquerboard palette — distinct, muted hues with
+ * consistent contrast against the light pulp/ledger backgrounds. Core assets
+ * use hand-picked colors; extended assets draw from the same palette pool.
  */
 
 export interface AssetSpec {
@@ -49,13 +49,37 @@ type CoreAssetId = (typeof ASSET_IDS)[number];
 /** Any registered asset id: a core id or a lowercase Coinbase currency id. */
 export type AssetId = string;
 
+/* ---------------- asset color palette ---------------- */
+
+/**
+ * Curated lacquerboard palette: twelve muted, well-separated hues.
+ * All colors target ≥ 3.5:1 contrast ratio against the ledger background
+ * (#FAF8F2) for clear visibility as mix-bar segments and asset swatches.
+ * The palette spans the hue wheel so assets remain distinguishable even
+ * in portfolios with many positions.
+ */
+const ASSET_PALETTE = [
+  '#0B7A75', // teal
+  '#C98A14', // gold
+  '#B85A28', // terracotta
+  '#5B48B2', // indigo
+  '#2E7D52', // forest
+  '#BF4B6B', // rose
+  '#6A7FA8', // slate
+  '#7B8B3A', // olive
+  '#9B6B8E', // plum
+  '#4A82B0', // steel
+  '#A0724A', // copper
+  '#6B8E6E', // sage
+] as const;
+
 export const ASSETS: Record<CoreAssetId, AssetSpec> = {
   wsol: {
     id: 'wsol',
     symbol: 'WSOL',
     name: 'Wrapped SOL',
     decimals: 9,
-    color: '#13343B',
+    color: '#0B7A75',
     synthetic: false,
     core: true,
     priceSymbol: 'SOL-USD',
@@ -66,7 +90,7 @@ export const ASSETS: Record<CoreAssetId, AssetSpec> = {
     symbol: 'tUSD',
     name: 'Test USD',
     decimals: 6,
-    color: '#C66E22',
+    color: '#C98A14',
     synthetic: true,
     core: true,
     priceSymbol: null,
@@ -77,7 +101,7 @@ export const ASSETS: Record<CoreAssetId, AssetSpec> = {
     symbol: 'tBTC',
     name: 'Test BTC',
     decimals: 8,
-    color: '#14171A',
+    color: '#B85A28',
     synthetic: true,
     core: true,
     priceSymbol: 'BTC-USD',
@@ -88,7 +112,7 @@ export const ASSETS: Record<CoreAssetId, AssetSpec> = {
     symbol: 'tETH',
     name: 'Test ETH',
     decimals: 8,
-    color: '#384551',
+    color: '#5B48B2',
     synthetic: true,
     core: true,
     priceSymbol: 'ETH-USD',
@@ -125,17 +149,14 @@ export function registerCoinbaseAssets(assets: UniverseAsset[]): number {
   return added;
 }
 
-/** Deterministic muted hue per asset id — distinct segments without leaving the palette family. */
+/** Deterministic palette color per asset id — draws from the curated lacquerboard palette. */
 function extendedColor(id: string): string {
   let h = 2166136261; // FNV-1a offset basis
   for (let i = 0; i < id.length; i += 1) {
     h ^= id.charCodeAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   }
-  const hue = h % 360;
-  const sat = 34 + ((h >>> 9) % 26); // 34-59% — muted, lacquer-adjacent
-  const light = 28 + ((h >>> 17) % 20); // 28-47%
-  return `hsl(${hue} ${sat}% ${light}%)`;
+  return ASSET_PALETTE[h % ASSET_PALETTE.length];
 }
 
 /* ---------------- registry lookups ---------------- */
@@ -159,7 +180,7 @@ export function assetSpec(id: string): AssetSpec {
     symbol: (id || '?').toUpperCase().slice(0, 6),
     name: 'Unregistered asset',
     decimals: 8,
-    color: '#5B6770',
+    color: ASSET_PALETTE[6], // slate — neutral fallback
     synthetic: true,
     core: false,
     priceSymbol: null,
