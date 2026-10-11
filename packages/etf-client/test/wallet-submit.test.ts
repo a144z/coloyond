@@ -62,7 +62,7 @@ function makeTransaction(payer: PublicKey, blockhash = Keypair.generate().public
   }));
 }
 
-function transactionResponse(signature: string, payer: PublicKey, options: { err?: unknown; post?: string } = {}): VersionedTransactionResponse {
+function transactionResponse(signature: string, payer: PublicKey, options: { err?: unknown; post?: string; missingTokenMetadata?: boolean } = {}): VersionedTransactionResponse {
   const err = options.err ?? null;
   return {
     transaction: {
@@ -72,8 +72,10 @@ function transactionResponse(signature: string, payer: PublicKey, options: { err
     meta: {
       err,
       fee: 5000,
-      preTokenBalances: [{ accountIndex: 1, mint: mint.toBase58(), uiTokenAmount: { amount: "100", decimals: 9 } }],
-      postTokenBalances: [{ accountIndex: 1, mint: mint.toBase58(), uiTokenAmount: { amount: options.post ?? "100", decimals: 9 } }],
+      preBalances: [10000, 100],
+      postBalances: [5000, 100],
+      preTokenBalances: options.missingTokenMetadata ? null : [{ accountIndex: 1, mint: mint.toBase58(), uiTokenAmount: { amount: "100", decimals: 9 } }],
+      postTokenBalances: options.missingTokenMetadata ? null : [{ accountIndex: 1, mint: mint.toBase58(), uiTokenAmount: { amount: options.post ?? "100", decimals: 9 } }],
       loadedAddresses: { writable: [], readonly: [] },
     },
     slot,
@@ -87,6 +89,7 @@ function setup(options: {
   status?: SignatureStatus | null;
   txError?: unknown;
   post?: string;
+  missingTokenMetadata?: boolean;
   sendThrows?: boolean;
 } = {}) {
   const keypair = Keypair.generate();
@@ -95,6 +98,7 @@ function setup(options: {
     : options.status;
   let txError = options.txError;
   let post = options.post;
+  let missingTokenMetadata = options.missingTokenMetadata ?? false;
   const sent: { bytes: Uint8Array; options: unknown }[] = [];
   const signer = {
     publicKey: keypair.publicKey,
@@ -113,7 +117,7 @@ function setup(options: {
       return "rpc-returned-signature";
     },
     getSignatureStatuses: async ([signature]: string[]) => ({ context: { slot }, value: [status === null ? null : { ...status }] }),
-    getTransaction: async (signature: string) => transactionResponse(signature, keypair.publicKey, { err: txError, post }),
+    getTransaction: async (signature: string) => transactionResponse(signature, keypair.publicKey, { err: txError, post, missingTokenMetadata }),
   } as unknown as Connection;
   return {
     keypair,
@@ -122,7 +126,7 @@ function setup(options: {
     journal: new MemoryJournal(),
     sent,
     setStatus(next: SignatureStatus | null) { status = next; },
-    setTransaction(next: { err?: unknown; post?: string }) { txError = next.err; post = next.post; },
+    setTransaction(next: { err?: unknown; post?: string; missingTokenMetadata?: boolean }) { txError = next.err; post = next.post; missingTokenMetadata = next.missingTokenMetadata ?? false; },
   };
 }
 
@@ -235,6 +239,75 @@ test("does not submit when the signed-message journal write fails", async () => 
   const env = setup();
   env.journal.failAppend = true;
   await errorCode(submitWalletTransaction(submitArgs(env)), "wallet_submit_journal_write_failed");
+  assert.equal(env.sent.length, 0);
+});
+
+function makeNoTokenTransaction(payer: PublicKey, programId: PublicKey, discriminator: readonly number[]): Transaction {
+  return new Transaction({ feePayer: payer, recentBlockhash: Keypair.generate().publicKey.toBase58() }).add(
+    new TransactionInstruction({ keys: [], programId, data: Buffer.from(discriminator) }),
+  );
+}
+
+const stateProgram = Keypair.generate().publicKey;
+const pauseDiscriminator = [221, 2, 34, 100, 217, 178, 42, 15];
+
+function noTokenArgs(env: ReturnType<typeof setup>, operationId = "pause") {
+  return {
+    ...submitArgs(env, operationId),
+    transaction: makeNoTokenTransaction(env.keypair.publicKey, stateProgram, pauseDiscriminator),
+    trackedTokenAccounts: [],
+    noTokenBalanceAction: "pause" as const,
+    noTokenProgramId: stateProgram,
+    requirePostStateReadback: true,
+    postStateVerifier: async () => true,
+  };
+}
+
+test("no-token state actions require complete RPC token metadata and exact post-state verification", async () => {
+  const env = setup();
+  const result = await submitWalletTransaction(noTokenArgs(env));
+  assert.equal(result.state, "confirmed");
+  assert.equal(result.postStateVerified, true);
+  assert.equal(result.receipt?.tokenDeltas?.length, 1);
+  assert.equal(result.receipt?.networkFeeLamports, "5000");
+
+  const incomplete = setup({ missingTokenMetadata: true });
+  const unresolved = await submitWalletTransaction(noTokenArgs(incomplete));
+  assert.equal(unresolved.state, "unknown");
+  assert.equal(unresolved.postStateVerified, false);
+  assert.equal(unresolved.retryAllowed, false);
+  assert.equal(unresolved.receipt?.reason, "token_balance_metadata_incomplete");
+});
+
+test("confirmed state-action signatures with mismatched post-state remain unresolved and cannot retry", async () => {
+  const env = setup();
+  const args = noTokenArgs(env);
+  args.postStateVerifier = async () => false;
+  const result = await submitWalletTransaction(args);
+  assert.equal(result.receipt?.state, "confirmed");
+  assert.equal(result.state, "unknown");
+  assert.equal(result.postStateVerified, false);
+  assert.equal(result.retryAllowed, false);
+  await errorCode(submitWalletTransaction({ ...noTokenArgs(env), retryOfSignature: result.signature }), "wallet_submit_retry_not_authorized");
+  assert.equal(env.sent.length, 1);
+});
+
+test("no-token actions become unresolved if any token balance changed", async () => {
+  const env = setup({ post: "99" });
+  const result = await submitWalletTransaction(noTokenArgs(env));
+  assert.equal(result.state, "unknown");
+  assert.equal(result.receipt?.reason, "no_token_action_had_token_delta");
+  assert.equal(result.receipt?.tokenBalancesUnchanged, false);
+  assert.equal(result.retryAllowed, false);
+});
+
+test("no-token mode accepts only its named ETF program instruction", async () => {
+  const env = setup();
+  await errorCode(submitWalletTransaction({
+    ...noTokenArgs(env),
+    transaction: makeTransaction(env.keypair.publicKey),
+  }), "wallet_submit_no_token_action_invalid");
+  assert.equal(env.signer.calls, 0);
   assert.equal(env.sent.length, 0);
 });
 

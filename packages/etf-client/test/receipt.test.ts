@@ -25,7 +25,7 @@ function transactionResponse(options: {
       signatures: [options.responseSignature ?? signature],
       message: { staticAccountKeys: [new PublicKey(owner), new PublicKey(tokenAccount)] },
     },
-    meta: { err: options.err ?? null, fee: options.fee ?? 5000, preTokenBalances: pre, postTokenBalances: post, loadedAddresses: { writable: [], readonly: [] } },
+    meta: { err: options.err ?? null, fee: options.fee ?? 5000, preBalances: [10000, 100], postBalances: [5000, 100], preTokenBalances: pre, postTokenBalances: post, loadedAddresses: { writable: [], readonly: [] } },
     slot: options.responseSlot ?? slot,
     blockTime: null,
     version: 0,
@@ -63,6 +63,10 @@ test("reconciles confirmed RPC metadata and keeps lamport fee separate from toke
   assert.deepEqual(rpc.transactionRequests, [signature]);
   assert.equal(receipt.state, "confirmed");
   assert.equal(receipt.networkFeeLamports, "5000");
+  assert.deepEqual(receipt.accountLamportDeltas, [
+    { account: owner, preLamports: "10000", postLamports: "5000", deltaLamports: "-5000" },
+    { account: tokenAccount, preLamports: "100", postLamports: "100", deltaLamports: "0" },
+  ]);
   assert.deepEqual(receipt.tokenDeltas, [{ account: tokenAccount, accountIndex: 1, mint, decimals: 9, preAmount: "100", postAmount: "80", delta: "-20" }]);
   assert.equal(receipt.tokenBalancesUnchanged, false);
   assert.equal(receipt.automaticResendAllowed, false);
@@ -155,4 +159,15 @@ test("rejects conflicting signature and transaction outcomes", async () => {
   assert.equal(receipt.state, "unknown");
   assert.equal(receipt.reason, "signature_and_transaction_outcome_conflict");
   assert.equal(receipt.manualRetryAllowed, false);
+});
+
+test("requires complete RPC lamport balance metadata before confirming a transaction", async () => {
+  const response = transactionResponse() as unknown as { meta: { preBalances: number[]; postBalances: number[] } };
+  response.meta.preBalances = [];
+  const rpc = fakeConnection({ transaction: response as unknown as VersionedTransactionResponse });
+  const receipt = await reconcileRpcTransactionReceipt(rpc.connection, signature, tracked);
+  assert.equal(receipt.state, "unknown");
+  assert.equal(receipt.reason, "lamport_balance_metadata_incomplete");
+  assert.equal(receipt.networkFeeLamports, "5000");
+  assert.equal(receipt.accountLamportDeltas, null);
 });

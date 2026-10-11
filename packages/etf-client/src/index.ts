@@ -7,3 +7,4 @@ export * from "./manifest.js";
 export * from "./readback.js";
 export * from "./instructions.js";
 export * from "./shares.js";
+export * from "./weighted-math.js";

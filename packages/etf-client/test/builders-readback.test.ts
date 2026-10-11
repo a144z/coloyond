@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { Keypair, PublicKey, SystemProgram, type AccountInfo, type Connection } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, type AccountInfo, type Connection } from "@solana/web3.js";
 import {
   buildEligibilityPokeInstruction,
   buildCancelResumeProposalInstruction,
@@ -18,6 +18,7 @@ import {
   decodeEtfAssetStateAccount,
   deriveEtfAddresses,
   derivePythFixedFeedAccount,
+  deriveWalletAtaPreparationPlan,
   ETF_CONFIG_DOMAIN,
   ETF_DEVNET_CANDIDATE_FEEDS,
   ETF_DEVNET_GENESIS,
@@ -27,6 +28,8 @@ import {
   quoteProportionalDeposit,
   quoteProportionalRedeem,
   verifyEtfManifest,
+  submitWalletTransaction,
+  WalletSubmissionError,
   type EtfDeploymentManifestV1,
 } from "../src/index.js";
 
@@ -71,7 +74,7 @@ function priceAccount(feed: Buffer, publishTime: bigint, owner = receiver, verif
 
 type TestDeployment = { manifest: EtfDeploymentManifestV1; idl: Record<string, unknown>; context: ReturnType<typeof verifyEtfManifest>; rpc: Connection; wallet: PublicKey; walletAssetAccounts: { mint: string; tokenAccount: string }[]; shareAccount: PublicKey; programId: PublicKey; pool: PublicKey; addressByKey: Map<string, AccountInfo<Buffer> | null> };
 
-function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: PublicKey; verifyTag?: number; missingPool?: boolean; missingPoolState?: boolean; missingFeed?: boolean; missingMint?: boolean; badMintDecimals?: boolean; badProgramBinary?: boolean; lifecycle?: "unseeded" | "active" | "closed"; riskPaused?: boolean; oraclePublishTime?: bigint; oracleConfidence?: bigint; sequence?: bigint; pendingResume?: Readonly<{ proposer: PublicKey; nonce: bigint; executeAfter: bigint }> | null; blockTime?: number | null; governance?: PublicKey } = {}): TestDeployment {
+function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: PublicKey; verifyTag?: number; missingPool?: boolean; missingPoolState?: boolean; missingFeed?: boolean; missingMint?: boolean; badMintDecimals?: boolean; badProgramBinary?: boolean; lifecycle?: "unseeded" | "active" | "closed"; riskPaused?: boolean; oraclePublishTime?: bigint; oracleConfidence?: bigint; sequence?: bigint; pendingResume?: Readonly<{ proposer: PublicKey; nonce: bigint; executeAfter: bigint }> | null; blockTime?: number | null; governance?: PublicKey; currentGovernance?: PublicKey; currentGuardian?: PublicKey } = {}): TestDeployment {
   const programId = Keypair.generate().publicKey;
   const governance = overrides.governance ?? Keypair.generate().publicKey;
   const guardian = Keypair.generate().publicKey;
@@ -119,7 +122,7 @@ function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: Publ
   map.set(programData.toBase58(), account(new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"), programDataBytes));
 
   const poolBytes = Buffer.alloc(1_265); poolDiscriminator.copy(poolBytes); poolBytes[8] = 1; poolBytes[9] = poolBump; configHash.copy(poolBytes, 10); u32(configBytes.length).copy(poolBytes, 42); configBytes.copy(poolBytes, 46); addresses.shareMint.toBuffer().copy(poolBytes, 1_201); initializer.toBuffer().copy(poolBytes, 1_233);
-  const stateBytes = Buffer.alloc(300); stateDiscriminator.copy(stateBytes); stateBytes[8] = 1; stateBytes[9] = poolStateBump; pool.toBuffer().copy(stateBytes, 10); governance.toBuffer().copy(stateBytes, 42); guardian.toBuffer().copy(stateBytes, 74); stateBytes[106] = overrides.lifecycle === "unseeded" ? 0 : overrides.lifecycle === "closed" ? 2 : 1; stateBytes[107] = overrides.riskPaused ? 1 : 0; u64(overrides.sequence ?? 8n).copy(stateBytes, 108); // absent observation, optional pending resume/handoff, disabled scheduler
+  const stateBytes = Buffer.alloc(300); stateDiscriminator.copy(stateBytes); stateBytes[8] = 1; stateBytes[9] = poolStateBump; pool.toBuffer().copy(stateBytes, 10); (overrides.currentGovernance ?? governance).toBuffer().copy(stateBytes, 42); (overrides.currentGuardian ?? guardian).toBuffer().copy(stateBytes, 74); stateBytes[106] = overrides.lifecycle === "unseeded" ? 0 : overrides.lifecycle === "closed" ? 2 : 1; stateBytes[107] = overrides.riskPaused ? 1 : 0; u64(overrides.sequence ?? 8n).copy(stateBytes, 108); // absent observation, optional pending resume/handoff, disabled scheduler
   if (overrides.pendingResume) { stateBytes[117] = 1; overrides.pendingResume.proposer.toBuffer().copy(stateBytes, 118); u64(overrides.pendingResume.nonce).copy(stateBytes, 150); stateBytes.writeBigInt64LE(overrides.pendingResume.executeAfter, 158); }
   const shareMintBytes = Buffer.alloc(82); shareMintBytes.writeUInt32LE(1, 0); addresses.authority.toBuffer().copy(shareMintBytes, 4); u64(overrides.lifecycle === "unseeded" ? 0n : 1_000_000n).copy(shareMintBytes, 36); shareMintBytes[44] = 6; shareMintBytes[45] = 1; shareMintBytes.writeUInt32LE(0, 46);
   map.set(pool.toBase58(), overrides.missingPool ? null : account(programId, poolBytes));
@@ -261,6 +264,29 @@ test("encodes all S5E instruction discriminators, argument vectors, and account 
   assert.equal(shareAta.keys.length, 6);
   assert.equal(shareAta.programId.toBase58(), "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
   assert.throws(() => buildCreateEtfTokenAccountInstruction(d.context, d.wallet, d.wallet, Keypair.generate().publicKey), /mint_not_in_manifest/);
+  const ataPayer = Keypair.generate();
+  const ataPlan = deriveWalletAtaPreparationPlan(d.context, ataPayer.publicKey, [d.context.config.assets[0]!.mint, d.context.addresses.shareMint]);
+  assert.equal(ataPlan.length, 2);
+  assert.equal(ataPlan[0]!.decimals, d.context.config.assets[0]!.decimals);
+  assert.equal(ataPlan[1]!.decimals, 6);
+  assert.throws(() => deriveWalletAtaPreparationPlan(d.context, ataPayer.publicKey, [Keypair.generate().publicKey]), /wallet_submit_no_token_action_invalid/);
+  const assetAta = buildCreateEtfTokenAccountInstruction(d.context, ataPayer.publicKey, ataPayer.publicKey, d.context.config.assets[0]!.mint);
+  const shareAtaForPayer = buildCreateEtfTokenAccountInstruction(d.context, ataPayer.publicKey, ataPayer.publicKey, d.context.addresses.shareMint);
+  const invalidAta = new TransactionInstruction({ programId: assetAta.programId, keys: assetAta.keys, data: Buffer.from([0]) });
+  const invalidAtaTransaction = new Transaction({ feePayer: ataPayer.publicKey, recentBlockhash: Keypair.generate().publicKey.toBase58() }).add(invalidAta, shareAtaForPayer);
+  let ataSignCalls = 0;
+  await assert.rejects(() => submitWalletTransaction({
+    connection: {} as Connection,
+    signer: { publicKey: ataPayer.publicKey, async signTransaction(transaction) { ataSignCalls += 1; return transaction; } },
+    transaction: invalidAtaTransaction,
+    journal: { async read() { return null; }, async appendIfLatest() { return true; }, async replaceLatest() { return true; } },
+    operationId: "ata-reject-invalid-create-mode",
+    trackedTokenAccounts: [],
+    noTokenBalanceAction: "prepare_accounts",
+    noTokenProgramId: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+    ataPreparationPlan: ataPlan,
+  }), (error: unknown) => error instanceof WalletSubmissionError && error.code === "wallet_submit_no_token_action_invalid");
+  assert.equal(ataSignCalls, 0, "invalid ATA instruction is rejected before requesting a wallet signature");
 
   const seedDeployment = buildTestDeployment({ lifecycle: "unseeded", riskPaused: false });
   const seedSnapshot = await readEtfSnapshot(seedDeployment.rpc, seedDeployment.context, { walletAddress: seedDeployment.wallet.toBase58() });
@@ -364,6 +390,24 @@ test("builds the delayed governance resume lifecycle with exact IDL encoding and
   assert.throws(() => buildCancelResumeProposalInstruction(cancelDeployment.context, cancelSnapshot, governance, proposalNonce, expectedPendingSequence + 1n), /sequence_stale/);
   assert.throws(() => buildResumeRiskAfterDelayInstruction(pending.context, pendingSnapshot, unrelatedExecutor, proposalNonce + 1n, expectedPendingSequence), /nonce_stale/);
   assert.throws(() => buildCancelResumeProposalInstruction(cancelDeployment.context, cancelSnapshot, governance, proposalNonce + 1n, expectedPendingSequence), /nonce_stale/);
+
+  const successorGovernance = Keypair.generate().publicKey;
+  const successorGuardian = Keypair.generate().publicKey;
+  const handedOff = buildTestDeployment({ lifecycle: "unseeded", riskPaused: true, currentGovernance: successorGovernance, currentGuardian: successorGuardian });
+  const handedOffSnapshot = await readEtfSnapshot(handedOff.rpc, handedOff.context, { walletAddress: successorGuardian.toBase58() });
+  assert.equal(handedOffSnapshot.identity.currentGovernance, successorGovernance.toBase58());
+  assert.equal(handedOffSnapshot.identity.currentGuardian, successorGuardian.toBase58());
+  assert.equal(buildProposeResumeInstruction(handedOff.context, handedOffSnapshot, successorGovernance, BigInt(handedOffSnapshot.state.sequence)).action, "resume_propose");
+  assert.throws(() => buildProposeResumeInstruction(handedOff.context, handedOffSnapshot, governance, BigInt(handedOffSnapshot.state.sequence)), /not_authorized/);
+  assert.equal(buildPauseRiskInstruction(handedOff.context, handedOffSnapshot, successorGuardian).action, "pause");
+
+  const priorAuthorityPending = buildTestDeployment({
+    lifecycle: "unseeded", riskPaused: true, sequence: 15n, currentGovernance: successorGovernance,
+    pendingResume: { proposer: governance, nonce: proposalNonce, executeAfter }, blockTime: Number(executeAfter),
+  });
+  const priorAuthoritySnapshot = await readEtfSnapshot(priorAuthorityPending.rpc, priorAuthorityPending.context);
+  assert.equal(buildCancelResumeProposalInstruction(priorAuthorityPending.context, priorAuthoritySnapshot, successorGovernance, proposalNonce, 15n).action, "resume_cancel");
+  assert.throws(() => buildResumeRiskAfterDelayInstruction(priorAuthorityPending.context, priorAuthoritySnapshot, unrelatedExecutor, proposalNonce, 15n), /governance_mismatch/);
 
   const early = buildTestDeployment({ lifecycle: "unseeded", riskPaused: true, sequence: 15n, governance, pendingResume: { proposer: governance, nonce: proposalNonce, executeAfter }, blockTime: Number(executeAfter - 1n) });
   const earlySnapshot = await readEtfSnapshot(early.rpc, early.context);
