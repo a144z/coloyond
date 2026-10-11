@@ -173,6 +173,14 @@ build_provenance:
     compatible_with_pinned_ci: false
   build_result: not_reproduced
   devnet_programdata_match: unverified
+  host_comparison_attempt:
+    program: cron
+    solana_build_sbf: 2.3.0
+    platform_tools: v1.57
+    result: blocked_before_compilation
+    dependency: https://github.com/helium/tuktuk.git
+    required_revision: 2d19afd2b5ed2ea09649e231059d5bb434dd5453
+    reason: pinned_git_dependency_was_not_cached_and_github_dns_was_unavailable
   notes:
     - CI builds the Solana programs through the pinned Anchor action on Ubuntu; the apparent Docker build job in the workflow is commented out.
     - The available host toolchain does not match the pinned CI matrix, so a local build is not labeled reproducible and its artifacts cannot establish Devnet bytecode correspondence.
