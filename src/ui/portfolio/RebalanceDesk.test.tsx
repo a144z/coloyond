@@ -70,10 +70,10 @@ test("the allocation bar draws target segments and one draggable handle per boun
   assert.match(html, /aria-valuetext="SOL 60%, USDC 40%"/);
 });
 
-test("the live allocation shows as ghost segments, one dashed line, and signed deltas", () => {
+test("the live allocation shows as one straight dashed line and signed deltas", () => {
   const { view } = deskView({ weights: [70, 30], drift: 20 });
   const html = render(view);
-  assert.equal(count(html, /data-allocation-ghost-segment=/g), 2);
+  assert.doesNotMatch(html, /data-allocation-ghost-segment=/);
   assert.equal(count(html, /data-allocation-ghost-line=/g), 1);
   assert.match(html, /left:70%/);
   assert.match(html, /\+10 pp/);

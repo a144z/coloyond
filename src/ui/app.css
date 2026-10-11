@@ -492,9 +492,8 @@ a { color: inherit; }
 .cr-desk-allocation-bar { position: relative; display: flex; height: 26px; border: 1px solid var(--rule); border-radius: 7px; background: var(--canvas); }
 .cr-desk-allocation-bar > span[data-allocation-segment] { height: 100%; }
 .cr-desk-allocation-bar > span[data-allocation-segment] + span[data-allocation-segment] { border-left: 1px solid var(--paper); }
-.cr-desk-allocation-ghost { position: absolute; inset: 0; z-index: 1; opacity: 0.16; pointer-events: none; border-radius: inherit; overflow: hidden; }
-.cr-desk-allocation-ghost > span[data-allocation-ghost-segment] { position: absolute; top: 0; height: 100%; }
-.cr-desk-allocation-ghost > span[data-allocation-ghost-line] { position: absolute; top: -3px; height: 32px; border-left: 1px dashed var(--ink); }
+.cr-desk-allocation-ghost { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit; overflow: hidden; }
+.cr-desk-allocation-ghost > span[data-allocation-ghost-line] { position: absolute; top: -3px; height: 32px; border-left: 1px dashed var(--muted); }
 .cr-desk-allocation-handle { position: absolute; top: -6px; z-index: 2; width: 20px; height: 38px; margin: 0; padding: 0; transform: translateX(-50%); border: none; background: transparent; cursor: col-resize; touch-action: none; }
 .cr-desk-allocation-handle::before { content: ""; position: absolute; inset: 5px 7px; border: 1px solid var(--ink); border-radius: 4px; background: var(--paper); box-shadow: 0 0 0 2px var(--paper); }
 .cr-desk-allocation-handle:hover::before, .cr-desk-allocation-handle:focus-visible::before { background: var(--blue); border-color: var(--blue); }

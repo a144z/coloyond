@@ -70,10 +70,8 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
   });
   let liveCursor = 0;
   const liveBars = desk.weights.map((weight, index) => {
-    const share = Math.min(100, Math.max(0, weight));
-    const start = liveCursor;
-    liveCursor += share;
-    return { symbol: desk.assets[index]?.symbol ?? `share-${index}`, start, end: liveCursor, color: desk.assets[index]?.color ?? "transparent" };
+    liveCursor += Math.min(100, Math.max(0, weight));
+    return { symbol: desk.assets[index]?.symbol ?? `share-${index}`, end: liveCursor };
   });
   const commitShares = (shares: { symbol: string; targetPct: number }[]) => shares.forEach((share) => desk.setTarget(share.symbol, share.targetPct));
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>, leftIndex: number) => {
@@ -114,8 +112,7 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
     <div className="cr-desk-allocation">
       <div className="cr-desk-allocation-bar" ref={barRef}>
         <div className="cr-desk-allocation-ghost" aria-hidden="true">
-          {liveBars.map((bar) => (bar.end > bar.start ? <span key={bar.symbol} data-allocation-ghost-segment={bar.symbol} style={{ left: `${bar.start}%`, width: `${Math.max(0, bar.end - bar.start)}%`, background: bar.color }} /> : null))}
-          {liveBars.slice(0, -1).map((bar) => (bar.end > 0 && bar.end < 100 ? <span key={`line-${bar.symbol}`} data-allocation-ghost-line={bar.symbol} style={{ left: `${bar.end}%` }} /> : null))}
+          {liveBars.map((bar) => (bar.end > 0 && bar.end < 100 ? <span key={`line-${bar.symbol}`} data-allocation-ghost-line={bar.symbol} style={{ left: `${bar.end}%` }} /> : null))}
         </div>
         {targetBars.map(({ asset, width }) => (
           <span key={asset.symbol} data-allocation-segment={asset.symbol} title={`${asset.symbol} target ${asset.targetPct}%`} style={{ width: `${width}%`, background: asset.color }} />
