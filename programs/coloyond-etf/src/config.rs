@@ -29,7 +29,9 @@ pub fn decode_inert_config(bytes: &[u8]) -> Result<EtfPoolConfigV1> {
         require!(
             asset.token_program == anchor_spl::token::ID.to_bytes()
                 && asset.decimals <= 9
-                && asset.oracle_mode == OracleModeV1::ReceiverFull
+                // The first profile uses fixed shard-0 PDAs derived under the
+                // Push Oracle. Data owner and verification are checked below.
+                && asset.oracle_mode == OracleModeV1::PushFeed
                 && Pubkey::new_from_array(asset.oracle_program) == PYTH_RECEIVER_PROGRAM_ID
                 && asset_matches_pinned_feed(asset),
             EtfError::InvalidConfig
@@ -130,9 +132,9 @@ mod tests {
     }
 
     #[test]
-    fn inert_config_parser_requires_receiver_full_and_exact_pinned_feed_pair() {
+    fn inert_config_parser_requires_fixed_push_feed_mode_and_exact_feed_pair() {
         let mut config = fixture();
-        config.assets[0].oracle_mode = OracleModeV1::PushFeed;
+        config.assets[0].oracle_mode = OracleModeV1::ReceiverFull;
         assert!(decode_inert_config(&config.canonical_bytes().unwrap()).is_err());
 
         let mut config = fixture();
@@ -249,7 +251,7 @@ mod tests {
                     mint: [1; 32],
                     token_program: token,
                     decimals: 9,
-                    oracle_mode: OracleModeV1::ReceiverFull,
+                    oracle_mode: OracleModeV1::PushFeed,
                     oracle_program: PYTH_RECEIVER_PROGRAM_ID.to_bytes(),
                     oracle_account: PinnedFeed::SolUsd.address().to_bytes(),
                     feed_id: sol_id,
@@ -259,7 +261,7 @@ mod tests {
                     mint: [2; 32],
                     token_program: token,
                     decimals: 6,
-                    oracle_mode: OracleModeV1::ReceiverFull,
+                    oracle_mode: OracleModeV1::PushFeed,
                     oracle_program: PYTH_RECEIVER_PROGRAM_ID.to_bytes(),
                     oracle_account: PinnedFeed::UsdcUsd.address().to_bytes(),
                     feed_id: usd_id,
