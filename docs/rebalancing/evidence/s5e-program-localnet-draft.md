@@ -24,6 +24,12 @@ The real risk math is not enabled in this draft. It does not yet apply approved 
 
 ## Unresolved gates and effect
 
+### Integration review follow-up (11 October 2026)
+
+Independent review of the merged S5E package found an additional lifecycle blocker: `initialize_pool` always sets `risk_paused = true`, `seed_pool` requires the pool to be unpaused, and the package currently implements only `pause_risk`—there is no governance resume/proposal/execution path. Therefore no newly initialized pool can reach seed, even after the draft policy gate is replaced. Add the S5A-specified delayed governance resume and prove its role, delay, replay, and pause-state behavior before offering a seed transaction. This is separate from the still-unavailable Localnet SPL-CPI harness and the S0B/S5A/S5D2/manifest gates.
+
+The integrated root rerun passed the host program suite (6 tests), IDL-build suite (12 tests), shared identity/math/oracle suites (8/82/14 tests), client suite (54 tests), application typecheck/build, formatting, and diff checks. The isolated S5E worker's SBF build passed with cached platform-tools v1.57. The integration shell has Solana 2.3.0 binaries but no available v1.57 SBF Rust target; its direct SBF-build attempt failed before compilation with “Provided rustc does not have sbpf-solana-solana target.” This does not invalidate the isolated build result, but the integrated SBF artifact is not independently reproduced here.
+
 | Open evidence/decision | Effect on testing |
 |---|---|
 | S5A strict fee/risk schema and accepted oracle age, confidence, exponent, quote/parity, input-size, drift and seed-tolerance limits | Seed, swap and eligibility remain fail-closed. The documented 60-second age check and other candidate values are not approvals. |
