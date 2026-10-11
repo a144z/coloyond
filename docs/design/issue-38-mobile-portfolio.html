@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>coloyond · issue 38 mobile design</title>
+<style>
+:root{--paper:#f1ecdd;--ink:#171715;--rule:#d9d3c3;--blue:#1249ed;--violet:#8d25d9;--muted:#625e53;--white:#fbf8ef}*{box-sizing:border-box}body{margin:0;background:#e2ddce;color:var(--ink);font:15px Arial,sans-serif}button,input,select{font:inherit}button{cursor:pointer;min-height:48px;border:1px solid var(--rule);background:transparent;padding:10px 14px;color:var(--ink);border-radius:8px}button:hover{background:#e9e3d4}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:3px}button:disabled{opacity:.5;cursor:default}a{color:var(--blue)}.page{max-width:1140px;margin:30px auto;padding:20px;display:grid;grid-template-columns:1fr 408px;gap:60px}.notes{padding-top:30px}.eyebrow,.micro{font:11px monospace;letter-spacing:.06em;text-transform:uppercase}.notes h1{font-size:46px;line-height:1.04;letter-spacing:-2px;margin:20px 0}.notes p{max-width:520px;color:var(--muted);line-height:1.65}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0}.controls button[aria-pressed=true]{background:var(--ink);color:var(--paper)}.legend{border-top:1px solid var(--rule);padding-top:20px}.phone{background:var(--paper);border:1px solid #b5ae9c;border-radius:28px;overflow:hidden;box-shadow:0 18px 70px #17171512;min-height:760px}.prototype{background:var(--ink);color:var(--paper);font:11px monospace;padding:14px 18px;line-height:1.5}.top{display:flex;align-items:center;justify-content:space-between;padding:24px 20px 18px}.brand{font-size:25px;letter-spacing:-1px;font-weight:bold}.badge{font:11px monospace;border:1px solid var(--rule);padding:7px 9px;border-radius:30px}.content{padding:8px 20px 28px}h2{font-size:32px;letter-spacing:-1.2px;font-weight:normal;margin:14px 0 8px}h3{font-size:21px;letter-spacing:-.5px;font-weight:normal;margin:0 0 8px}.sub{color:var(--muted);line-height:1.5;font-size:13px;margin:8px 0 20px}.primary{background:var(--blue);color:white;border-color:var(--blue)}.primary:hover{background:#103fca}.full{width:100%}.card{background:var(--white);border:1px solid var(--rule);border-radius:12px;padding:18px;margin:14px 0}.row{display:flex;gap:12px;justify-content:space-between;align-items:center}.mix{display:flex;height:9px;overflow:hidden;border-radius:4px;margin:20px 0 10px}.sol{background:var(--blue)}.usd{background:var(--violet)}.quiet{font-size:12px;color:var(--muted);line-height:1.6}.status{font:12px monospace}.dot{width:7px;height:7px;background:var(--blue);display:inline-block;border-radius:50%;margin-right:6px}.rule{border-top:1px solid var(--rule);margin:20px 0}dl{margin:18px 0 0}dl div{display:flex;justify-content:space-between;gap:15px;margin:13px 0;font-size:13px}dt{color:var(--muted)}dd{margin:0;text-align:right}.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}.asset-table{width:100%;border-collapse:collapse;font-size:13px;margin:16px 0}.asset-table th,.asset-table td{padding:14px 0;border-bottom:1px solid var(--rule);text-align:right}.asset-table th:first-child,.asset-table td:first-child{text-align:left}.asset-table th{font-weight:normal;color:var(--muted);font-size:11px}.swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px}.field{display:block;margin:18px 0;font-size:12px}.field input,.field select{display:block;width:100%;min-height:48px;border:1px solid var(--rule);background:var(--white);border-radius:7px;padding:12px;margin-top:8px}.inline-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field input[type=range]{padding:0;accent-color:var(--blue);background:transparent}.notice{border-left:3px solid var(--violet);padding:12px 14px;background:#8d25d908;font-size:13px;line-height:1.5}.back{border:0;padding-left:0;color:var(--muted)}.danger{color:#8c3925}.screen[hidden]{display:none}.screen{animation:appear .15s ease-out}@keyframes appear{from{opacity:.5}to{opacity:1}}dialog{max-width:360px;border:1px solid var(--rule);background:var(--paper);border-radius:14px;padding:24px;color:var(--ink)}dialog::backdrop{background:#17171566}dialog p{font-size:13px;line-height:1.6}.screen-label{margin-top:30px}.linkbutton{border:0;text-align:left;padding:12px 0;color:var(--blue)}@media(max-width:850px){.page{display:flex;flex-direction:column;align-items:center;gap:28px;margin:0;padding:16px}.notes{width:100%;max-width:520px;padding-top:5px}.notes h1{font-size:34px}.phone{width:100%;max-width:408px}.notes .legend{display:none}}@media(prefers-reduced-motion:reduce){.screen{animation:none}}
+</style>
+</head>
+<body>
+<main class="page">
+<aside class="notes">
+  <div class="eyebrow">Issue 38 / Native Android / Design study</div>
+  <h1>Your mix.<br>A vault that keeps moving.</h1>
+  <p>A focused mobile journey for the Solana hackathon: connect, own a portfolio, and let scheduled execution maintain its allocation. The Kotlin app uses MWA; this HTML is only a screen study.</p>
+  <nav class="controls" aria-label="Preview screens">
+    <button data-screen="list" aria-pressed="true">Portfolio list</button>
+    <button data-screen="create" aria-pressed="false">Create</button>
+    <button data-screen="detail" aria-pressed="false">Vault details</button>
+    <button data-screen="blocked" aria-pressed="false">Blocked / exit</button>
+  </nav>
+  <p id="screen-description" aria-live="polite">Two independent vaults, one connected owner. Every number on this page is illustrative.</p>
+  <div class="legend">
+    <div class="micro">Monday's cut</div>
+    <p>Two tokens. Two vaults. One real unattended swap. Owner editing and in-kind exit. Cards, games, cross-chain routes, public LP shares and a second release client stay outside the deadline.</p>
+    <p>The design keeps token custody on Solana. A funded test reserve is the counterparty; MagicBlock supplies scheduled execution. Availability and fees must be demonstrated.</p>
+    <p><a href="issue-38-mobile-portfolio-design.md">Technical design and code cuts</a><br><a href="../superpowers/specs/2026-10-11-issue-38-mobile-portfolio-spec.md">Product specification</a></p>
+  </div>
+</aside>
+<section class="phone" aria-label="Native mobile screen preview">
+  <div class="prototype">DESIGN PREVIEW · SAMPLE DATA<br>No wallet, RPC, transactions, or live automation.</div>
+  <header class="top"><span class="brand">coloyond ✳</span><span class="badge">DEVNET · owner demo</span></header>
+  <div class="content">
+    <section class="screen" id="list">
+      <div class="micro">01 / Your portfolios</div><h2>A mix of your own.</h2>
+      <p class="sub">Create a portfolio. Choose its weights.<br>See what each vault actually holds.</p>
+      <button class="primary full" data-screen="create">+ Create portfolio</button>
+      <article class="card">
+        <div class="row"><h3>Everyday mix</h3><span class="micro">01</span></div>
+        <div class="quiet">WSOL + Test USD · synthetic USD token</div>
+        <div class="mix" aria-label="Sample target: WSOL 60%, Test USD 40%"><span class="sol" style="width:60%"></span><span class="usd" style="width:40%"></span></div>
+        <div class="row quiet"><span>60 / 40 target</span><span>2.0% deviation · sample</span></div>
+        <div class="rule"></div><div class="status"><span class="dot"></span>Automation active · sample state</div>
+        <p class="quiet">Last trade 2 minutes ago · sample</p>
+        <button class="full" data-screen="detail">Open portfolio →</button>
+      </article>
+      <article class="card">
+        <div class="row"><h3>Second vault</h3><span class="micro">02</span></div>
+        <div class="quiet">WSOL 40% / Test USD 60% · sample</div>
+        <div class="rule"></div><div class="status">Paused · sample state</div>
+        <p class="quiet">Separate custody, schedule and budget.</p>
+      </article>
+      <p class="quiet">Disconnecting the wallet does not pause a vault. Manage automation inside each portfolio.</p>
+    </section>
+    <section class="screen" id="create" hidden>
+      <button class="back" data-screen="list">← Portfolios</button>
+      <div class="micro">02 / Create a portfolio</div><h2>Set the balance.</h2>
+      <p class="sub">These controls edit a local design draft. The native app will review each action in your wallet.</p>
+      <label class="field">Portfolio name<input id="name" maxlength="40" value="Everyday mix"></label>
+      <div class="card">
+        <div class="row"><span><i class="swatch sol"></i>WSOL</span><strong id="sol-label">60.00%</strong></div>
+        <label class="field">WSOL target<input id="weight" type="range" min="1" max="99" step="1" value="60"></label>
+        <div class="row"><span><i class="swatch usd"></i>Test USD</span><strong id="usd-label">40.00%</strong></div>
+        <div class="rule"></div><div class="row quiet"><span>Total target</span><strong>100.00%</strong></div>
+      </div>
+      <div class="notice">Test USD is a synthetic Devnet asset. It is not backed by dollars and is not redeemable as USDC.</div>
+      <div class="inline-fields"><label class="field">Deposit WSOL<input inputmode="decimal" value="0.10" aria-label="Illustrative WSOL deposit"></label><label class="field">Deposit Test USD<input inputmode="decimal" value="10.00" aria-label="Illustrative Test USD deposit"></label></div>
+      <label class="field">Check cadence · candidate<select><option>Every 75 seconds · demo candidate</option><option>Every hour · candidate</option></select></label>
+      <label class="field">Automation budget · separate from tokens<input inputmode="decimal" value="0.05 SOL · illustrative estimate"></label>
+      <button class="primary full" data-review="create">Preview setup review</button>
+      <p class="quiet">Setup is resumable: create → fund → register → activate. A funded vault remains withdrawable if scheduling fails.</p>
+    </section>
+    <section class="screen" id="detail" hidden>
+      <button class="back" data-screen="list">← Portfolios</button>
+      <div class="micro">03 / Portfolio 01 · sample</div><h2>Everyday mix</h2>
+      <p class="sub">WSOL + Test USD · Solana Devnet<br>Sample holdings and automation evidence.</p>
+      <div class="card"><div class="status"><span class="dot"></span>Automation active · sample</div><dl><div><dt>Last check</dt><dd>30 seconds ago · sample</dd></div><div><dt>Last actual trade</dt><dd>2 minutes ago · sample</dd></div><div><dt>Next check</dt><dd>About 45 seconds · estimate</dd></div></dl></div>
+      <div class="micro">Target and actual / sample</div>
+      <div class="mix" aria-label="Sample target WSOL 60%, Test USD 40%"><span class="sol" style="width:60%"></span><span class="usd" style="width:40%"></span></div><div class="quiet">Target · 60 / 40</div>
+      <div class="mix" aria-label="Sample actual WSOL 62%, Test USD 38%"><span class="sol" style="width:62%"></span><span class="usd" style="width:38%"></span></div><div class="quiet">Actual · 62 / 38 · sample</div>
+      <table class="asset-table"><thead><tr><th>Asset</th><th>Target</th><th>Actual</th></tr></thead><tbody><tr><td><i class="swatch sol"></i>WSOL</td><td>60.00%</td><td>62.00%</td></tr><tr><td><i class="swatch usd"></i>Test USD</td><td>40.00%</td><td>38.00%</td></tr></tbody></table>
+      <div class="actions"><button data-review="fund">Add funds</button><button data-screen="create">Edit draft</button><button data-review="withdraw">Withdraw</button><button data-review="pause">Pause</button></div>
+      <div class="card"><div class="micro">Automation budget / sample</div><dl><div><dt>Remaining SOL</dt><dd>0.041 · sample</dd></div><div><dt>Curve-fee margin</dt><dd>0.30% · candidate</dd></div><div><dt>Reserve spread</dt><dd>0.30% · candidate</dd></div><div><dt>Counterparty</dt><dd>Funded Devnet reserve</dd></div></dl><p class="quiet">Network execution costs are separate from token fees. Reserve inventory is shared and finite. No live capacity or funded duration is verified here.</p></div>
+      <button class="linkbutton" data-review="close">Close vault</button>
+    </section>
+    <section class="screen" id="blocked" hidden>
+      <button class="back" data-screen="list">← Portfolios</button>
+      <div class="micro">04 / Blocked execution · sample</div><h2>Your assets.<br>Still yours.</h2>
+      <p class="sub">An unavailable price blocks a trade.<br>It does not block an in-kind exit.</p>
+      <div class="notice"><strong>Price unavailable · sample state</strong><br>The required price is older than the configured limit. Automation cannot exchange tokens using that observation.</div>
+      <div class="card"><h3>Holdings · sample</h3><dl><div><dt>WSOL</dt><dd>0.100000000</dd></div><div><dt>Test USD</dt><dd>10.000000</dd></div><div><dt>Live USD value</dt><dd>Unavailable</dd></div><div><dt>Live weight deviation</dt><dd>Unavailable</dd></div></dl></div>
+      <button class="primary full" data-review="withdraw">Preview in-kind withdrawal</button>
+      <div class="rule"></div><div class="micro">If scheduler cleanup is unavailable</div>
+      <p class="quiet">The native flow can return tokens first. It must show “Assets returned · automation cleanup pending” until cancellation and rent/budget refunds are confirmed.</p>
+      <button class="full" data-review="close">Preview close sequence</button>
+    </section>
+  </div>
+</section>
+</main>
+<dialog id="review" aria-labelledby="review-title"><div class="micro">Design review sheet / no transaction</div><h3 id="review-title">Preview only</h3><p id="review-copy"></p><p>No action is sent. The native app will show exact quantities, authorities, fees, revisions and expected effects before opening the wallet.</p><button class="primary full" id="dismiss">Return to preview</button></dialog>
+<script>
+const descriptions={list:"Two independent vaults, one connected owner. Every number on this page is illustrative.",create:"Local draft controls; review and MWA signing are separate owner actions in the proposed native app.",detail:"Target and actual weights, written automation state, separate last check/trade, and a visible fee budget.",blocked:"Unavailable live prices hide valuation and drift. Raw holdings and in-kind exit remain available."};
+document.querySelectorAll('[data-screen]').forEach(button=>button.addEventListener('click',()=>{const target=button.dataset.screen;document.querySelectorAll('.screen').forEach(screen=>screen.hidden=screen.id!==target);document.querySelectorAll('.controls button').forEach(control=>control.setAttribute('aria-pressed',String(control.dataset.screen===target)));document.getElementById('screen-description').textContent=descriptions[target];}));
+document.getElementById('weight').addEventListener('input',event=>{const sol=Number(event.target.value);document.getElementById('sol-label').textContent=sol.toFixed(2)+'%';document.getElementById('usd-label').textContent=(100-sol).toFixed(2)+'%';});
+const reviews={create:['Create portfolio','Create, fund and schedule are confirmed steps. Review program upgrade, mint/freeze and reserve authorities, curve-fee margin and reserve spread, shared finite reserve inventory, and execution caps. A scheduling failure leaves the funded vault withdrawable with automation Off. Weight-only edits keep the scheduler and budget, with a 120-second cooldown. Setup includes separate reviewed L1 and ER wallet transactions.'],fund:['Add funds','Proportional funding uses the current custody mix. It does not top up automation SOL or reset trade allowances.'],withdraw:['Withdraw in kind','Return a proportion of each token to the owner. A full exit returns every base unit and atomically disables old automation. WSOL remains an SPL token.'],pause:['Pause automation','Invalidate the active generation on Solana first. Already queued old actions cannot trade afterward. Then request cancellation; until confirmed, old ticks may consume their finite fee budget.'],close:['Close vault','Return assets, stop stale work, then reconcile controller cancellation and rent/budget refunds. Cleanup can remain pending without holding the tokens.']};
+document.querySelectorAll('[data-review]').forEach(button=>button.addEventListener('click',()=>{const [title,copy]=reviews[button.dataset.review];document.getElementById('review-title').textContent=title+' · design';document.getElementById('review-copy').textContent=copy;document.getElementById('review').showModal();}));
+document.getElementById('dismiss').addEventListener('click',()=>document.getElementById('review').close());
+</script>
+</body>
+</html>
