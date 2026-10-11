@@ -38,4 +38,20 @@ pub enum EtfError {
     SlippageExceeded,
     #[msg("Initial seed composition exceeds the accepted test-profile tolerance")]
     SeedCompositionOutOfRange,
+    #[msg("Weight vector length must match the ETF's asset-count bound")]
+    WeightsLengthMismatch,
+    #[msg("Weight vector must sum to exactly 10_000 basis points")]
+    WeightsSumMismatch,
+    #[msg("A weights proposal is already open for this ETF")]
+    ProposalAlreadyExists,
+    #[msg("No weights proposal is currently open for this ETF")]
+    ProposalNotFound,
+    #[msg("Rebalance cooldown has not elapsed since the last rebalance")]
+    RebalanceCooldownActive,
+    #[msg("Rebalance is missing or has out-of-order oracle feed accounts")]
+    RebalanceOracleMismatch,
+    #[msg("Rebalance swap would violate the requested minimum-out bound")]
+    RebalanceSlippage,
+    #[msg("Signer is not the current governance authority")]
+    Unauthorized,
 }

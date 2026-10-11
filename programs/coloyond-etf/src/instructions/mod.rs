@@ -7,6 +7,7 @@ pub mod governance;
 pub mod initialize;
 pub mod liquidity;
 pub mod risk;
+pub mod weights;
 
 pub(crate) use governance::{
     __client_accounts_cancel_resume_proposal, __client_accounts_propose_resume,
@@ -138,6 +139,87 @@ pub struct Poke<'info> {
     /// CHECK: account identity and data are verified by the shared validator.
     #[account(mut)]
     pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_0: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_1: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_2: Option<UncheckedAccount<'info>>,
+}
+
+#[derive(Accounts)]
+pub struct InitWeights<'info> {
+    #[account(mut)]
+    pub funder: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; initialized by the handler.
+    #[account(mut, seeds = [pda::WEIGHTS_SEED, pool.key().as_ref()], bump)]
+    pub weights: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetTargetWeights<'info> {
+    pub governance: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; owner and data are checked by the shared loader.
+    #[account(mut)]
+    pub weights: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeTargetWeights<'info> {
+    #[account(mut)]
+    pub proposer: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; owner and data are checked by the shared loader.
+    #[account(mut)]
+    pub weights: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptTargetWeights<'info> {
+    pub governance: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; owner and data are checked by the shared loader.
+    #[account(mut)]
+    pub weights: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct DeclineTargetWeights<'info> {
+    pub governance: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; owner and data are checked by the shared loader.
+    #[account(mut)]
+    pub weights: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Rebalance<'info> {
+    pub caller: Signer<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: account identity and data are verified by the shared validator.
+    pub pool_state: UncheckedAccount<'info>,
+    /// CHECK: exact derived PDA; owner and data are checked by the shared loader.
+    #[account(mut)]
+    pub weights: UncheckedAccount<'info>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
     pub oracle_feed_0: Option<UncheckedAccount<'info>>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.

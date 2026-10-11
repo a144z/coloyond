@@ -8,15 +8,22 @@ pub mod pda;
 pub mod state;
 
 pub(crate) use instructions::{
-    __client_accounts_cancel_resume_proposal, __client_accounts_deposit_proportional,
-    __client_accounts_initialize_pool, __client_accounts_pause_risk, __client_accounts_poke,
-    __client_accounts_propose_resume, __client_accounts_redeem_in_kind,
-    __client_accounts_resume_risk_after_delay, __client_accounts_seed_pool,
+    __client_accounts_accept_target_weights,
+    __client_accounts_cancel_resume_proposal,
+    __client_accounts_decline_target_weights,
+    __client_accounts_deposit_proportional,
+    __client_accounts_init_weights, __client_accounts_initialize_pool, __client_accounts_pause_risk,
+    __client_accounts_poke, __client_accounts_propose_resume,
+    __client_accounts_propose_target_weights, __client_accounts_rebalance,
+    __client_accounts_redeem_in_kind, __client_accounts_resume_risk_after_delay,
+    __client_accounts_seed_pool, __client_accounts_set_target_weights,
     __client_accounts_swap_exact_in,
 };
 pub use instructions::{
-    CancelResumeProposal, DepositProportional, DepositResultV1, InitializePool, PauseRisk, Poke,
-    ProposeResume, RedeemInKind, RedeemResultV1, ResumeRiskAfterDelay, SeedPool, SwapExactIn,
+    AcceptTargetWeights, CancelResumeProposal, DeclineTargetWeights, DepositProportional,
+    DepositResultV1, InitWeights, InitializePool, PauseRisk, Poke, ProposeResume,
+    ProposeTargetWeights, Rebalance, RedeemInKind, RedeemResultV1, ResumeRiskAfterDelay, SeedPool,
+    SetTargetWeights, SwapExactIn,
 };
 
 // Devnet program ID approved for the S5A bring-up (keypair: gitignored devnet-program-keypair.json).
@@ -93,5 +100,45 @@ pub mod coloyond_etf {
         proposal_nonce: u64,
     ) -> Result<()> {
         instructions::governance::cancel_resume_proposal(ctx, proposal_nonce)
+    }
+
+    pub fn init_weights<'info>(
+        ctx: Context<'_, '_, 'info, 'info, InitWeights<'info>>,
+        initial_weights: Vec<u64>,
+        rebalance_interval_seconds: u64,
+    ) -> Result<()> {
+        instructions::weights::init_weights(ctx, initial_weights, rebalance_interval_seconds)
+    }
+
+    pub fn set_target_weights<'info>(
+        ctx: Context<'_, '_, 'info, 'info, SetTargetWeights<'info>>,
+        new_weights: Vec<u64>,
+    ) -> Result<()> {
+        instructions::weights::set_target_weights(ctx, new_weights)
+    }
+
+    pub fn propose_target_weights<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ProposeTargetWeights<'info>>,
+        new_weights: Vec<u64>,
+    ) -> Result<()> {
+        instructions::weights::propose_target_weights(ctx, new_weights)
+    }
+
+    pub fn accept_target_weights(ctx: Context<AcceptTargetWeights>) -> Result<()> {
+        instructions::weights::accept_target_weights(ctx)
+    }
+
+    pub fn decline_target_weights(ctx: Context<DeclineTargetWeights>) -> Result<()> {
+        instructions::weights::decline_target_weights(ctx)
+    }
+
+    pub fn rebalance<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Rebalance<'info>>,
+        asset_in: u8,
+        asset_out: u8,
+        amount_in: u64,
+        min_amount_out: u64,
+    ) -> Result<()> {
+        instructions::weights::rebalance(ctx, asset_in, asset_out, amount_in, min_amount_out)
     }
 }

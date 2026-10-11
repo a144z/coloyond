@@ -6,6 +6,7 @@ pub const AUTHORITY_SEED: &[u8] = b"etf_authority_v1";
 pub const SHARE_MINT_SEED: &[u8] = b"etf_share_v1";
 pub const CUSTODY_SEED: &[u8] = b"etf_custody_v1";
 pub const ASSET_STATE_SEED: &[u8] = b"etf_asset_v1";
+pub const WEIGHTS_SEED: &[u8] = b"etf_weights_v1";
 
 pub fn pool(config_hash: &[u8; 32]) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[POOL_SEED, config_hash], &crate::ID)
@@ -34,6 +35,10 @@ pub fn asset_state(pool: &Pubkey, asset_index: u8) -> (Pubkey, u8) {
     )
 }
 
+pub fn weights(pool: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[WEIGHTS_SEED, pool.as_ref()], &crate::ID)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,5 +54,7 @@ mod tests {
         assert_ne!(authority(&pool_key).0, share_mint(&pool_key).0);
         assert_ne!(custody(&pool_key, 0).0, custody(&pool_key, 1).0);
         assert_ne!(asset_state(&pool_key, 0).0, asset_state(&pool_key, 1).0);
+        assert_ne!(weights(&pool_key).0, asset_state(&pool_key, 0).0);
+        assert_ne!(weights(&pool_key).0, pool_state(&pool_key).0);
     }
 }
