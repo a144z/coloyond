@@ -10,6 +10,8 @@ use sha2::{Digest, Sha256};
 pub const CONFIG_DOMAIN: &[u8] = b"coloyond:etf:config:v1";
 pub const CONFIG_VERSION_V1: u8 = 1;
 pub const CONFIG_HASH_BYTES: usize = 32;
+/// Matches the minimum allocation supported by `etf-math`'s weighted math.
+const MIN_TARGET_WEIGHT_BPS: u16 = 100;
 
 #[derive(Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Eq)]
 pub struct EtfPoolConfigV1 {
@@ -64,6 +66,13 @@ impl EtfPoolConfigV1 {
         }
         if !(2..=3).contains(&self.assets.len()) {
             return Err(IdentityError::InvalidAssetCount);
+        }
+        if self
+            .assets
+            .iter()
+            .any(|asset| asset.target_weight_bps < MIN_TARGET_WEIGHT_BPS)
+        {
+            return Err(IdentityError::InvalidWeights);
         }
         for index in 0..self.assets.len() {
             if self.assets[index + 1..]
@@ -286,16 +295,35 @@ mod tests {
     }
 
     #[test]
-    fn decoder_requires_an_explicit_size_ceiling_and_does_not_freeze_minimum_weight() {
+    fn decoder_requires_an_explicit_size_ceiling_and_enforces_minimum_weight() {
         let bytes = sample_config().canonical_bytes().unwrap();
         assert_eq!(
             EtfPoolConfigV1::from_canonical_bytes(&bytes, bytes.len() - 1),
             Err(IdentityError::Serialization)
         );
-        let mut small_weight = sample_config();
-        small_weight.assets[0].target_weight_bps = 1;
-        small_weight.assets[1].target_weight_bps = 9_999;
-        assert!(small_weight.canonical_bytes().is_ok());
+        for weight in [0, 1, 99] {
+            for asset_index in 0..2 {
+                let mut below_floor = sample_config();
+                below_floor.assets[asset_index].target_weight_bps = weight;
+                below_floor.assets[1 - asset_index].target_weight_bps = 10_000 - weight;
+                assert_eq!(
+                    below_floor.validate(),
+                    Err(IdentityError::InvalidWeights),
+                    "asset {asset_index} weight {weight} bps must be rejected"
+                );
+                assert_eq!(
+                    below_floor.canonical_bytes(),
+                    Err(IdentityError::InvalidWeights),
+                    "asset {asset_index} weight {weight} bps must not be canonically encoded"
+                );
+            }
+        }
+
+        let mut at_floor = sample_config();
+        at_floor.assets[0].target_weight_bps = 100;
+        at_floor.assets[1].target_weight_bps = 9_900;
+        assert_eq!(at_floor.validate(), Ok(()));
+        assert!(at_floor.canonical_bytes().is_ok());
     }
 
     #[test]
