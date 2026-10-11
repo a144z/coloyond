@@ -16,6 +16,12 @@ test("environment defaults to dry-run and rejects mainnet", () => {
   assert.throws(() => keeperConfigFromEnvironment({ ...base, COLOYOND_KEEPER_DRY_RUN: "maybe" }), /must be true or false/);
 });
 
+test("execution selection fails closed at config load and defaults to manual poke", () => {
+  assert.equal(keeperConfigFromEnvironment(base).execution.provider.id, "manual-poke");
+  assert.equal(keeperConfigFromEnvironment({ ...base, COLOYOND_KEEPER_EXECUTION_PROVIDER: "magicblock,tuktuk" }).execution.provider.id, "magicblock");
+  assert.throws(() => keeperConfigFromEnvironment({ ...base, COLOYOND_KEEPER_EXECUTION_PROVIDER: "antegen" }), /Unknown execution provider admission/);
+});
+
 test("submission requires an explicit positive transaction fee cap", () => {
   assert.throws(() => keeperConfigFromEnvironment({ ...base, COLOYOND_KEEPER_DRY_RUN: "false" }), /MAX_FEE_LAMPORTS/);
   assert.equal(keeperConfigFromEnvironment({ ...base, COLOYOND_KEEPER_DRY_RUN: "false", COLOYOND_KEEPER_MAX_FEE_LAMPORTS: "5000" }).maxFeeLamports, 5000n);

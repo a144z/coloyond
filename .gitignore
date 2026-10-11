@@ -8,3 +8,4 @@ node_modules/
 /dist/
 /.vite/
 /public/localnet-manifest.json
+__pycache__/
