@@ -1,8 +1,8 @@
 # Sprint 5 GitHub issue drafts — 11 October 2026
 
-**Status: draft only; GitHub duplicate search and issue creation are blocked by repository access.** The connected GitHub app is authenticated as `agilentic` and cannot see `a144z/coloyond`; the local `wlkit` token is invalid. The user explicitly rejected `agilentic` and offered to help authenticate the correct account. An attempted GitHub CLI browser login could not connect to `github.com`, so no account was changed. No issues were created or updated, and duplicate status is unknown. Do not treat these drafts as GitHub tracking or begin implementation that the active goal gates on issue creation.
+**Status: created and duplicate-checked.** GitHub CLI was authenticated as `wlkit`; the repository's complete existing issue list had no Sprint 5 duplicates. Issues [#29](https://github.com/a144z/coloyond/issues/29) through [#36](https://github.com/a144z/coloyond/issues/36) now track the grouped S5 work below. Issue [#36](https://github.com/a144z/coloyond/issues/36) is explicitly owned by the colleague and is not part of this implementation scope.
 
-The current local feature branch was clean and fast-forwarded from `ec513256` to `e80ef5b3` after fetching. The fetched changes include colleague commit `e33568db` (interactive target-weight editor) and merge commit `e80ef5b3`; no history was rewritten. Current branch: `feature/portfolio-rebalancing`.
+Current branch: `feature/portfolio-rebalancing`. The issue draft was committed as `15056af`; colleague's allocation overlay fix `d5c658e6` was fetched and fast-forwarded through merge commit `d1eddcb4`. No history was rewritten.
 
 ## Shared evidence links
 
@@ -210,6 +210,13 @@ This issue is assigned to the colleague to investigate and implement. Do not fol
 - [ ] The demo describes availability only to the extent supported by measured evidence; no “zero infrastructure,” guaranteed cadence, or higher-availability claim is made without proof.
 - [ ] TukTuk evidence remains available as a separate candidate and its status is updated without deleting prior results.
 
-## Issue-creation access needed
+## Created issue links
 
-To finish the issue-first gate, authenticate GitHub CLI or the GitHub app as the account the user designates with write access to `a144z/coloyond`. Do not use `agilentic`. Once access is restored, search all open and closed issues for duplicates, create/update these eight grouped issues, replace this draft status with issue numbers/links, then use that issue set to order and track implementation. No private deployment or wallet credentials are needed for issue setup.
+- [#29 — Freeze the ETF v1 Devnet test profile and admission policy](https://github.com/a144z/coloyond/issues/29)
+- [#30 — Produce reproducible ETF deployment and accepted Devnet manifest](https://github.com/a144z/coloyond/issues/30)
+- [#31 — Prove successful SPL custody lifecycle and adversarial rollback](https://github.com/a144z/coloyond/issues/31)
+- [#32 — Enable Devnet ETF wallet flow with confirmed RPC reconciliation](https://github.com/a144z/coloyond/issues/32)
+- [#33 — Decide fixed versus dynamic fee from reviewed execution economics](https://github.com/a144z/coloyond/issues/33)
+- [#34 — Prove recurring ETF maintenance through an external TukTuk crank](https://github.com/a144z/coloyond/issues/34)
+- [#35 — Integrate and validate the Android ETF wallet/read model](https://github.com/a144z/coloyond/issues/35)
+- [#36 — Evaluate MagicBlock scheduling for the ETF product demo (colleague-owned)](https://github.com/a144z/coloyond/issues/36)
