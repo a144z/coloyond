@@ -21,3 +21,20 @@ that the deployed Cron binary matches the pinned source.
 `returned_tasks.py` is an offline, strict Borsh parser for TukTuk's direct `RunTaskReturnV0` bytes plus a small constraint model for returned compiled children. It checks the 1,000-byte direct-return bound, exact consumption (no trailing bytes), enum/option tags, UTF-8, child description size, per-signer PDA seed limits (at most 16 seeds, each at most 32 bytes), parent-declared free-task capacity, supplied ID uniqueness/range/occupancy, child queue-capacity declaration, and the queue-minimum crank reward rule. It parses `RemoteV0` but rejects it in the no-backend candidate policy; it also rejects the alternate `tasks_accounts` path rather than implying that path is covered. Twenty-six tests cover the parser and deterministic checks, including maximum/malformed child signer-seed boundaries, child compiled-index bounds, offline supplied task-account PDA/order/emptiness fixtures, and a 166-byte source-shaped single-child requeue fixture. That fixture uses placeholder account keys/instruction bytes and the local Python Borsh builder; it is not the production ETF `poke` payload and is not serialized with Helium's Rust types. This remains an offline model: supplied PDA addresses and empty-account markers are fixture inputs, not RPC-verified account ownership or state. It does not verify the invoked program identity, queue or task lamports, rent, funding, CPI effects, stop policy, or any crank execution. No queue/task was created and no transaction was submitted.
 
 Queue registration and automated invocation require a separately reviewed wallet-signed Devnet flow. Do not interpret this program-account probe as proof that a queue is funded, a task is valid, or any third party will execute it.
+
+`cron_funding.py` is a parameter-only estimate of one Cron `queue_cron_tasks_v1`
+pass. Supply the Cron balance and rent minimum, the queue minimum crank reward,
+the job's action cap/outstanding records/empty records, and rent/current balances
+for each used return PDA. The source emits one successor coordinator plus each
+nonempty selected action record, with at most five action records per pass;
+the Cron PDA funds `task_count * queue_min_crank_reward` and any return-PDA rent
+deficit while keeping its own rent minimum. The calculator reports the exact
+modeled threshold/shortfall, the rent actually paid in source order, and the
+post-call Cron balance. If a later rent deficit fails, earlier PDA rent top-ups
+may already be paid; if the reward check fails, rent top-ups remain paid but no
+crank reward is transferred. Both paths stand down.
+It has no Devnet defaults and excludes initial setup, task-queue deposit/capacity,
+crankers' transaction fees, account-layout/serialization validity, and executor
+availability. Rent and account-size inputs must come from actual reads and
+serialized task construction before wallet approval. The values are not a
+runtime liveness guarantee or an operating-cost recommendation.

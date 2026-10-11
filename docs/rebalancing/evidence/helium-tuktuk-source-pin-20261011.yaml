@@ -103,6 +103,9 @@ source_files:
   - path: solana-programs/programs/cron/src/instructions/queue_cron_tasks_v1.rs
     sha256: 0cf1dcc6d904dc1b6e7939b574a7367d8d395c8c9d379fb02e4d42504bfb61c9
     review: versioned schedule processing, queue/task-chain checks and next-task return
+  - path: tuktuk-program/src/write_return_tasks.rs
+    sha256: a9927b5086c1cc21f3d6ebfcc011a4e68ad3a07db3c4a753b5dcfffd5ce6b0b8
+    review: serialized return-task account rent deficits are charged to the Cron PDA while preserving its rent minimum
   - path: solana-programs/programs/cron/src/instructions/requeue_cron_task_v0.rs
     sha256: 74007bb9eeea35b3a8f7568470e5fc2b1b0e9eab047bb5707b3a034f979187dc
     review: V0 requeue instruction is deprecated and returns an error
@@ -139,6 +142,41 @@ source_files:
   - path: solana-programs/programs/cron/src/instructions/add_cron_transaction_v0.rs
     sha256: 981bcefdba076c7abeb3fabd2a0e1633e33be2362402d4bc9aa2491117478f5b
     review: scheduled transaction record storage and deletion semantics
+build_provenance:
+  ci_source_commit: 77dabc07580496517b6c390446daf4962fb3c39a
+  platform: ubuntu-latest
+  host_rust: 1.82.0
+  solana_cli: 2.1.6
+  anchor_cli: 0.31.1
+  anchor_git_commit: 98396c0aeffb4745ab08fb9f45e0d31ad0bd1402
+  node: 18.12.1
+  build_command: TESTING=true ~/.cargo/bin/anchor build
+  ci_build_action: .github/actions/build-anchor/action.yaml
+  ci_build_action_sha256: d409701488c2550edda4f7927efdcc86c9363198c81ccbe5c7d278dc2271f966
+  setup_action: .github/actions/setup/action.yaml
+  setup_action_sha256: fc1ea624d07159fea2c017928093dad6a4e46ea7230c09a8a9cb9e39094f0cec
+  solana_setup_action: .github/actions/setup-solana/action.yaml
+  solana_setup_action_sha256: 4ea8412cb65238b916e2cf241d1457aab1deb2ea711882768a89be255b9f86e8
+  workflow: .github/workflows/solana-programs.yaml
+  workflow_sha256: 12c533a18119ba39a1c4a907fcd19d8613c38440ecdede8aa4e6d4e3a7a8d0e1
+  rust_toolchain_file: solana-programs/rust-toolchain.toml
+  rust_toolchain_sha256: cc9c7699a75ad38810bbfdb7b8b194d4827aa9c210757f4e7b5046885b9add89
+  anchor_config_file: solana-programs/Anchor.toml
+  anchor_config_sha256: cdfe55f84071b592888f3ebe87d4476edf9f21375cf363c9d8c2fc5e338ae0bc
+  cargo_lock_file: solana-programs/Cargo.lock
+  cargo_lock_sha256: 05d7e17afb5b4058d8f4c6d50caceaf3195bd5444b1c780e79e5415e63eb20b5
+  host_comparison:
+    observed_solana_cli: 2.3.0
+    observed_sbf_platform_tools: v1.48
+    observed_sbf_rustc: 1.84.1
+    observed_anchor_cli: 0.32.1
+    compatible_with_pinned_ci: false
+  build_result: not_reproduced
+  devnet_programdata_match: unverified
+  notes:
+    - CI builds the Solana programs through the pinned Anchor action on Ubuntu; the apparent Docker build job in the workflow is commented out.
+    - The available host toolchain does not match the pinned CI matrix, so a local build is not labeled reproducible and its artifacts cannot establish Devnet bytecode correspondence.
+    - No clean Ubuntu build with the pinned toolchain or byte-for-byte ProgramData comparison has been performed.
 reviewed_source_facts:
   task_trigger:
     variants: [Now, Timestamp(i64)]
@@ -161,6 +199,15 @@ reviewed_source_facts:
       - enumerate_and_dequeue_pending_coordinator_and_action_tasks_with_queue_authority
       - protocol_level_scheduler_epoch_or_disabled_guard_on_every_action_payload
       - remove_cron_transactions_then_close_only_after_queue_cleanup_is_read_back
+    queue_pass_funding:
+      source_instruction: queue_cron_tasks_v1
+      effective_action_record_cap: 5
+      task_count: one_successor_coordinator_plus_each_nonempty_selected_action_record
+      max_emitted_tasks_per_pass: 6
+      crank_reward_per_emitted_task: task_queue_min_crank_reward
+      cron_job_funding: cron_rent_minimum_plus_used_return_account_rent_deficits_plus_task_count_times_minimum_crank_reward
+      underfunded_behavior: stand_down_and_require_recovery_or_requeue
+      transaction_fees_and_executor_availability_included: false
     tuktuk_dequeue_requires_queue_authority_signer: true
     dequeue_rejects_task_whose_exists_bit_is_already_clear: true
     executor: external_crank_turner_required
