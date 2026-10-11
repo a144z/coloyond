@@ -6,6 +6,8 @@
 
 The encoder checks fixed-width hex input lengths and rejects non-`BigInt` values at the u64 writer boundary. The fixture's small JSON number is converted only after a safe-integer check; a separate boundary assertion confirms a value above JavaScript's exact `Number` range is serialized exactly as a `BigInt`.
 
+`crates/etf-identity/tests/identity_commitment.rs` now mutates each valid asset and pool-configuration field independently and verifies that canonical bytes, config hash, strategy ID, and pool seed hash all change. It also checks that asset order is identity-bearing and that unsupported protocol versions fail closed. The isolated identity crate passes eight tests total, including its six existing encoder/parser tests. This proves field commitment for the Rust identity implementation and fixture-shaped values; it does not add Kotlin agreement, production policy selection, a deployed program ID, actual PDA addresses, or on-chain behavior.
+
 The shared fixture is marked `fixtureOnly` and uses patterned synthetic asset, feed, policy, governance, and guardian bytes. This evidence demonstrates only TypeScript agreement with the same synthetic vector used by Rust and Python. It does not establish Kotlin agreement, production policy selection or freeze, an actual PDA address, program identity, deployment readiness, or on-chain behavior.
 
 ## Validation
