@@ -311,3 +311,211 @@ fn tampered_quotes_leave_the_entire_vault_unchanged() {
     );
     assert_eq!(snapshot(&v), before);
 }
+
+// This deliberately small reference model uses only u128 integer arithmetic;
+// it does not call the production accounting helpers to derive expected
+// shares, inputs, payouts, or reserve balances.
+fn model_floor(numerator_a: u64, numerator_b: u64, denominator: u64) -> u128 {
+    assert_ne!(denominator, 0);
+    (numerator_a as u128 * numerator_b as u128) / denominator as u128
+}
+
+fn model_ceil(numerator_a: u64, numerator_b: u64, denominator: u64) -> u128 {
+    assert_ne!(denominator, 0);
+    let numerator = numerator_a as u128 * numerator_b as u128;
+    let denominator = denominator as u128;
+    numerator / denominator + u128::from(numerator % denominator != 0)
+}
+
+#[derive(Clone, Debug)]
+struct MultiHolderLedger {
+    locked_seed_shares: u64,
+    // Seed owner, Alice, Bob. Locked shares are accounted for separately.
+    holder_shares: [u64; 3],
+    initial_net_backing: [u128; 2],
+    contributed_assets: [u128; 2],
+    cumulative_payouts: [u128; 2],
+    bounty_liabilities: [u64; 2],
+}
+
+fn assert_multi_holder_conservation(v: &Vault, ledger: &MultiHolderLedger) {
+    let modeled_shares = ledger.locked_seed_shares as u128
+        + ledger
+            .holder_shares
+            .iter()
+            .map(|shares| *shares as u128)
+            .sum::<u128>();
+    assert_eq!(modeled_shares, v.total_shares as u128);
+
+    for asset_index in 0..2 {
+        assert_eq!(
+            v.bounty_liabilities[asset_index],
+            ledger.bounty_liabilities[asset_index]
+        );
+        assert!(v.bootstrap_reserve[asset_index] >= v.bounty_liabilities[asset_index]);
+        assert!(v.bootstrap_reserve[asset_index] <= v.accounted_amounts[asset_index]);
+
+        let net_backing =
+            (v.accounted_amounts[asset_index] - v.bounty_liabilities[asset_index]) as u128;
+        let total_contributed =
+            ledger.initial_net_backing[asset_index] + ledger.contributed_assets[asset_index];
+        assert_eq!(
+            ledger.cumulative_payouts[asset_index] + net_backing,
+            total_contributed
+        );
+        assert!(ledger.cumulative_payouts[asset_index] <= total_contributed);
+    }
+}
+
+fn model_deposit_quote(v: &Vault, max_amounts: [u64; 2]) -> accounting::DepositQuote {
+    let backing = [
+        v.accounted_amounts[0] - v.bounty_liabilities[0],
+        v.accounted_amounts[1] - v.bounty_liabilities[1],
+    ];
+    let shares_out = model_floor(max_amounts[0], v.total_shares, backing[0]).min(model_floor(
+        max_amounts[1],
+        v.total_shares,
+        backing[1],
+    ));
+    assert!(shares_out > 0 && shares_out <= u64::MAX as u128);
+    let shares_out = shares_out as u64;
+    let amounts_in = [
+        model_ceil(backing[0], shares_out, v.total_shares) as u64,
+        model_ceil(backing[1], shares_out, v.total_shares) as u64,
+    ];
+    accounting::DepositQuote {
+        shares_out,
+        amounts_in,
+    }
+}
+
+fn multi_holder_fixture() -> (Vault, MultiHolderLedger) {
+    let mut v = vault([10_000, 20_000], 1_000, 100);
+    v.bootstrap_reserve = [1_200, 2_400];
+    v.bounty_liabilities = [300, 600];
+    let mut ledger = MultiHolderLedger {
+        locked_seed_shares: 100,
+        holder_shares: [900, 0, 0],
+        initial_net_backing: [9_700, 19_400],
+        contributed_assets: [0, 0],
+        cumulative_payouts: [0, 0],
+        bounty_liabilities: v.bounty_liabilities,
+    };
+    assert_multi_holder_conservation(&v, &ledger);
+
+    // Alice and Bob deposit at different points in the lifecycle. The model
+    // independently predicts exact proportional share issuance and rounding.
+    for (holder_index, max_amounts) in [(1, [1_000, 2_000]), (2, [500, 1_000])] {
+        let expected = model_deposit_quote(&v, max_amounts);
+        let quote = accounting::quote_deposit(&v, max_amounts, 1).unwrap();
+        assert_eq!(quote, expected);
+        let backing_before = [
+            v.accounted_amounts[0] - v.bounty_liabilities[0],
+            v.accounted_amounts[1] - v.bounty_liabilities[1],
+        ];
+        for asset_index in 0..2 {
+            let rounding_numerator = quote.amounts_in[asset_index] as u128 * v.total_shares as u128
+                - backing_before[asset_index] as u128 * quote.shares_out as u128;
+            assert!(rounding_numerator < v.total_shares as u128);
+        }
+        accounting::apply_deposit(&mut v, quote).unwrap();
+        ledger.holder_shares[holder_index] += quote.shares_out;
+        for asset_index in 0..2 {
+            ledger.contributed_assets[asset_index] += quote.amounts_in[asset_index] as u128;
+        }
+        assert_multi_holder_conservation(&v, &ledger);
+
+        // A direct transfer is recognized as backing for the current ledger;
+        // it must never mint shares to either existing holder or the donor.
+        if holder_index == 1 {
+            let shares_before = v.total_shares;
+            let donation = [37, 51];
+            let actual_amounts = [
+                v.accounted_amounts[0] + donation[0],
+                v.accounted_amounts[1] + donation[1],
+            ];
+            assert_eq!(
+                accounting::sync_donation(&mut v, actual_amounts).unwrap(),
+                donation
+            );
+            assert_eq!(v.total_shares, shares_before);
+            for asset_index in 0..2 {
+                ledger.contributed_assets[asset_index] += donation[asset_index] as u128;
+            }
+            assert_multi_holder_conservation(&v, &ledger);
+        }
+    }
+
+    (v, ledger)
+}
+
+fn redeem_for_holder(
+    v: &mut Vault,
+    ledger: &mut MultiHolderLedger,
+    holder_index: usize,
+    burn: u64,
+) {
+    assert!(burn > 0 && burn <= ledger.holder_shares[holder_index]);
+    let supply_before = v.total_shares;
+    let backing_before = [
+        v.accounted_amounts[0] - v.bounty_liabilities[0],
+        v.accounted_amounts[1] - v.bounty_liabilities[1],
+    ];
+    let expected_amounts = [
+        model_floor(backing_before[0], burn, supply_before) as u64,
+        model_floor(backing_before[1], burn, supply_before) as u64,
+    ];
+    let remaining_supply = supply_before - burn;
+    let expected_reserve = std::array::from_fn(|asset_index| {
+        let free_reserve = v.bootstrap_reserve[asset_index] - v.bounty_liabilities[asset_index];
+        v.bounty_liabilities[asset_index]
+            + model_floor(free_reserve, remaining_supply, supply_before) as u64
+    });
+
+    let quote = accounting::quote_redemption(v, burn).unwrap();
+    assert_eq!(quote.amounts_out, expected_amounts);
+    assert_eq!(quote.remaining_supply, remaining_supply);
+    assert_eq!(quote.reserve_after, expected_reserve);
+    for asset_index in 0..2 {
+        assert!(quote.amounts_out[asset_index] <= backing_before[asset_index]);
+        let payout_dust_numerator = backing_before[asset_index] as u128 * burn as u128
+            - quote.amounts_out[asset_index] as u128 * supply_before as u128;
+        assert!(payout_dust_numerator < supply_before as u128);
+
+        let free_reserve = v.bootstrap_reserve[asset_index] - v.bounty_liabilities[asset_index];
+        let reserve_dust_numerator = free_reserve as u128 * remaining_supply as u128
+            - (quote.reserve_after[asset_index] - v.bounty_liabilities[asset_index]) as u128
+                * supply_before as u128;
+        assert!(reserve_dust_numerator < supply_before as u128);
+    }
+
+    accounting::apply_redemption(v, burn, quote).unwrap();
+    ledger.holder_shares[holder_index] -= burn;
+    for asset_index in 0..2 {
+        ledger.cumulative_payouts[asset_index] += quote.amounts_out[asset_index] as u128;
+    }
+    assert_multi_holder_conservation(v, ledger);
+}
+
+#[test]
+fn two_holder_lifecycle_conserves_shares_backing_reserves_and_dust_in_both_exit_orders() {
+    for order in [[1, 2, 1, 2, 1, 2], [2, 1, 2, 1, 2, 1]] {
+        let (mut v, mut ledger) = multi_holder_fixture();
+        for (turn_index, holder_index) in order.iter().copied().enumerate() {
+            // Split every holder's exit into three independently applied
+            // redemptions so ordering and retained rounding dust are checked.
+            let balance = ledger.holder_shares[holder_index];
+            let remaining_redemptions = order[turn_index..]
+                .iter()
+                .filter(|next_holder| **next_holder == holder_index)
+                .count() as u64;
+            let burn = (balance + remaining_redemptions - 1) / remaining_redemptions;
+            redeem_for_holder(&mut v, &mut ledger, holder_index, burn);
+        }
+        assert_eq!(ledger.holder_shares[1], 0);
+        assert_eq!(ledger.holder_shares[2], 0);
+        assert_eq!(ledger.holder_shares[0], 900);
+        assert_eq!(v.total_shares, ledger.locked_seed_shares + 900);
+        assert_multi_holder_conservation(&v, &ledger);
+    }
+}
