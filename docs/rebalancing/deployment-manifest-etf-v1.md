@@ -18,9 +18,21 @@
 | Governance authority | _TBD; exact key or program PDA must be pinned before S5E deployment_ | May propose only delayed resume or authority handoff; cannot change pool economics/configuration or transfer custody. |
 | Emergency guardian | _TBD; exact key must be pinned before S5E deployment_ | May pause risk-increasing actions immediately; cannot resume, alter policy or block in-kind exit. |
 | Governance delay | 24 hours | Fixed before S5E; execution is permissionless after delay and new authority handoff requires new-key acceptance. |
-| Target test weights | SOL 4,000 bps / test BTC 4,000 bps / test USD 2,000 bps | Blueprint example for Devnet only; freeze in S5A with seed/math tolerances. |
+| First test-profile target weights | WSOL 5,000 bps / Test USD 5,000 bps | Bounded S5A draft recommendation only; not frozen or admitted. The blueprint's three-asset 40/40/20 example is historical, not this first test profile. See [test-profile evidence](evidence/s5-devnet-test-profile.md). |
 | Fee policy | _TBD by S5D2 and S5A amendment_ | No 30/500/1,000 bps values are approved. |
 | Share mint | Six decimals, PDA authority | Exact address is created at deployment; initial USD-NAV denomination is not a peg. |
+
+### First two-asset Devnet test profile — draft recommendation, not admitted
+
+| Role | Exact candidate | Proposed display label | Current evidence / limitation |
+|---|---|---|---|
+| Asset 0 | WSOL mint `So11111111111111111111111111111111111111112`, classic SPL Token Program, 9 decimals | `WSOL` | Point-in-time finalized mint observation found no mint or freeze authority; refresh before any admission or deployment. |
+| Asset 1 | Devnet mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, classic SPL Token Program, 6 decimals | `Test USD / synthetic / unbacked / not redeemable USDC` | The observed mint has active mint and freeze authorities and supply near `u64::MAX`. Its ticker-like feed does not make this USDC or redeemable USD. |
+| Candidate target | `5,000 / 5,000` bps | 50/50 | Recommendation only; seed-composition tolerance is unresolved, so this does not authorize seeding. |
+| SOL/USD fixed feed | Account `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE`; feed ID `0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | — | Fixed shard-0 PDA candidate. Must verify Push Oracle PDA derivation and Receiver-owned `PriceUpdateV2`, exact feed ID, and `Full` on the live cluster. |
+| USDC/USD fixed feed | Account `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX`; feed ID `0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | — | Used only as an oracle reference for Test USD. It provides no backing or redemption claim. Apply the same owner/layout/feed/Full/PDA checks as SOL/USD. |
+
+The 60-second age ceiling is diagnostic-only, not an approved policy; do not widen it, and fail closed while freshness policy is unapproved or any required feed is stale. Candidate confidence limit `100 bps`, exponent range `[-17, 0]`, fixed fee `30 bps`, and gross input cap `3,000 bps` are model inputs for review only, not frozen policy. No pool initialization, seed, swap, deployment, or funded action is authorized by this profile. The quote/parity band, seed tolerance, final fee/risk schemas and economics remain open pending S0B/S5A/S5D2 review. There is no exact Test BTC mint in this profile and no BTC asset claim. See the detailed [profile evidence and limits](evidence/s5-devnet-test-profile.md).
 
 ## Pyth program candidates
 
