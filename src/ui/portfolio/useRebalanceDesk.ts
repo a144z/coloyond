@@ -38,12 +38,14 @@ interface DeskCore {
   reserveUsd: number;
   runs: number;
   log: DeskLogEntry[];
+  locked: string[];
 }
 
 export interface RebalanceDeskView {
   assets: DeskAsset[];
   byId: Record<string, { targetPct: number; weightPct: number }>;
   weights: number[];
+  lockedSymbols: string[];
   drift: number;
   totalUsd: number;
   targetsTotal: number;
@@ -58,6 +60,7 @@ export interface RebalanceDeskView {
   setTriggerPp: (pp: number) => void;
   setTarget: (symbol: string, pct: number) => void;
   normalizeTargets: () => void;
+  toggleLocked: (symbol: string) => void;
   simulateMarket: () => void;
   rebalanceNow: () => void;
   resetBasket: () => void;
@@ -74,7 +77,7 @@ function prependLog(log: DeskLogEntry[], text: string): DeskLogEntry[] {
 }
 
 function seedCore(): DeskCore {
-  return { assets: seedBasket(), triggerPp: DEFAULT_TRIGGER_PP, reserveUsd: 0, runs: 0, log: [] };
+  return { assets: seedBasket(), triggerPp: DEFAULT_TRIGGER_PP, reserveUsd: 0, runs: 0, log: [], locked: [] };
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -113,7 +116,7 @@ function readCore(): DeskCore {
           .filter((entry): entry is DeskLogEntry => typeof entry === "object" && entry !== null && typeof (entry as DeskLogEntry).id === "string" && typeof (entry as DeskLogEntry).text === "string")
           .slice(0, MAX_LOG_ENTRIES)
       : [];
-    return { assets, triggerPp: trigger, reserveUsd, runs, log };
+    return { assets, triggerPp: trigger, reserveUsd, runs, log, locked: Array.isArray(stored.locked) ? (stored.locked as unknown[]).filter((symbol): symbol is string => typeof symbol === "string" && assets.some((asset) => asset.symbol === symbol)) : [] };
   } catch {
     return seedCore();
   }
@@ -212,6 +215,7 @@ export function useRebalanceDesk(): RebalanceDeskView {
       const nextAssets = reweigh(core.assets, clickPlan);
       const nextDrift = driftPp(nextAssets);
       setCore((current) => ({
+        ...current,
         assets: nextAssets,
         triggerPp: current.triggerPp,
         reserveUsd: round2(current.reserveUsd + clickPlan.reserveUsd),
@@ -229,10 +233,18 @@ export function useRebalanceDesk(): RebalanceDeskView {
     setStatus("The basket is back on the saved seed set by the strategy.");
   }, []);
 
+  const toggleLocked = useCallback((symbol: string) => {
+    setCore((current) => ({
+      ...current,
+      locked: current.locked.includes(symbol) ? current.locked.filter((lockedSymbol) => lockedSymbol !== symbol) : [...current.locked, symbol],
+    }));
+  }, []);
+
   return {
     assets: core.assets,
     byId,
     weights,
+    lockedSymbols: core.locked,
     drift,
     totalUsd,
     targetsTotal,
@@ -247,6 +259,7 @@ export function useRebalanceDesk(): RebalanceDeskView {
     setTriggerPp,
     setTarget,
     normalizeTargets,
+    toggleLocked,
     simulateMarket,
     rebalanceNow,
     resetBasket,

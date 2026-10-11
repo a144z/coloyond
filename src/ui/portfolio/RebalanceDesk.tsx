@@ -21,13 +21,13 @@ function DeskSection({ area, index, title, children }: { area: string; index: st
 // The percent text field keeps a local draft while typing, so mid-edit
 // values like an empty box never break the strict total; blur or Enter
 // commits through the engine's share algebra and the whole row resyncs.
-function TargetField({ desk, symbol, pct }: { desk: RebalanceDeskView; symbol: string; pct: number }) {
+function TargetField({ desk, symbol, pct, locked }: { desk: RebalanceDeskView; symbol: string; pct: number; locked: boolean }) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = (raw: string) => {
     setDraft(null);
     const parsed = Number(raw);
-    if (raw.trim() !== "" && Number.isFinite(parsed)) {
-      for (const share of sharesForSet(desk.assets, symbol, parsed)) desk.setTarget(share.symbol, share.targetPct);
+    if (!locked && raw.trim() !== "" && Number.isFinite(parsed)) {
+      for (const share of sharesForSet(desk.assets, symbol, parsed, desk.lockedSymbols)) desk.setTarget(share.symbol, share.targetPct);
     }
   };
   return (
@@ -38,6 +38,7 @@ function TargetField({ desk, symbol, pct }: { desk: RebalanceDeskView; symbol: s
         min={0}
         max={100}
         step={1}
+        disabled={locked}
         aria-label={`Target percent for ${symbol}`}
         value={draft ?? String(pct)}
         onFocus={() => setDraft(String(pct))}
@@ -74,9 +75,10 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
     return { symbol: desk.assets[index]?.symbol ?? `share-${index}`, end: liveCursor };
   });
   const commitShares = (shares: { symbol: string; targetPct: number }[]) => shares.forEach((share) => desk.setTarget(share.symbol, share.targetPct));
+  const isLocked = (symbol: string) => desk.lockedSymbols.includes(symbol);
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>, leftIndex: number) => {
     const pairTotal = desk.assets[leftIndex].targetPct + desk.assets[leftIndex + 1].targetPct;
-    if (!barRef.current || pairTotal <= 0) return;
+    if (!barRef.current || pairTotal <= 0 || isLocked(desk.assets[leftIndex].symbol) || isLocked(desk.assets[leftIndex + 1].symbol)) return;
     dragRef.current = {
       leftSymbol: desk.assets[leftIndex].symbol,
       rightSymbol: desk.assets[leftIndex + 1].symbol,
@@ -95,7 +97,7 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
     const current = desk.assets.find((asset) => asset.symbol === drag.leftSymbol)?.targetPct ?? 0;
     const dragged = drag.startLeft + (((event.clientX - drag.startX) / rect.width) * 100);
     const nextLeft = Math.max(0, Math.min(drag.pair, Math.round(dragged)));
-    if (nextLeft !== current) commitShares(sharesForTransfer(desk.assets, drag.leftSymbol, drag.rightSymbol, nextLeft));
+    if (nextLeft !== current) commitShares(sharesForTransfer(desk.assets, drag.leftSymbol, drag.rightSymbol, nextLeft, desk.lockedSymbols));
   };
   const endPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!dragRef.current) return;
@@ -106,7 +108,7 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     if (step === 0) return;
     event.preventDefault();
-    commitShares(sharesForTransfer(desk.assets, desk.assets[leftIndex].symbol, desk.assets[leftIndex + 1].symbol, desk.assets[leftIndex].targetPct + step));
+    commitShares(sharesForTransfer(desk.assets, desk.assets[leftIndex].symbol, desk.assets[leftIndex + 1].symbol, desk.assets[leftIndex].targetPct + step, desk.lockedSymbols));
   };
   return (
     <div className="cr-desk-allocation">
@@ -127,6 +129,7 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
               data-allocation-handle={`${leftAsset.symbol}|${rightAsset.symbol}`}
               type="button"
               role="slider"
+              disabled={isLocked(leftAsset.symbol) || isLocked(rightAsset.symbol)}
               aria-label={`Drag to move share between ${leftAsset.symbol} and ${rightAsset.symbol}`}
               aria-valuemin={0}
               aria-valuemax={pairTotal}
@@ -156,13 +159,15 @@ function AllocationEditor({ desk }: { desk: RebalanceDeskView }) {
                 min={0}
                 max={100}
                 step={1}
+                disabled={isLocked(asset.symbol)}
                 value={clampPct(asset.targetPct)}
                 style={{ "--cr-split-track": shareTrack } as React.CSSProperties}
                 aria-label={`Target slider for ${asset.symbol}`}
-                onChange={(event) => commitShares(sharesForSet(desk.assets, asset.symbol, Number(event.target.value)))}
+                onChange={(event) => commitShares(sharesForSet(desk.assets, asset.symbol, Number(event.target.value), desk.lockedSymbols))}
               />
               <span className="cr-desk-target-delta">{livePp === 0 ? "on live" : `${livePp > 0 ? "+" : ""}${livePp} pp`}</span>
-              <TargetField desk={desk} symbol={asset.symbol} pct={asset.targetPct} />
+              <TargetField desk={desk} symbol={asset.symbol} pct={asset.targetPct} locked={isLocked(asset.symbol)} />
+              <button type="button" className="cr-desk-lock" aria-pressed={isLocked(asset.symbol)} onClick={() => desk.toggleLocked(asset.symbol)}>{isLocked(asset.symbol) ? "locked" : "lock"}</button>
             </label>
           );
         })}

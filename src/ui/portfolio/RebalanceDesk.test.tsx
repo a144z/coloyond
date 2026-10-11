@@ -25,6 +25,7 @@ function deskView(overrides = {}) {
       ],
       byId: {},
       weights: [60, 40],
+      lockedSymbols: [],
       drift: 0,
       totalUsd: 10000,
       targetsTotal: 100,
@@ -39,6 +40,7 @@ function deskView(overrides = {}) {
       setTriggerPp: () => undefined,
       setTarget: (symbol: string) => { touched.push(symbol); },
       normalizeTargets: () => undefined,
+      toggleLocked: () => undefined,
       simulateMarket: () => undefined,
       rebalanceNow: () => undefined,
       resetBasket: () => undefined,
@@ -138,6 +140,45 @@ test("sharesForTransfer trades only between the pair and clamps inside it", () =
   assert.deepEqual(clamped, [{ symbol: "SOL", targetPct: 100 }, { symbol: "USDC", targetPct: 0 }]);
   const untouched = sharesForTransfer([{ symbol: "SOL", targetPct: 60 }, { symbol: "USDC", targetPct: 40 }], "SOL", "MISSING", 10);
   assert.deepEqual(untouched, [{ symbol: "SOL", targetPct: 60 }, { symbol: "USDC", targetPct: 40 }]);
+});
+
+test("every row carries a lock button that reads as unlocked by default", () => {
+  const { view } = deskView();
+  const html = render(view);
+  assert.equal(count(html, /class="cr-desk-lock"/g), 2);
+  assert.equal(count(html, /aria-pressed="false"/g), 2);
+  assert.equal(count(html, />lock</g), 2);
+});
+
+test("a locked token shows pressed lock, disabled sliders and a frozen handle", () => {
+  const { view } = deskView({ lockedSymbols: ["USDC"] });
+  const html = render(view);
+  assert.equal(count(html, /aria-pressed="true"/g), 1);
+  assert.equal(count(html, />locked</g), 1);
+  assert.equal(count(html, /disabled=""/g), 4);
+});
+
+test("sharesForSet honours locks: a locked token or target blocks the move", () => {
+  assert.deepEqual(sharesForSet([{ symbol: "SOL", targetPct: 60 }, { symbol: "USDC", targetPct: 40 }], "SOL", 80, ["USDC"]), [
+    { symbol: "SOL", targetPct: 60 },
+    { symbol: "USDC", targetPct: 40 },
+  ]);
+  assert.deepEqual(sharesForSet([{ symbol: "SOL", targetPct: 60 }, { symbol: "USDC", targetPct: 40 }], "SOL", 80, ["SOL"]), [
+    { symbol: "SOL", targetPct: 60 },
+    { symbol: "USDC", targetPct: 40 },
+  ]);
+});
+
+test("sharesForSet with a locked third way fills only the free shares to 100", () => {
+  const moved = sharesForSet([{ symbol: "A", targetPct: 30 }, { symbol: "B", targetPct: 20 }, { symbol: "C", targetPct: 50 }], "A", 0, ["C"]);
+  assert.deepEqual(moved, [{ symbol: "A", targetPct: 0 }, { symbol: "B", targetPct: 50 }, { symbol: "C", targetPct: 50 }]);
+});
+
+test("sharesForTransfer freezes a pair when either side is locked", () => {
+  assert.deepEqual(sharesForTransfer([{ symbol: "SOL", targetPct: 60 }, { symbol: "USDC", targetPct: 40 }], "SOL", "USDC", 75, ["SOL"]), [
+    { symbol: "SOL", targetPct: 60 },
+    { symbol: "USDC", targetPct: 40 },
+  ]);
 });
 
 test.after(() => vite.close());

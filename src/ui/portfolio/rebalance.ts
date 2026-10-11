@@ -170,19 +170,29 @@ export function sharesForSet(
   shares: readonly { symbol: string; targetPct: number }[],
   symbol: string,
   nextPct: number,
+  locked: readonly string[] = [],
 ): { symbol: string; targetPct: number }[] {
   const wanted = Number.isFinite(nextPct) ? Math.max(0, Math.min(100, Math.round(nextPct))) : 0;
   const index = shares.findIndex((share) => share.symbol === symbol);
-  if (index < 0) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
+  const lockedSet = new Set(locked);
+  if (index < 0 || lockedSet.has(symbol)) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
   const others = shares.filter((_, position) => position !== index);
-  const remaining = 100 - wanted;
-  const othersTotal = others.reduce((sum, share) => sum + share.targetPct, 0);
-  const scaled = others.map((share) => (othersTotal > 0 ? (share.targetPct * remaining) / othersTotal : remaining / Math.max(1, others.length)));
+  const freeOthers = others.filter((share) => !lockedSet.has(share.symbol));
+  const pinnedShare = others.reduce((sum, share) => (lockedSet.has(share.symbol) ? sum + share.targetPct : sum), 0);
+  const remaining = 100 - wanted - pinnedShare;
+  if (remaining < 0 || (freeOthers.length === 0 && others.reduce((sum, share) => sum + share.targetPct, 0) !== remaining + pinnedShare)) {
+    return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
+  }
+  const freeTotal = freeOthers.reduce((sum, share) => sum + share.targetPct, 0);
+  const scaled = others.map((share) => (lockedSet.has(share.symbol) ? share.targetPct : freeTotal > 0 ? (share.targetPct * remaining) / freeTotal : freeOthers.length > 0 ? remaining / freeOthers.length : 0));
   const whole = scaled.map(Math.floor);
-  let rest = remaining - whole.reduce((sum, value) => sum + value, 0);
-  const byFraction = scaled.map((value, position) => ({ position, fraction: value - Math.floor(value) })).sort((a, b) => b.fraction - a.fraction);
+  const freeFloorSum = whole.filter((_, position) => !lockedSet.has(others[position].symbol)).reduce((sum, value) => sum + value, 0);
+  let rest = remaining - freeFloorSum;
+  const byFraction = scaled
+    .map((value, position) => ({ position, fraction: lockedSet.has(others[position].symbol) ? -1 : value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction);
   let at = 0;
-  while (rest > 0 && at < byFraction.length) {
+  while (rest > 0 && at < byFraction.length && byFraction[at].fraction >= 0) {
     whole[byFraction[at].position] += 1;
     rest -= 1;
     at += 1;
@@ -200,10 +210,11 @@ export function sharesForTransfer(
   leftSymbol: string,
   rightSymbol: string,
   nextLeftPct: number,
+  locked: readonly string[] = [],
 ): { symbol: string; targetPct: number }[] {
   const left = shares.find((share) => share.symbol === leftSymbol);
   const right = shares.find((share) => share.symbol === rightSymbol);
-  if (!left || !right) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
+  if (!left || !right || locked.includes(leftSymbol) || locked.includes(rightSymbol)) return shares.map((share) => ({ symbol: share.symbol, targetPct: share.targetPct }));
   const pair = left.targetPct + right.targetPct;
   const wanted = Number.isFinite(nextLeftPct) ? Math.max(0, Math.min(pair, Math.round(nextLeftPct))) : left.targetPct;
   return shares.map((share) =>
