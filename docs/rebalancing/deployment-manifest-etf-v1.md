@@ -24,14 +24,14 @@
 
 ## Pyth program candidates
 
-Pyth's current Solana documentation lists the Receiver and Price Feed programs separately, both on Devnet. S5C must prove which program owns the chosen account mode and which exact layout/parser matches the deployed feed account.
+Pyth's current Solana documentation lists the Receiver and Price Feed programs separately, both on Devnet. The selected fixed-feed addresses are derived under the Price Feed (Push Oracle) program, while the account data is owned and decoded by the Receiver (Pull Oracle).
 
 | Program | Devnet address | Use | Status |
 |---|---|---|---|
 | Pyth Receiver / Pull Oracle | `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` | Owns verified `PriceUpdateV2` update accounts. | Direct Devnet read at confirmed slot `509627995`: executable under upgradeable BPF loader. |
 | Pyth Price Feed / Push Oracle | `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` | Program ID used for fixed shard-0 sponsored feed accounts. | Direct Devnet read at confirmed slot `509627995`: executable under upgradeable BPF loader. |
 
-The current first choice is the fixed shard-0 sponsored feed account path because it avoids posting a fresh update with every action. A `PriceUpdateV2` Receiver account is a distinct candidate path, not an interchangeable type. If the fixed feed account path cannot be safely decoded with the current SDK/toolchain, S5C must return a reviewed amendment for Full-verified Receiver updates and their wallet update transaction flow. Do not downgrade to Partial verification.
+The current first choice is the fixed shard-0 sponsored feed account path because it avoids posting a fresh update with every action. Fixed feeds and ephemeral Receiver updates share the `PriceUpdateV2` layout and Pull Oracle owner; they differ in address derivation, lifetime and updater path. Require `Full` verification for either mode. The fixed-feed PDA derivation and its supported update path remain separately bound and must not be inferred from parser compatibility alone.
 
 ## Candidate Pyth feed set
 
@@ -52,8 +52,8 @@ The colleague blueprint's legacy `H6AR...` SOL and `HovQM...` BTC values are pre
 S5A freezes the interface schema and provisional candidate baseline. Do not freeze exact feed mode, risk/fee parameters or deployment values for S5E until the S5C oracle evidence and S5D2 fee amendment are reviewed and incorporated.
 
 - Read and pin the exact Devnet genesis hash and RPC label that the wallet/client will use.
-- Fetch each selected Pyth candidate at confirmed/finalized commitment and record address, existence, owner, data length, decoded account type/layout, embedded feed ID, shard, publish time, price, confidence, exponent and read slot. Record verification according to mode: Receiver updates must show `Full`; fixed Push Feed accounts must show the program owner/layout/status/update evidence established by S5C.
-- Complete S5C's parser compatibility proof against fetched account data. For Receiver mode, verify `Full`, feed identity, freshness, positivity, confidence and exponent rules at the adapter boundary; for fixed Push Feed mode, verify only the actual fields and checks exposed by that account model. The on-chain ETF consumer test happens after S5E, not before this freeze.
+- Fetch each selected Pyth candidate at confirmed/finalized commitment and record address, existence, owner, data length, decoded account type/layout, embedded feed ID, shard, publish time, price, confidence, exponent and read slot. Under the current Solana integration, fixed feed PDAs and ephemeral updates are both Pull Oracle-owned `PriceUpdateV2` data; require `Full` in either mode.
+- Complete S5C's parser compatibility proof against fetched account data. For fixed feeds, independently derive the shard/feed PDA with the pinned Pyth derivation and verify its sponsored/permissionless update path; for ephemeral mode, prove the wallet-posted account flow. The on-chain ETF consumer test happens after S5E, not before this freeze.
 - Verify exact Devnet test-mint addresses, token-program owners, decimals, mint/freeze authorities and synthetic/unbacked labels. BTC/USD and USDC/USD feed identities do not prove those SPL mints are backed by BTC or USDC.
 - Recompute canonical config bytes, domain-separated hash, pool/asset/authority/share/custody PDAs and strategy ID in independent predeployment client/program vectors. Freeze those vectors with the exact manifest inputs; no on-chain pool readback is expected yet.
 - Freeze source-derived scheduler selection and cost assumptions with explicit evidence status; an unverified deployment or executor remains labeled as a candidate. The real program account, queue/task and crank-invocation proof is post-deployment.
@@ -63,7 +63,7 @@ S5A freezes the interface schema and provisional candidate baseline. Do not free
 - Read back ETF program executable/loader, source/build identity and upgrade-authority policy; compare them to the frozen deployment manifest.
 - Initialize the exact pool and read back the immutable config hash, ordered assets, all PDAs, share mint and custody token accounts. Prove the selected on-chain initialization rule, including its front-run behavior and one-time PDA consumption; an off-chain manifest alone is not an authorization check.
 - Prove guardian pause-only behavior and delayed governance resume/handoff with actual transactions, including early-execution rejection and new-authority acceptance.
-- Submit a real ETF instruction with each selected feed account. For Receiver mode, show a valid `Full` fresh update succeeds while wrong account/feed, stale update, `Partial`, nonpositive price, unsupported exponent and excessive confidence fail on-chain with no SPL movement. For fixed Push Feed mode, test only applicable owner/layout/feed/status/freshness checks; never invent a `Full` or `Partial` state. Prove stale-feed recovery through the admitted update mechanism.
+- Submit a real ETF instruction with each selected feed account. Under the current Pyth Core Solana integration, both fixed feed PDAs and ephemeral update accounts are Receiver-owned `PriceUpdateV2` data with an actual verification level; require `Full` in either mode. Prove the fixed PDA from shard/feed ID using the pinned Pyth derivation and verify its supported update path; for ephemeral mode, prove the wallet posting/closing flow. Wrong account/feed, stale update, `Partial`, nonpositive price, unsupported exponent and excessive confidence must fail on-chain with no SPL movement. Prove stale-feed recovery through the admitted update mechanism.
 - Read back every created mint/custody/share authority and reconcile actual wallet, pool, token and share balances from confirmed transactions.
 - If TukTuk is used, prove its Devnet program executable/loader, queue configuration/authority/balance/capacity, task PDA/ID, compiled payload, registration transaction and a distinct crank-turner-signed run transaction invoking exactly `poke`. Record queue deposit, rent/capacity and per-run reward separately. The resulting state change is eligibility/maintenance only; a separate trader must fund the swap.
 

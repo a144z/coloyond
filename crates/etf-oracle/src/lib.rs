@@ -390,6 +390,23 @@ mod tests {
     }
 
     #[test]
+    fn sponsored_shard_zero_addresses_match_official_pda_derivation() {
+        // Pyth's TypeScript SDK derives fixed feed accounts with two seeds:
+        // little-endian u16 shard ID, then the 32-byte feed ID, under the
+        // Push Oracle program ID. The account data itself is Receiver-owned.
+        let push_oracle_program = pubkey!("pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT");
+        let shard_zero = 0u16.to_le_bytes();
+        for feed in [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd] {
+            let feed_id = get_feed_id_from_hex(feed.id_hex()).unwrap();
+            let (derived, _) = Pubkey::find_program_address(
+                &[&shard_zero, feed_id.as_ref()],
+                &push_oracle_program,
+            );
+            assert_eq!(derived, feed.address(), "{}", feed.id_hex());
+        }
+    }
+
+    #[test]
     fn confidence_interval_uses_exact_fixed_point_price_plus_and_minus_confidence() {
         let value = update(
             PinnedFeed::SolUsd,
