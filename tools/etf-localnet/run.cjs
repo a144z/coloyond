@@ -4,6 +4,8 @@
 // Localnet-only S5E transaction probe. It creates disposable local token mints,
 // never connects to a public cluster, and never stores the throwaway signer.
 const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   Connection,
   Keypair,
@@ -144,6 +146,137 @@ function derivePdas(configHash) {
   return { pool, poolState, shareMint, authority, custodies, assetStates };
 }
 
+function tokenMintData(mintAuthority, supply, decimals) {
+  const data = Buffer.alloc(82);
+  data.writeUInt32LE(1, 0);
+  mintAuthority.toBuffer().copy(data, 4);
+  data.writeBigUInt64LE(BigInt(supply), 36);
+  data[44] = decimals;
+  data[45] = 1;
+  return data;
+}
+
+function tokenAccountData(mint, owner, amount) {
+  const data = Buffer.alloc(165);
+  mint.toBuffer().copy(data, 0);
+  owner.toBuffer().copy(data, 32);
+  data.writeBigUInt64LE(BigInt(amount), 64);
+  data[108] = 1;
+  return data;
+}
+
+function poolAccountData(config, pdas, initializer) {
+  const data = Buffer.alloc(1265);
+  accountDiscriminator("EtfPoolV1").copy(data, 0);
+  data[8] = 1;
+  data[9] = PublicKey.findProgramAddressSync([Buffer.from("etf_pool_v1"), config.hash], PROGRAM_ID)[1];
+  config.hash.copy(data, 10);
+  data.writeUInt32LE(config.bytes.length, 42);
+  config.bytes.copy(data, 46);
+  const offset = 46 + config.bytes.length;
+  pdas.shareMint.toBuffer().copy(data, offset);
+  initializer.toBuffer().copy(data, offset + 32);
+  return data;
+}
+
+function activePoolStateData(pdas, governance, guardian) {
+  const data = Buffer.alloc(300);
+  accountDiscriminator("EtfPoolStateV1").copy(data, 0);
+  data[8] = 1;
+  data[9] = PublicKey.findProgramAddressSync([Buffer.from("etf_pool_state_v1"), pdas.pool.toBuffer()], PROGRAM_ID)[1];
+  pdas.pool.toBuffer().copy(data, 10);
+  governance.toBuffer().copy(data, 42);
+  guardian.toBuffer().copy(data, 74);
+  data[106] = 1; // Active lifecycle; this is a synthetic Localnet genesis fixture.
+  data[107] = 0;
+  return data;
+}
+
+function assetStateData(pool, index, bump) {
+  const data = Buffer.alloc(59);
+  accountDiscriminator("EtfAssetStateV1").copy(data, 0);
+  data[8] = 1;
+  data[9] = bump;
+  pool.toBuffer().copy(data, 10);
+  data[42] = index;
+  return data;
+}
+
+function writeGenesisAccount(directory, address, owner, data, lamports = 10_000_000_000) {
+  const file = path.join(directory, `${address.toBase58()}.json`);
+  fs.writeFileSync(file, JSON.stringify({
+    pubkey: address.toBase58(),
+    account: {
+      lamports,
+      data: [data.toString("base64"), "base64"],
+      owner: owner.toBase58(),
+      executable: false,
+      rentEpoch: 0,
+    },
+  }));
+  return file;
+}
+
+function prepareGenesisFixture(directory, manifestPath, walletPath) {
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const payer = Keypair.generate();
+  const mints = [Keypair.generate(), Keypair.generate()];
+  const governance = Keypair.generate().publicKey;
+  let otherHolder = Keypair.generate().publicKey;
+  while (otherHolder.equals(payer.publicKey) || otherHolder.equals(governance)) otherHolder = Keypair.generate().publicKey;
+  const config = encodeConfig({ mints, governance, guardian: payer.publicKey });
+  const pdas = derivePdas(config.hash);
+  const userTokens = mints.map((mint) => associatedTokenAddress(payer.publicKey, mint.publicKey));
+  const userShares = associatedTokenAddress(payer.publicKey, pdas.shareMint);
+  const otherShares = associatedTokenAddress(otherHolder, pdas.shareMint);
+  const reserves = [1_000_000_000n, 1_000_000n];
+  const userAmounts = [100_000_000n, 60_000n];
+  const userShareAmount = 100_000n;
+  const otherShareAmount = 900_000n;
+  const mintSupplies = reserves.map((reserve, index) => reserve + userAmounts[index]);
+  const files = [];
+  files.push(writeGenesisAccount(directory, pdas.pool, PROGRAM_ID, poolAccountData(config, pdas, payer.publicKey)));
+  files.push(writeGenesisAccount(directory, pdas.poolState, PROGRAM_ID, activePoolStateData(pdas, governance, payer.publicKey)));
+  const shareMintData = tokenMintData(pdas.authority, userShareAmount + otherShareAmount, 6);
+  files.push(writeGenesisAccount(directory, pdas.shareMint, TOKEN_PROGRAM_ID, shareMintData));
+  files.push(writeGenesisAccount(directory, userShares, TOKEN_PROGRAM_ID, tokenAccountData(pdas.shareMint, payer.publicKey, userShareAmount)));
+  files.push(writeGenesisAccount(directory, otherShares, TOKEN_PROGRAM_ID, tokenAccountData(pdas.shareMint, otherHolder, otherShareAmount)));
+  for (let index = 0; index < mints.length; index += 1) {
+    const [assetState, assetBump] = PublicKey.findProgramAddressSync([
+      Buffer.from("etf_asset_v1"), pdas.pool.toBuffer(), Buffer.from([index]),
+    ], PROGRAM_ID);
+    files.push(writeGenesisAccount(directory, mints[index].publicKey, TOKEN_PROGRAM_ID, tokenMintData(payer.publicKey, mintSupplies[index], index === 0 ? 9 : 6)));
+    files.push(writeGenesisAccount(directory, pdas.custodies[index], TOKEN_PROGRAM_ID, tokenAccountData(mints[index].publicKey, pdas.authority, reserves[index])));
+    files.push(writeGenesisAccount(directory, assetState, PROGRAM_ID, assetStateData(pdas.pool, index, assetBump)));
+    files.push(writeGenesisAccount(directory, userTokens[index], TOKEN_PROGRAM_ID, tokenAccountData(mints[index].publicKey, payer.publicKey, userAmounts[index])));
+  }
+  fs.writeFileSync(walletPath, JSON.stringify(Array.from(payer.secretKey)), { mode: 0o600 });
+  fs.chmodSync(walletPath, 0o600);
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    pool: pdas.pool.toBase58(),
+    poolState: pdas.poolState.toBase58(),
+    shareMint: pdas.shareMint.toBase58(),
+    authority: pdas.authority.toBase58(),
+    mints: mints.map((mint) => mint.publicKey.toBase58()),
+    custody: pdas.custodies.map((address) => address.toBase58()),
+    assetState: pdas.assetStates.map((address) => address.toBase58()),
+    userTokens: userTokens.map((address) => address.toBase58()),
+    userShares: userShares.toBase58(),
+    otherShares: otherShares.toBase58(),
+    otherHolder: otherHolder.toBase58(),
+    initialReserves: reserves.map(String),
+    initialUserTokens: userAmounts.map(String),
+    initialShareSupply: String(userShareAmount + otherShareAmount),
+    initialUserShares: String(userShareAmount),
+    fixtureFiles: files,
+  }, null, 2));
+  fs.chmodSync(manifestPath, 0o600);
+  fs.writeFileSync(`${directory}/accounts.tsv`, files.map((file) => {
+    const account = JSON.parse(fs.readFileSync(file, "utf8"));
+    return `${account.pubkey}\t${file}`;
+  }).join("\n") + "\n");
+}
+
 function associatedTokenAddress(owner, mint) {
   return PublicKey.findProgramAddressSync(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
@@ -254,6 +387,74 @@ function seedInstruction({ payer, config, pdas, mints, userTokenAccounts, shareA
   return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
 }
 
+function depositInstruction({ user, pool, poolState, shareMint, authority, tokenAccounts, custody, assetState, shareAccount, maxInputs, minShares }) {
+  const data = Buffer.concat([
+    instructionDiscriminator("deposit_proportional"),
+    u32(maxInputs.length),
+    ...maxInputs.map(u64),
+    u64(minShares),
+  ]);
+  const keys = [
+    { pubkey: user.publicKey, isSigner: true, isWritable: true },
+    { pubkey: pool, isSigner: false, isWritable: true },
+    { pubkey: poolState, isSigner: false, isWritable: true },
+    { pubkey: shareMint, isSigner: false, isWritable: true },
+    { pubkey: authority, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: shareAccount, isSigner: false, isWritable: true },
+  ];
+  for (let index = 0; index < maxInputs.length; index += 1) {
+    keys.push(
+      { pubkey: new PublicKey(tokenAccounts[index].mint), isSigner: false, isWritable: false },
+      { pubkey: custody[index], isSigner: false, isWritable: true },
+      { pubkey: tokenAccounts[index].address, isSigner: false, isWritable: true },
+      { pubkey: assetState[index], isSigner: false, isWritable: true },
+    );
+  }
+  return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
+}
+
+function pauseRiskInstruction({ guardian, pool, poolState, shareMint, authority }) {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: guardian.publicKey, isSigner: true, isWritable: false },
+      { pubkey: pool, isSigner: false, isWritable: false },
+      { pubkey: poolState, isSigner: false, isWritable: true },
+      { pubkey: shareMint, isSigner: false, isWritable: false },
+      { pubkey: authority, isSigner: false, isWritable: false },
+    ],
+    data: instructionDiscriminator("pause_risk"),
+  });
+}
+
+function redeemInstruction({ user, pool, poolState, shareMint, authority, tokenAccounts, custody, assetState, shareAccount, shares, minAmounts }) {
+  const data = Buffer.concat([
+    instructionDiscriminator("redeem_in_kind"),
+    u64(shares),
+    u32(minAmounts.length),
+    ...minAmounts.map(u64),
+  ]);
+  const keys = [
+    { pubkey: user.publicKey, isSigner: true, isWritable: true },
+    { pubkey: pool, isSigner: false, isWritable: true },
+    { pubkey: poolState, isSigner: false, isWritable: true },
+    { pubkey: shareMint, isSigner: false, isWritable: true },
+    { pubkey: authority, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: shareAccount, isSigner: false, isWritable: true },
+  ];
+  for (let index = 0; index < minAmounts.length; index += 1) {
+    keys.push(
+      { pubkey: new PublicKey(tokenAccounts[index].mint), isSigner: false, isWritable: false },
+      { pubkey: custody[index], isSigner: false, isWritable: true },
+      { pubkey: tokenAccounts[index].address, isSigner: false, isWritable: true },
+      { pubkey: assetState[index], isSigner: false, isWritable: false },
+    );
+  }
+  return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
+}
+
 function ensure(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -295,6 +496,10 @@ async function sendTransaction(connection, payer, transaction, extraSigners = []
 async function tokenAmount(connection, tokenAccount) {
   const account = await connection.getTokenAccountBalance(tokenAccount, "confirmed");
   return account.value.amount;
+}
+
+async function shareSupply(connection, mint) {
+  return (await connection.getTokenSupply(mint, "confirmed")).value.amount;
 }
 
 async function assertAbsent(connection, addresses, label) {
@@ -349,13 +554,17 @@ function parseMint(account, expectedAuthority, expectedDecimals) {
 async function main() {
   const parsedRpc = new URL(RPC_URL);
   ensure(parsedRpc.protocol === "http:" && ["127.0.0.1", "localhost"].includes(parsedRpc.hostname), "Refusing non-Localnet RPC URL");
+  ensure(process.env.COLOYOND_ETF_LOCALNET_FIXTURE_MANIFEST, "Missing disposable Active-pool fixture manifest path");
+  ensure(process.env.COLOYOND_ETF_LOCALNET_WALLET_FILE, "Missing disposable Localnet wallet path");
   const connection = new Connection(RPC_URL, "confirmed");
   const genesisHash = await connection.getGenesisHash();
   ensure(genesisHash !== DEVNET_GENESIS, "RPC is Devnet; refusing to run this Localnet-only harness");
   const programAccount = await connection.getAccountInfo(PROGRAM_ID, "confirmed");
   ensure(programAccount && programAccount.executable, "ETF SBF program is not loaded at the draft Localnet program ID");
 
-  const payer = Keypair.generate();
+  const fixture = JSON.parse(fs.readFileSync(process.env.COLOYOND_ETF_LOCALNET_FIXTURE_MANIFEST, "utf8"));
+  const walletSecret = JSON.parse(fs.readFileSync(process.env.COLOYOND_ETF_LOCALNET_WALLET_FILE, "utf8"));
+  const payer = Keypair.fromSecretKey(Uint8Array.from(walletSecret));
   const airdropBlockhash = await connection.getLatestBlockhash("confirmed");
   const airdropSignature = await connection.requestAirdrop(payer.publicKey, 10 * 1_000_000_000);
   const airdropConfirmation = await connection.confirmTransaction({
@@ -544,6 +753,127 @@ async function main() {
   const stateAfterSeed = await connection.getAccountInfo(pdas.poolState, "confirmed");
   ensure(stateAfterSeed && stateAfterSeed.data.equals(stateAccount.data), "Rejected seed changed pool state");
 
+  const activePool = new PublicKey(fixture.pool);
+  const activePoolState = new PublicKey(fixture.poolState);
+  const activeShareMint = new PublicKey(fixture.shareMint);
+  const activeAuthority = new PublicKey(fixture.authority);
+  const activeCustody = fixture.custody.map((address) => new PublicKey(address));
+  const activeAssetState = fixture.assetState.map((address) => new PublicKey(address));
+  const activeShareAccount = new PublicKey(fixture.userShares);
+  const activeTokenAccounts = fixture.mints.map((mint, index) => ({
+    mint,
+    address: new PublicKey(fixture.userTokens[index]),
+  }));
+  const fixtureState = await connection.getAccountInfo(activePoolState, "confirmed");
+  ensure(fixtureState && fixtureState.data[106] === 1 && fixtureState.data[107] === 0, "Injected Active-pool fixture state is invalid");
+  ensure((await shareSupply(connection, activeShareMint)) === fixture.initialShareSupply, "Injected share supply mismatch");
+
+  const balancesBeforeDeposit = await Promise.all([
+    ...activeTokenAccounts.map(({ address }) => tokenAmount(connection, address)),
+    ...activeCustody.map((address) => tokenAmount(connection, address)),
+    tokenAmount(connection, activeShareAccount),
+  ]);
+  const depositReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(depositInstruction({
+      user: payer,
+      pool: activePool,
+      poolState: activePoolState,
+      shareMint: activeShareMint,
+      authority: activeAuthority,
+      tokenAccounts: activeTokenAccounts,
+      custody: activeCustody,
+      assetState: activeAssetState,
+      shareAccount: activeShareAccount,
+      maxInputs: [50_000_000, 100_000],
+      minShares: 50_000,
+    })),
+  );
+  const balancesAfterDeposit = await Promise.all([
+    ...activeTokenAccounts.map(({ address }) => tokenAmount(connection, address)),
+    ...activeCustody.map((address) => tokenAmount(connection, address)),
+    tokenAmount(connection, activeShareAccount),
+  ]);
+  const supplyAfterDeposit = await shareSupply(connection, activeShareMint);
+  ensure(JSON.stringify(balancesBeforeDeposit) === JSON.stringify(["100000000", "60000", "1000000000", "1000000", "100000"]), "Unexpected synthetic Active-pool starting balances");
+  ensure(JSON.stringify(balancesAfterDeposit) === JSON.stringify(["50000000", "10000", "1050000000", "1050000", "150000"]), "Proportional deposit did not match expected consumed inputs/refund/share output");
+  ensure(supplyAfterDeposit === "1050000", "Proportional deposit share supply mismatch");
+  const stateAfterDeposit = await connection.getAccountInfo(activePoolState, "confirmed");
+  ensure(stateAfterDeposit && stateAfterDeposit.data[106] === 1 && stateAfterDeposit.data[107] === 0 && stateAfterDeposit.data.readBigUInt64LE(108) === 1n, "Deposit lifecycle/sequence readback mismatch");
+
+  const balancesBeforeFailedDeposit = [...balancesAfterDeposit];
+  const stateBeforeFailedDeposit = stateAfterDeposit.data;
+  const failedDepositReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(depositInstruction({
+      user: payer,
+      pool: activePool,
+      poolState: activePoolState,
+      shareMint: activeShareMint,
+      authority: activeAuthority,
+      tokenAccounts: activeTokenAccounts,
+      custody: activeCustody,
+      assetState: activeAssetState,
+      shareAccount: activeShareAccount,
+      maxInputs: [30_000_000, 50_000],
+      minShares: 30_000,
+    })),
+    [],
+    "error",
+  );
+  const balancesAfterFailedDeposit = await Promise.all([
+    ...activeTokenAccounts.map(({ address }) => tokenAmount(connection, address)),
+    ...activeCustody.map((address) => tokenAmount(connection, address)),
+    tokenAmount(connection, activeShareAccount),
+  ]);
+  const supplyAfterFailedDeposit = await shareSupply(connection, activeShareMint);
+  const stateAfterFailedDeposit = await connection.getAccountInfo(activePoolState, "confirmed");
+  ensure(JSON.stringify(balancesBeforeFailedDeposit) === JSON.stringify(balancesAfterFailedDeposit), "Failed second-token CPI did not roll back the earlier token transfer");
+  ensure(supplyAfterFailedDeposit === supplyAfterDeposit, "Failed deposit changed share supply");
+  ensure(stateAfterFailedDeposit && stateAfterFailedDeposit.data.equals(stateBeforeFailedDeposit), "Failed deposit changed pool state");
+
+  const pauseReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(pauseRiskInstruction({ guardian: payer, pool: activePool, poolState: activePoolState, shareMint: activeShareMint, authority: activeAuthority })),
+  );
+  const pausedState = await connection.getAccountInfo(activePoolState, "confirmed");
+  ensure(pausedState && pausedState.data[107] === 1 && pausedState.data.readBigUInt64LE(108) === 2n, "Guardian pause readback mismatch");
+  const balancesBeforeRedeem = await Promise.all([
+    ...activeTokenAccounts.map(({ address }) => tokenAmount(connection, address)),
+    ...activeCustody.map((address) => tokenAmount(connection, address)),
+    tokenAmount(connection, activeShareAccount),
+  ]);
+  const redeemReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(redeemInstruction({
+      user: payer,
+      pool: activePool,
+      poolState: activePoolState,
+      shareMint: activeShareMint,
+      authority: activeAuthority,
+      tokenAccounts: activeTokenAccounts,
+      custody: activeCustody,
+      assetState: activeAssetState,
+      shareAccount: activeShareAccount,
+      shares: 25_000,
+      minAmounts: [25_000_000, 25_000],
+    })),
+  );
+  const balancesAfterRedeem = await Promise.all([
+    ...activeTokenAccounts.map(({ address }) => tokenAmount(connection, address)),
+    ...activeCustody.map((address) => tokenAmount(connection, address)),
+    tokenAmount(connection, activeShareAccount),
+  ]);
+  const supplyAfterRedeem = await shareSupply(connection, activeShareMint);
+  const stateAfterRedeem = await connection.getAccountInfo(activePoolState, "confirmed");
+  ensure(JSON.stringify(balancesAfterRedeem) === JSON.stringify(["75000000", "35000", "1025000000", "1025000", "125000"]), "Pause-safe in-kind redemption deltas mismatch");
+  ensure(supplyAfterRedeem === "1025000", "Pause-safe redemption share supply mismatch");
+  ensure(stateAfterRedeem && stateAfterRedeem.data[106] === 1 && stateAfterRedeem.data[107] === 1 && stateAfterRedeem.data.readBigUInt64LE(108) === 3n, "Redemption must preserve pause and advance sequence");
+
   const report = {
     status: "LOCALNET_ONLY_PASS",
     disclaimer: "Synthetic Localnet configuration and disposable local mints only. No Devnet mint backing, oracle authenticity, accepted policy, or CP5 proof is implied.",
@@ -559,8 +889,62 @@ async function main() {
     shareMint: pdas.shareMint.toBase58(),
     custody: pdas.custodies.map((address) => address.toBase58()),
     assetState: pdas.assetStates.map((address) => address.toBase58()),
-    successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, createShareAtaReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
-    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, lateInitReceipt, duplicateInitReceipt, seedReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, createShareAtaReceipt, depositReceipt, pauseReceipt, redeemReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
+    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, lateInitReceipt, duplicateInitReceipt, seedReceipt, failedDepositReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    syntheticActivePoolLifecycle: {
+      disclaimer: "The Active pool and its reserves/share supply were injected into a disposable Localnet genesis. This proves the existing SPL lifecycle handlers against synthetic state only; it does not prove successful pool seed, a Devnet transaction, or a backed asset.",
+      pool: activePool.toBase58(),
+      mints: activeTokenAccounts.map(({ mint, address }) => ({ mint, userTokenAccount: address.toBase58(), label: "Disposable synthetic Localnet mint; unbacked" })),
+      initial: {
+        userTokenAmounts: fixture.initialUserTokens,
+        custodyAmounts: fixture.initialReserves,
+        userShares: fixture.initialUserShares,
+        shareSupply: fixture.initialShareSupply,
+        lifecycle: "Active",
+        riskPaused: false,
+      },
+      proportionalDeposit: {
+        signature: depositReceipt.signature,
+        slot: depositReceipt.slot,
+        feeLamports: depositReceipt.feeLamports,
+        maxInputs: ["50000000", "100000"],
+        consumed: ["50000000", "50000"],
+        refunded: ["0", "50000"],
+        sharesMinted: "50000",
+        balancesAfter: balancesAfterDeposit,
+        shareSupplyAfter: supplyAfterDeposit,
+        stateSequenceAfter: "1",
+      },
+      secondTransferFailureRollback: {
+        signature: failedDepositReceipt.signature,
+        slot: failedDepositReceipt.slot,
+        feeLamports: failedDepositReceipt.feeLamports,
+        error: failedDepositReceipt.error,
+        expectedFailure: "Second token input is underfunded after the first SPL transfer would have succeeded.",
+        tokenBalancesUnchanged: JSON.stringify(balancesBeforeFailedDeposit) === JSON.stringify(balancesAfterFailedDeposit),
+        shareSupplyUnchanged: supplyAfterFailedDeposit === supplyAfterDeposit,
+        poolStateUnchanged: stateAfterFailedDeposit.data.equals(stateBeforeFailedDeposit),
+      },
+      guardianPause: {
+        signature: pauseReceipt.signature,
+        slot: pauseReceipt.slot,
+        feeLamports: pauseReceipt.feeLamports,
+        riskPausedAfter: true,
+        stateSequenceAfter: "2",
+      },
+      inKindRedemptionWhilePaused: {
+        signature: redeemReceipt.signature,
+        slot: redeemReceipt.slot,
+        feeLamports: redeemReceipt.feeLamports,
+        sharesBurned: "25000",
+        tokenAmountsOut: ["25000000", "25000"],
+        balancesAfter: balancesAfterRedeem,
+        shareSupplyAfter: supplyAfterRedeem,
+        lifecycleAfter: "Active",
+        riskPausedAfter: true,
+        stateSequenceAfter: "3",
+      },
+    },
     lateInitializationRollback: {
       signature: lateInitReceipt.signature,
       slot: lateInitReceipt.slot,
@@ -578,6 +962,9 @@ async function main() {
       { action: "late second-asset-state rejection after partial PDA/SPL allocation", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeLateInit[index], after: tokenAfterLateInit[index] })) },
       { action: "duplicate initialization rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeDuplicate[index], after: duplicateTokenAfter[index] })) },
       { action: "seed rejected on absent Localnet oracle data", accounts: [...userTokenAccounts, ...pdas.custodies, shareAta].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeSeed[index], after: balancesAfterSeed[index] })) },
+      { action: "synthetic Active-pool successful proportional deposit", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeDeposit[index], after: balancesAfterDeposit[index] })) },
+      { action: "synthetic Active-pool failed second-token deposit rollback", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeFailedDeposit[index], after: balancesAfterFailedDeposit[index] })) },
+      { action: "synthetic Active-pool in-kind redemption while risk-paused", accounts: [...activeTokenAccounts.map(({ address }) => address), ...activeCustody, activeShareAccount].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeRedeem[index], after: balancesAfterRedeem[index] })) },
     ],
     checks: [
       "ETF SBF program loaded as executable in a fresh Localnet genesis",
@@ -588,18 +975,28 @@ async function main() {
       "Second asset-state PDA rejected after partial init allocations; transaction rollback removed all derived accounts, restored rent, and preserved token balances",
       "Duplicate initialization rejected with all existing account data unchanged",
       "Seed attempt rejected on incomplete Localnet oracle accounts; token/share balances and pool state unchanged",
+      "Genesis-injected synthetic Active pool accepted a proportional SPL deposit with exact consumed/refund/share deltas",
+      "Underfunded second SPL transfer failed and atomically rolled back the earlier transfer, share supply, and pool sequence",
+      "Guardian pause confirmed, then in-kind redemption succeeded while risk-paused and preserved the pause",
     ],
     gaps: [
       "No confirmed Devnet transaction or program deployment.",
       "No genuine Pyth feed update/Full verification was used; the Localnet seed rejection is caused by absent feed data.",
-      "Delayed governance resume exists in the current draft, but this harness does not transact it. Seed/deposit/redeem/swap remain unusable: valid seed and swap still return PolicyNotFrozen, and seed did not reach that gate because Localnet has no Pyth account data.",
+      "The synthetic genesis fixture does not prove a successful seed. Valid seed and swap still return PolicyNotFrozen after policy/account validation; this harness does not bypass those gates.",
+      "The deposit/refund, failed-CPI rollback, guardian pause, and pause-safe redemption results apply only to a pre-seeded synthetic Localnet Active pool. They do not prove a real Devnet pool lifecycle.",
       "This harness does not validate fee/economic policy, approved mint/feed manifest, governance, or scheduler behavior.",
     ],
   };
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((error) => {
-  console.error(`Localnet ETF probe failed: ${error?.stack || error}`);
-  process.exitCode = 1;
-});
+if (process.argv[2] === "--prepare-genesis-fixture") {
+  const [, , , directory, manifestPath, walletPath] = process.argv;
+  ensure(directory && manifestPath && walletPath, "Usage: run.cjs --prepare-genesis-fixture <account-dir> <manifest-path> <wallet-path>");
+  prepareGenesisFixture(directory, manifestPath, walletPath);
+} else {
+  main().catch((error) => {
+    console.error(`Localnet ETF probe failed: ${error?.stack || error}`);
+    process.exitCode = 1;
+  });
+}
