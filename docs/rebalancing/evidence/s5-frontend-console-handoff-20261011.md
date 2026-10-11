@@ -155,6 +155,8 @@ The live route `/etf-devnet/transactions` last refreshed at 07:45:57 UTC, confir
 The three other local feature branches called out by the user remain intact and are **not** merged into this Sprint 5 branch yet:
 
 - `feature/donation-sync-atomicity` at `3849921f` contains a focused change and tests in the existing v0.3.0 vault accounting code. The current one-hour scope explicitly says not to alter v0.3.0, so preserve it for that protocol's own review/integration.
-- `feature/portfolio-tokens` at `34a1311b` adds a Portfolio token watchlist, and `feature/ui-reform` at `ac152bb0` updates the reference-rooted portfolio composition UI. Both descend from root `14f09293`, while this rebalancing branch descends from `02e72536`; `git merge-base` finds no common ancestor. Do not use `--allow-unrelated-histories` during this S5 task. Revisit after the current sprint scope or with an explicit integration plan that identifies the intended UI baseline.
+- `feature/portfolio-tokens` at `34a1311b` adds a Portfolio token watchlist, and `feature/ui-reform` at `ac152bb0` updates the reference-rooted portfolio composition UI. They are sibling branches diverging from `18e62121`; this rebalancing branch has no common ancestor with their root `14f09293` (`git merge-base` is empty; S5 root `02e72536`). Do not use `--allow-unrelated-histories` during this S5 task. Revisit after the current sprint scope or with an explicit integration plan that identifies the intended UI baseline.
 
 No changes were made to these three refs. Their work remains preserved locally and no unrelated branch was pushed into the Sprint 5 feature.
+
+`git fetch --all --prune` at 08:04 UTC again found no incoming remote commits. `feature/portfolio-rebalancing` remains synchronized with `origin/feature/portfolio-rebalancing`.
