@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>coloyond — Private Autonomous Vault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* CSS RESET & VARIABLES */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      /* Pulpboard & Lacquer Palette */
+      --pulp-canvas: #EDE6D6;
+      --pulp-shade: #E1DAC7;
+      --lacquer-petrol: #13343B;
+      --lacquer-amber: #C66E22;
+      --lacquer-slate: #384551;
+      --lacquer-ink: #14171A;
+      --ledger-white: #FAF8F2;
+      --ledger-subtle: #F0EDE4;
+      --rule-hairline: #14171A;
+      --rule-faint: rgba(20, 23, 26, 0.16);
+
+      /* Attention Spectrum */
+      --rainbow-band: linear-gradient(90deg, #E62E5C 0%, #EA7325 22%, #ECCB1A 42%, #14C777 64%, #1A8EE9 84%, #8736E0 100%);
+      
+      /* Typography */
+      --font-display: 'Space Grotesk', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      /* Motion */
+      --ease-lacquer: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    body {
+      background-color: var(--pulp-canvas);
+      color: var(--lacquer-ink);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle unbleached cellulose pulpboard tooth texture */
+    .pulp-texture {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* FOCUS AND ACCESSIBILITY SPEC */
+    :focus-visible {
+      outline: 3px solid var(--lacquer-ink);
+      outline-offset: 3px;
+    }
+
+    .interactive-hit {
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* TOP SPINAL HEADER & SYSTEM IDENTIFIER */
+    header.system-bar {
+      border-bottom: 2px solid var(--rule-hairline);
+      padding: 0 2.5rem;
+      background: var(--pulp-canvas);
+      position: sticky;
+      top: 0;
+      z-index: 80;
+    }
+
+    .bar-inner {
+      max-width: 1520px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: stretch;
+      min-height: 72px;
+    }
+
+    .brand-cluster {
+      display: flex;
+      align-items: center;
+      gap: 1.75rem;
+      border-right: 1.5px solid var(--rule-hairline);
+      padding-right: 2.5rem;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      background: var(--lacquer-petrol);
+      display: grid;
+      place-items: center;
+    }
+
+    .brand-mark-inner {
+      width: 12px;
+      height: 12px;
+      background: var(--pulp-canvas);
+    }
+
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      text-transform: lowercase;
+    }
+
+    .brand-context {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--lacquer-slate);
+      border-left: 1px solid var(--rule-faint);
+      padding-left: 1rem;
+    }
+
+    /* NUMBERED SPINAL NAVIGATION (01 - 04) */
+    nav.spine-nav {
+      display: flex;
+      align-items: stretch;
+      flex-grow: 1;
+      padding-left: 2rem;
+    }
+
+    .spine-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0 1.5rem;
+      text-decoration: none;
+      color: var(--lacquer-slate);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      border-right: 1px solid var(--rule-faint);
+      transition: background-color 0.2s var(--ease-lacquer), color 0.2s var(--ease-lacquer);
+      position: relative;
+    }
+
+    .spine-item:hover {
+      background-color: var(--pulp-shade);
+      color: var(--lacquer-ink);
+    }
+
+    .spine-item.is-active {
+      color: var(--lacquer-ink);
+      font-weight: 700;
+      background-color: var(--pulp-shade);
+    }
+
+    .spine-item.is-active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--lacquer-ink);
+    }
+
+    .spine-digit {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--lacquer-petrol);
+    }
+
+    .vault-session {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding-left: 2rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 6px 12px;
+      background: var(--ledger-white);
+      border: 1px solid var(--rule-hairline);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-swatch {
+      width: 8px;
+      height: 8px;
+      display: inline-block;
+    }
+
+    .swatch-petrol { background: var(--lacquer-petrol); }
+    .swatch-amber { background: var(--lacquer-amber); }
+    .swatch-slate { background: var(--lacquer-slate); }
+
+    /* ATTENTION GRADIENT ACCENT / BUTTON */
+    .rainbow-indicator {
+      height: 4px;
+      width: 100%;
+      background: var(--rainbow-band);
+    }
+
+    .btn-attention {
+      position: relative;
+      background: var(--lacquer-ink);
+      color: #FFF;
+      border: 1.5px solid var(--lacquer-ink);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0 1.5rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      overflow: hidden;
+    }
+
+    .btn-attention::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--rainbow-band);
+    }
+
+    .btn-attention:hover {
+      transform: translateY(-1px);
+      box-shadow: 4px 4px 0px rgba(20, 23, 26, 0.25);
+    }
+
+    .btn-attention:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* MAIN UNIFIED CANVAS GRID */
+    main.canvas-layout {
+      max-width: 1520px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 3rem 2.5rem 6rem;
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 3.5rem;
+      align-items: start;
+    }
+
+    /* LEFT COMPOSITION: MONUMENTAL STENCIL LACQUER ART & OWNER CARD */
+    .monument-column {
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .lacquer-canvas-card {
+      background: var(--pulp-shade);
+      border: 2px solid var(--rule-hairline);
+      padding: 2.25rem;
+      position: relative;
+      box-shadow: 6px 6px 0px rgba(20, 23, 26, 0.12);
+    }
+
+    .art-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--rule-hairline);
+      padding-bottom: 0.75rem;
+    }
+
+    .art-header h2 {
+      font-family: var(--font-display);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+    }
+
+    .art-header span {
+      font-size: 11px;
+      color: var(--lacquer-slate);
+    }
+
+    /* SILKSCREEN LACQUERWORK ARTWORK */
+    .lacquer-art-frame {
+      width: 100%;
+      height: 360px;
+      background: #DDD5BF;
+      border: 1px solid var(--rule-hairline);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+
+    .stencil-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .art-caption {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--rule-faint);
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .art-caption p {
+      font-size: 12px;
+      color: var(--lacquer-slate);
+      line-height: 1.45;
+    }
+
+    .caption-meta {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--lacquer-ink);
+    }
+
+    /* RIGHT COLUMN: FINANCIAL FACTS & STRUCTURED PANELS */
+    .data-column {
+      display: flex;
+      flex-direction: column;
+      gap: 2.75rem;
+    }
+
+    .section-spine-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+      border-bottom: 2px solid var(--rule-hairline);
+      padding-bottom: 0.75rem;
+    }
+
+    .spine-large-num {
+      font-family: var(--font-display);
+      font-size: 3rem;
+      font-weight: 700;
+      line-height: 0.9;
+      color: var(--lacquer-petrol);
+    }
+
+    .section-title-wrap h1, 
+    .section-title-wrap h2 {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+
+    .section-subtext {
+      font-size: 12px;
+      color: var(--lacquer-slate);
+      margin-top: 0.25rem;
+    }
+
+    /* LEDGER PANELS */
+    .ledger-panel {
+      background: var(--ledger-white);
+      border: 2px solid var(--rule-hairline);
+      box-shadow: 6px 6px 0px rgba(20, 23, 26, 0.1);
+      position: relative;
+    }
+
+    .ledger-top-stripe {
+      padding: 0.75rem 1.75rem;
+      border-bottom: 1px solid var(--rule-hairline);
+      background: var(--ledger-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .ledger-body {
+      padding: 1.75rem;
+    }
+
+    /* ASSET ALLOCATION LEDGER TABLE */
+    .allocation-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .allocation-table th {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--lacquer-slate);
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--rule-hairline);
+      background: rgba(20, 23, 26, 0.02);
+    }
+
+    .allocation-table td {
+      padding: 1.15rem 1rem;
+      border-bottom: 1px solid var(--rule-faint);
+      vertical-align: middle;
+      font-size: 13px;
+    }
+
+    .asset-id-cell {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .asset-color-block {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      border: 1px solid var(--rule-hairline);
+    }
+
+    .asset-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .asset-sub {
+      font-size: 10px;
+      color: var(--lacquer-slate);
+      display: block;
+    }
+
+    .target-slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      max-width: 220px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: var(--pulp-shade);
+      border: 1px solid var(--rule-hairline);
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 24px;
+      background: var(--lacquer-ink);
+      border: 1px solid var(--pulp-canvas);
+      cursor: ew-resize;
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 16px;
+      height: 24px;
+      background: var(--lacquer-ink);
+      border: 1px solid var(--pulp-canvas);
+      cursor: ew-resize;
+    }
+
+    .val-pill {
+      font-weight: 700;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .status-text-cell {
+      font-size: 11px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* CRANK & BOUNDED LIMITS MATRIX */
+    .limits-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .limit-box {
+      border: 1px solid var(--rule-hairline);
+      padding: 1.25rem;
+      background: #FFF;
+    }
+
+    .limit-label {
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--lacquer-slate);
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .limit-value {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .limit-state {
+      font-size: 11px;
+      margin-top: 0.4rem;
+      color: var(--lacquer-slate);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* PROOF LOG ACCORDION / STREAM */
+    .proof-log-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .proof-entry {
+      border-bottom: 1px solid var(--rule-faint);
+      padding: 1rem 0;
+      display: grid;
+      grid-template-columns: 100px 180px 1fr 140px;
+      align-items: center;
+      font-size: 12px;
+      gap: 1rem;
+    }
+
+    .proof-entry:last-child {
+      border-bottom: none;
+    }
+
+    .proof-slot {
+      color: var(--lacquer-slate);
+    }
+
+    .proof-hash {
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .proof-bounds {
+      font-size: 11px;
+      color: var(--lacquer-slate);
+    }
+
+    .proof-verdict {
+      text-align: right;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    /* DELEGATION ACTION FOOTER */
+    .delegation-bar {
+      margin-top: 1.5rem;
+      padding: 1.25rem;
+      background: var(--pulp-shade);
+      border: 1px solid var(--rule-hairline);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .delegation-meta-text {
+      font-size: 11px;
+      color: var(--lacquer-slate);
+      max-width: 500px;
+    }
+
+    .delegation-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1.5px solid var(--rule-hairline);
+      color: var(--lacquer-ink);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0 1.25rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(20, 23, 26, 0.07);
+    }
+
+    /* FOOTER STRIP */
+    footer.coloyond-footer {
+      border-top: 2px solid var(--rule-hairline);
+      padding: 2rem 2.5rem;
+      background: var(--pulp-canvas);
+      margin-top: auto;
+    }
+
+    .footer-inner {
+      max-width: 1520px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--lacquer-slate);
+    }
+
+    /* RESPONSIVENESS */
+    @media (max-width: 1180px) {
+      main.canvas-layout {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+      }
+
+      .monument-column {
+        order: 2;
+      }
+
+      .data-column {
+        order: 1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      header.system-bar {
+        padding: 0 1rem;
+      }
+
+      .bar-inner {
+        flex-direction: column;
+        padding: 1rem 0;
+        gap: 1rem;
+      }
+
+      nav.spine-nav {
+        padding-left: 0;
+        overflow-x: auto;
+        width: 100%;
+      }
+
+      .vault-session {
+        padding-left: 0;
+        justify-content: space-between;
+        width: 100%;
+      }
+
+      main.canvas-layout {
+        padding: 1.5rem 1rem 3rem;
+      }
+
+      .limits-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .proof-entry {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Materiality Pulp Tooth Overlay -->
+  <div class="pulp-texture" aria-hidden="true"></div>
+
+  <!-- SPINAL NAVIGATION HEADER -->
+  <header class="system-bar" role="banner">
+    <div class="bar-inner">
+      <div class="brand-cluster">
+        <div class="brand-mark" aria-hidden="true">
+          <div class="brand-mark-inner"></div>
+        </div>
+        <div>
+          <span class="brand-name">coloyond</span>
+          <span class="brand-context">Solana Vault #0819</span>
+        </div>
+      </div>
+
+      <!-- Unified 01-04 Numbered Spine Navigation -->
+      <nav class="spine-nav" aria-label="Spinal Sections">
+        <a href="#section-01" class="spine-item interactive-hit is-active">
+          <span class="spine-digit">01</span>
+          <span>ISOLATION</span>
+        </a>
+        <a href="#section-02" class="spine-item interactive-hit">
+          <span class="spine-digit">02</span>
+          <span>WEIGHTS</span>
+        </a>
+        <a href="#section-03" class="spine-item interactive-hit">
+          <span class="spine-digit">03</span>
+          <span>DELEGATION</span>
+        </a>
+        <a href="#section-04" class="spine-item interactive-hit">
+          <span class="spine-digit">04</span>
+          <span>ROLLUP PROOFS</span>
+        </a>
+      </nav>
+
+      <div class="vault-session">
+        <div class="status-badge" role="status">
+          <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+          <span>CUSTODY: OWNER-EXCLUSIVE</span>
+        </div>
+
+        <button class="btn-attention interactive-hit" id="trigger-crank-btn" aria-label="Execute owner authorized ephemeral crank">
+          <span>RUN BOUNDED CRANK</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Attention Rainbow Edge (Signaling system live status) -->
+  <div class="rainbow-indicator" role="presentation"></div>
+
+  <!-- MAIN CANVAS: UNIFIED SHEET -->
+  <main class="canvas-layout">
+
+    <!-- LEFT MONUMENT: SILKSCREEN LACQUERBOARD COMPOSITION -->
+    <aside class="monument-column" aria-label="Vault Articulation & Monumental Visual">
+      <div class="lacquer-canvas-card">
+        <div class="art-header">
+          <h2>Equilibrium Construct 0819</h2>
+          <span>AUTONOMOUS COUNTERBALANCE</span>
+        </div>
+
+        <!-- Monumental Stencil Silkscreen Graphic -->
+        <div class="lacquer-art-frame">
+          <svg class="stencil-svg" viewBox="0 0 380 340" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Silkscreen lacquerwork showing sliced discs and interlocking cantilevers expressing isolation and balance">
+            <!-- Paper Ground Depth -->
+            <rect width="380" height="340" fill="#E2DAC6" />
+            
+            <!-- Slab 1: Matte Slate Rectangular Slab -->
+            <rect x="30" y="50" width="160" height="220" fill="var(--lacquer-slate)" />
+            
+            <!-- Sliced Disc: Petrol Blue Cantilever -->
+            <path d="M 120 70 A 90 90 0 0 1 290 200 L 120 200 Z" fill="var(--lacquer-petrol)" />
+            
+            <!-- Interlocking Disc: Matte Amber Counterweight -->
+            <circle cx="250" cy="180" r="64" fill="var(--lacquer-amber)" />
+
+            <!-- Sliced Void & Inverted Cutout -->
+            <path d="M 250 180 L 314 180 A 64 64 0 0 1 250 244 Z" fill="#E2DAC6" />
+
+            <!-- Fulcrum Blade: Razor Ink Wedge -->
+            <polygon points="120,290 270,290 195,210" fill="var(--lacquer-ink)" />
+
+            <!-- Thin Hard-Edge Calipers -->
+            <line x1="20" y1="290" x2="360" y2="290" stroke="var(--lacquer-ink)" stroke-width="2" />
+            <line x1="30" y1="30" x2="30" y2="310" stroke="var(--lacquer-ink)" stroke-width="1" stroke-dasharray="3 3" />
+            <line x1="350" y1="30" x2="350" y2="310" stroke="var(--lacquer-ink)" stroke-width="1" stroke-dasharray="3 3" />
+
+            <!-- Numeric Stencil Stamp -->
+            <text x="44" y="80" font-family="'Space Grotesk', sans-serif" font-size="28" font-weight="700" fill="#FAF8F2">0819</text>
+            <text x="44" y="100" font-family="'JetBrains Mono', monospace" font-size="9" letter-spacing="2" fill="#FAF8F2">NON-CUSTODIAL</text>
+          </svg>
+        </div>
+
+        <div class="art-caption">
+          <span class="caption-meta">Structural Interpretation</span>
+          <p>
+            Three non-fungible admitted tokens balanced through a bounded Ephemeral Rollup engine. No pooled capital, no social shares. The state holds in strict mechanical tension under owner-signed limits.
+          </p>
+        </div>
+      </div>
+
+      <!-- Owner Key Isolation Summary -->
+      <section class="ledger-panel" aria-labelledby="owner-facts-title">
+        <div class="ledger-top-stripe">
+          <span id="owner-facts-title">Owner Sovereignty Index</span>
+          <span>1 OWNER / 1 VAULT</span>
+        </div>
+        <div class="ledger-body">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <tbody>
+              <tr>
+                <td style="padding: 0.6rem 0; color: var(--lacquer-slate); border-bottom: 1px solid var(--rule-faint);">Owner Authority</td>
+                <td style="padding: 0.6rem 0; text-align: right; font-weight: 700; border-bottom: 1px solid var(--rule-faint);">8x9F...39eE (Wallet Connected)</td>
+              </tr>
+              <tr>
+                <td style="padding: 0.6rem 0; color: var(--lacquer-slate); border-bottom: 1px solid var(--rule-faint);">LP Mint Address</td>
+                <td style="padding: 0.6rem 0; text-align: right; font-weight: 700; border-bottom: 1px solid var(--rule-faint);">DISABLED (Zero Transferability)</td>
+              </tr>
+              <tr>
+                <td style="padding: 0.6rem 0; color: var(--lacquer-slate); border-bottom: 1px solid var(--rule-faint);">Yield Promising Code</td>
+                <td style="padding: 0.6rem 0; text-align: right; font-weight: 700; border-bottom: 1px solid var(--rule-faint);">NONE (Pure Rebalance Mechanicals)</td>
+              </tr>
+              <tr>
+                <td style="padding: 0.6rem 0; color: var(--lacquer-slate);">Revocation Latency</td>
+                <td style="padding: 0.6rem 0; text-align: right; font-weight: 700;">INSTANT (Owner Root Key Override)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+
+    <!-- RIGHT SECTION: FINANCIAL FACTS & INTERACTIVE PANELS -->
+    <div class="data-column">
+
+      <!-- SECTION 01: VAULT SPEC & IDENTITY -->
+      <section id="section-01">
+        <div class="section-spine-heading">
+          <div class="spine-large-num">01</div>
+          <div class="section-title-wrap">
+            <h1>Self-Directed Vault Core</h1>
+            <p class="section-subtext">Isolated Solana PDA / Program-Derived Account with owner-retained signing control.</p>
+          </div>
+        </div>
+
+        <div class="ledger-panel" style="margin-top: 1.5rem;">
+          <div class="ledger-top-stripe">
+            <span>Core Financial Facts</span>
+            <span>Total Value: 284.18 SOL</span>
+          </div>
+          <div class="ledger-body" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+            <div>
+              <span style="font-size: 10px; color: var(--lacquer-slate); text-transform: uppercase;">Unsettled Skew</span>
+              <div style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;">0.84%</div>
+              <div style="font-size: 11px; color: var(--lacquer-slate); margin-top: 4px;">Status: Below 1.00% Threshold</div>
+            </div>
+            <div>
+              <span style="font-size: 10px; color: var(--lacquer-slate); text-transform: uppercase;">MagicBlock Delegation</span>
+              <div style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;">ACTIVE</div>
+              <div style="font-size: 11px; color: var(--lacquer-slate); margin-top: 4px;">Status: Ephemeral Rollup Crank</div>
+            </div>
+            <div>
+              <span style="font-size: 10px; color: var(--lacquer-slate); text-transform: uppercase;">Proof Receipts Logged</span>
+              <div style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;">1,402</div>
+              <div style="font-size: 11px; color: var(--lacquer-slate); margin-top: 4px;">Status: 100% Cryptographically Verified</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 02: TARGET WEIGHTS -->
+      <section id="section-02">
+        <div class="section-spine-heading">
+          <div class="spine-large-num">02</div>
+          <div class="section-title-wrap">
+            <h2>Target Allocation Calibration</h2>
+            <p class="section-subtext">Set target weights over admitted assets. Color marks asset identities only, never performance or risk.</p>
+          </div>
+        </div>
+
+        <div class="ledger-panel" style="margin-top: 1.5rem;">
+          <div class="ledger-top-stripe">
+            <span>Admitted Assets (Max 3)</span>
+            <span id="weight-sum-indicator">Assigned Sum: 100%</span>
+          </div>
+
+          <table class="allocation-table">
+            <thead>
+              <tr>
+                <th scope="col">Asset Identity</th>
+                <th scope="col">Current Holding</th>
+                <th scope="col">Target Weight</th>
+                <th scope="col">Drift Distance</th>
+                <th scope="col">Operational State</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- ASSET 1: SOL (Petrol Blue) -->
+              <tr>
+                <td>
+                  <div class="asset-id-cell">
+                    <div class="asset-color-block swatch-petrol" aria-hidden="true"></div>
+                    <div>
+                      <span class="asset-title">SOL</span>
+                      <span class="asset-sub">Native Layer-1</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <strong>142.09 SOL</strong>
+                  <div class="asset-sub">50.0% Actual</div>
+                </td>
+                <td>
+                  <div class="target-slider-wrap">
+                    <input type="range" min="10" max="80" value="50" class="asset-range interactive-hit" data-asset="SOL" id="range-sol" aria-label="SOL Target Weight Percentage">
+                    <span class="val-pill" id="val-sol">50%</span>
+                  </div>
+                </td>
+                <td>
+                  <span>+0.21%</span>
+                </td>
+                <td>
+                  <div class="status-text-cell">
+                    <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+                    <span>State: Balanced</span>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- ASSET 2: JUP (Matte Amber) -->
+              <tr>
+                <td>
+                  <div class="asset-id-cell">
+                    <div class="asset-color-block swatch-amber" aria-hidden="true"></div>
+                    <div>
+                      <span class="asset-title">JUP</span>
+                      <span class="asset-sub">Jupiter Core Token</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <strong>85.25 SOL Equiv</strong>
+                  <div class="asset-sub">30.0% Actual</div>
+                </td>
+                <td>
+                  <div class="target-slider-wrap">
+                    <input type="range" min="10" max="80" value="30" class="asset-range interactive-hit" data-asset="JUP" id="range-jup" aria-label="JUP Target Weight Percentage">
+                    <span class="val-pill" id="val-jup">30%</span>
+                  </div>
+                </td>
+                <td>
+                  <span>-0.45%</span>
+                </td>
+                <td>
+                  <div class="status-text-cell">
+                    <span class="status-swatch swatch-amber" aria-hidden="true"></span>
+                    <span>State: In Rebalance Window</span>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- ASSET 3: USDC (Matte Slate) -->
+              <tr>
+                <td>
+                  <div class="asset-id-cell">
+                    <div class="asset-color-block swatch-slate" aria-hidden="true"></div>
+                    <div>
+                      <span class="asset-title">USDC</span>
+                      <span class="asset-sub">Spl Circulating Stable</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <strong>56.84 SOL Equiv</strong>
+                  <div class="asset-sub">20.0% Actual</div>
+                </td>
+                <td>
+                  <div class="target-slider-wrap">
+                    <input type="range" min="0" max="80" value="20" class="asset-range interactive-hit" data-asset="USDC" id="range-usdc" aria-label="USDC Target Weight Percentage">
+                    <span class="val-pill" id="val-usdc">20%</span>
+                  </div>
+                </td>
+                <td>
+                  <span>+0.24%</span>
+                </td>
+                <td>
+                  <div class="status-text-cell">
+                    <span class="status-swatch swatch-slate" aria-hidden="true"></span>
+                    <span>State: Balanced</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="padding: 1.25rem 1.75rem; background: var(--ledger-subtle); display: flex; justify-content: flex-end; gap: 1rem; align-items: center;">
+            <span style="font-size: 11px; color: var(--lacquer-slate);">Requires Owner Signature to Commit Weight Vector:</span>
+            <button class="btn-attention interactive-hit" id="save-weights-btn">
+              <span>SIGN NEW WEIGHT VECTOR</span>
+              <span aria-hidden="true">✓</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 03: EPHEMERAL ROLLUP DELEGATION LIMITS -->
+      <section id="section-03">
+        <div class="section-spine-heading">
+          <div class="spine-large-num">03</div>
+          <div class="section-title-wrap">
+            <h2>Bounded Ephemeral Crank Mandate</h2>
+            <p class="section-subtext">The crank operates strictly within owner-signed bounds. Zero access to capital outside parameter envelopes.</p>
+          </div>
+        </div>
+
+        <div class="limits-grid">
+          <div class="limit-box">
+            <span class="limit-label">Crank Gas Budget</span>
+            <div class="limit-value">0.050 SOL</div>
+            <div class="limit-state">
+              <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+              <span>State: 0.038 SOL Remaining</span>
+            </div>
+          </div>
+          <div class="limit-box">
+            <span class="limit-label">Max Drift Excursion</span>
+            <div class="limit-value">± 1.25 %</div>
+            <div class="limit-state">
+              <span class="status-swatch swatch-slate" aria-hidden="true"></span>
+              <span>State: Hard Rebalance Trigger</span>
+            </div>
+          </div>
+          <div class="limit-box">
+            <span class="limit-label">Session Loss Cap</span>
+            <div class="limit-value">0.20 SOL</div>
+            <div class="limit-state">
+              <span class="status-swatch swatch-amber" aria-hidden="true"></span>
+              <span>State: Execution Circuit Breaker</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="delegation-bar">
+          <div class="delegation-meta-text">
+            <strong>Revocable Crank Delegation</strong>: Authorization valid for current epoch. Revocation broadcasts an immediate instruction resetting the Ephemeral Rollup context to on-chain cold storage.
+          </div>
+          <div class="delegation-actions">
+            <button class="btn-secondary interactive-hit" id="revoke-btn" aria-label="Revoke Crank Delegation instantly">
+              REVOKE DELEGATION
+            </button>
+            <button class="btn-secondary interactive-hit" id="refresh-budget-btn" aria-label="Replenish gas budget">
+              TOP UP GAS BUDGET
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 04: ON-CHAIN PROOFS & EPHEMERAL ROLLUP LOG -->
+      <section id="section-04">
+        <div class="section-spine-heading">
+          <div class="spine-large-num">04</div>
+          <div class="section-title-wrap">
+            <h2>Verifiable Execution Receipts</h2>
+            <p class="section-subtext">Every automated run executes inside owner parameters and commits cryptographic proofs on Solana.</p>
+          </div>
+        </div>
+
+        <div class="ledger-panel" style="margin-top: 1.5rem;">
+          <div class="ledger-top-stripe">
+            <span>Rollup Proof Attestations</span>
+            <span>State: Engine Verified</span>
+          </div>
+
+          <div class="ledger-body">
+            <ul class="proof-log-list" id="proof-log-list">
+              <!-- Item 1 -->
+              <li class="proof-entry">
+                <span class="proof-slot">Slot 2984102</span>
+                <span class="proof-hash" title="Click to inspect proof receipt">0x7F4B...99A2</span>
+                <span class="proof-bounds">Delta: JUP +0.45% / SOL -0.45%</span>
+                <span class="proof-verdict">
+                  <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+                  State: Verified
+                </span>
+              </li>
+              <!-- Item 2 -->
+              <li class="proof-entry">
+                <span class="proof-slot">Slot 2983820</span>
+                <span class="proof-hash" title="Click to inspect proof receipt">0x3E1C...44D8</span>
+                <span class="proof-bounds">Delta: USDC -0.18% / JUP +0.18%</span>
+                <span class="proof-verdict">
+                  <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+                  State: Verified
+                </span>
+              </li>
+              <!-- Item 3 -->
+              <li class="proof-entry">
+                <span class="proof-slot">Slot 2983501</span>
+                <span class="proof-hash" title="Click to inspect proof receipt">0x99A8...B21F</span>
+                <span class="proof-bounds">Delta: SOL +0.30% / USDC -0.30%</span>
+                <span class="proof-verdict">
+                  <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+                  State: Verified
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- UNIFIED SYSTEM FOOTER -->
+  <footer class="coloyond-footer" role="contentinfo">
+    <div class="footer-inner">
+      <div>
+        <strong>coloyond</strong> // Solana Ephemeral Rollup Engine. One Owner. No Third Parties.
+      </div>
+      <div>
+        Status: Strict Autonomous Equivalence — All Actions Owner-Signed
+      </div>
+    </div>
+  </footer>
+
+  <!-- MINIMAL COMPONENT LOGIC -->
+  <script>
+    (function () {
+      'use strict';
+
+      // Spine Item Active Tracking on Scroll
+      const navLinks = document.querySelectorAll('.spine-item');
+      const sections = ['section-01', 'section-02', 'section-03', 'section-04'].map(id => document.getElementById(id));
+
+      window.addEventListener('scroll', () => {
+        let currentSectionId = '';
+        sections.forEach(sec => {
+          if (!sec) return;
+          const rect = sec.getBoundingClientRect();
+          if (rect.top <= 140 && rect.bottom >= 140) {
+            currentSectionId = sec.id;
+          }
+        });
+
+        if (currentSectionId) {
+          navLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href === '#' + currentSectionId) {
+              link.classList.add('is-active');
+            } else {
+              link.classList.remove('is-active');
+            }
+          });
+        }
+      }, { passive: true });
+
+      // Target Weight Sliders Normalization Feedback
+      const rangeSol = document.getElementById('range-sol');
+      const rangeJup = document.getElementById('range-jup');
+      const rangeUsdc = document.getElementById('range-usdc');
+      const valSol = document.getElementById('val-sol');
+      const valJup = document.getElementById('val-jup');
+      const valUsdc = document.getElementById('val-usdc');
+      const sumIndicator = document.getElementById('weight-sum-indicator');
+      const saveBtn = document.getElementById('save-weights-btn');
+
+      function updateSums() {
+        const s = parseInt(rangeSol.value, 10);
+        const j = parseInt(rangeJup.value, 10);
+        const u = parseInt(rangeUsdc.value, 10);
+        
+        valSol.textContent = s + '%';
+        valJup.textContent = j + '%';
+        valUsdc.textContent = u + '%';
+
+        const total = s + j + u;
+        sumIndicator.textContent = 'Assigned Sum: ' + total + '%';
+
+        if (total === 100) {
+          sumIndicator.style.color = 'var(--lacquer-ink)';
+          saveBtn.disabled = false;
+          saveBtn.style.opacity = '1';
+        } else {
+          sumIndicator.style.color = 'var(--lacquer-amber)';
+          saveBtn.disabled = true;
+          saveBtn.style.opacity = '0.7';
+        }
+      }
+
+      [rangeSol, rangeJup, rangeUsdc].forEach(input => {
+        input.addEventListener('input', updateSums);
+      });
+
+      // Simulation: Trigger Bounded Crank
+      const crankBtn = document.getElementById('trigger-crank-btn');
+      const proofList = document.getElementById('proof-log-list');
+
+      crankBtn.addEventListener('click', () => {
+        crankBtn.disabled = true;
+        crankBtn.textContent = 'EXECUTING ROLLUP...';
+
+        setTimeout(() => {
+          const newSlot = 2984102 + Math.floor(Math.random() * 50) + 1;
+          const hashHex = '0x' + Array.from({length: 4}, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join('') + '...' +
+                          Array.from({length: 4}, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join('');
+
+          const li = document.createElement('li');
+          li.className = 'proof-entry';
+          li.innerHTML = `
+            <span class="proof-slot">Slot ${newSlot}</span>
+            <span class="proof-hash" title="Click to inspect proof receipt">${hashHex}</span>
+            <span class="proof-bounds">Delta: JUP +0.12% / SOL -0.12%</span>
+            <span class="proof-verdict">
+              <span class="status-swatch swatch-petrol" aria-hidden="true"></span>
+              State: Verified
+            </span>
+          `;
+          proofList.insertBefore(li, proofList.firstChild);
+
+          crankBtn.disabled = false;
+          crankBtn.innerHTML = '<span>RUN BOUNDED CRANK</span> <span aria-hidden="true">→</span>';
+        }, 750);
+      });
+
+      // Simulation: Revocation Interaction
+      const revokeBtn = document.getElementById('revoke-btn');
+      revokeBtn.addEventListener('click', () => {
+        const confirmRevoke = confirm('REVOKE CRANK DELEGATION?\n\nThis will immediately strip the Ephemeral Rollup crank of signing bounds and return all execution authority exclusively to manual owner keys.');
+        if (confirmRevoke) {
+          revokeBtn.textContent = 'DELEGATION REVOKED';
+          revokeBtn.style.borderColor = 'var(--lacquer-amber)';
+          revokeBtn.disabled = true;
+        }
+      });
+
+      // Simulation: Sign New Weights
+      saveBtn.addEventListener('click', () => {
+        saveBtn.textContent = 'TRANSACTION COMMITTED ✓';
+        setTimeout(() => {
+          saveBtn.innerHTML = '<span>SIGN NEW WEIGHT VECTOR</span> <span aria-hidden="true">✓</span>';
+        }, 2000);
+      });
+    })();
+  </script>
+</body>
+</html>

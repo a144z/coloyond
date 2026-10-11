@@ -1,0 +1,46 @@
+{
+  "name": "coloyond",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "coloyond · private autonomous vault on Solana devnet (mobile-first React app)",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "gen:keys": "node scripts/generate-demo-keys.mjs",
+    "bootstrap:reserve": "node scripts/bootstrap-reserve.mjs",
+    "cap:sync": "npm run build && npx cap sync android",
+    "cap:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/status-bar": "^8.0.4",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@noble/hashes": "^2.4.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@scure/base": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.99.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-plugin-node-polyfills": "^0.28.0"
+  }
+}

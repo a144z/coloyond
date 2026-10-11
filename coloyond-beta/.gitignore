@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+*.tsbuildinfo
+
+# capacitor / android build artifacts
+android/.gradle
+android/app/build
+android/build
+android/local.properties
+android/capacitor-cordova-android-plugins
