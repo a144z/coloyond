@@ -1,8 +1,8 @@
 import { Route } from "../types.js";
 
-export type ProductTab = "Portfolio" | "Shield" | "Yield" | "Ecosystem" | "Game";
+export type ProductTab = "Portfolio" | "Yield";
 
-export const TABS: ProductTab[] = ["Portfolio", "Shield", "Yield", "Ecosystem", "Game"];
+export const TABS: ProductTab[] = ["Portfolio", "Yield"];
 
 export interface Pillar {
   title: string;
@@ -208,7 +208,7 @@ export const PILLARS: Pillar[] = [
   {
     title: "Full ecosystem",
     label: "Kehila",
-    detail: "Swap shield, liquidity layer, farms, cards, and settlement status connect into one loop.",
+    detail: "Swap checks, liquidity layer, farms, cards, and settlement status connect into one loop.",
     points: [
       "Aggregator quotes plus v4 hook checks",
       "LP rewards and fee revenue are visible together",
@@ -236,8 +236,8 @@ export const ECOSYSTEM: StackNode[] = [
     status: "Core",
   },
   {
-    title: "Shield swap prep",
-    detail: "Quotes, v4 hook rules, slippage, MEV bounds, and route choice stay behind one action.",
+    title: "Swap and route checks",
+    detail: "Quotes, slippage, MEV bounds, and route choice stay behind one action.",
     status: "Risk-gated",
   },
   {
@@ -260,7 +260,7 @@ export const ECOSYSTEM: StackNode[] = [
 export const QUESTS: Quest[] = [
   { id: "wallet", title: "Connect a demo wallet", reward: 120 },
   { id: "nav", title: "Review NAV and executable quote", reward: 80 },
-  { id: "route", title: "Prepare a shielded swap route", reward: 150 },
+  { id: "route", title: "Review pool and yield terms", reward: 150 },
   { id: "farm", title: "Stake share tokens into TradeFi LP", reward: 100 },
   { id: "share", title: "Save or share an expression", reward: 70 },
 ];
