@@ -21,6 +21,19 @@ export class IndexedDbSubmissionJournal implements WalletSubmissionJournal {
     private readonly databaseName = DATABASE_NAME,
   ) {}
 
+  /** Serialize signing across tabs for one exact genesis/pool/wallet and recheck durable attempts under the lock. */
+  async withSigningGate<T>(scopePrefix: string, sign: () => Promise<T>): Promise<T> {
+    const locks = globalThis.navigator?.locks;
+    if (!locks) throw new Error("cross_tab_signing_lock_unavailable");
+    return locks.request(`coloyond-etf-signing:${scopePrefix}`, { mode: "exclusive" }, async () => {
+      const entries = await this.listByPrefix(scopePrefix);
+      if (entries.some((entry) => entry.attempts.at(-1)?.state === "unknown")) {
+        throw new Error("unresolved_wallet_signature_blocks_signing");
+      }
+      return sign();
+    });
+  }
+
   private open(): Promise<IDBDatabase> {
     if (!this.factory) return Promise.reject(new Error("indexed_db_unavailable"));
     if (this.database) return this.database;

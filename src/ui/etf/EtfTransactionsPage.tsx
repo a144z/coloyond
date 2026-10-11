@@ -352,30 +352,34 @@ export function EtfTransactionsPage() {
   const feedSafe = !!snapshot && snapshot.assets.every((asset) => asset.oracle.verification === "full" && asset.oracle.freshness === "within_approved_limits");
   const unresolvedEntries = page.entries.filter((entry) => entry.attempts.at(-1)?.state === "unknown");
   const journalReady = page.journalError === null;
-  const canSign = wallet.connected && wallet.publicKey !== null && typeof wallet.signTransaction === "function" && acceptedContext && journalReady && unresolvedEntries.length === 0 && !busy;
+  const signingLockAvailable = typeof navigator !== "undefined" && "locks" in navigator;
+  const canSign = wallet.connected && wallet.publicKey !== null && typeof wallet.signTransaction === "function" && acceptedContext && journalReady && signingLockAvailable && unresolvedEntries.length === 0 && !busy;
 
     const execute = useCallback(async (operationId: string, operation: UiOperation, evidence: ActionEvidence, tracked: TrackedTokenAccount[], options: { noTokenBalanceAction?: WalletNoTokenBalanceAction; noTokenProgramId?: PublicKey; ataPreparationPlan?: readonly WalletAtaPreparationTarget[]; retryOfSignature?: string } = {}) => {
     if (!wallet.publicKey || !wallet.signTransaction || !page.context) throw new Error("A connected signing wallet and accepted manifest are required.");
     setBusy(true);
     setNotice(null);
     try {
-      await journal.current.stageEvidence(operationId, evidence);
-      const latest = await connection.getLatestBlockhash("confirmed");
-      const instructions = operation.instructions ?? (operation.instruction ? [operation.instruction] : []);
-      if (instructions.length === 0) throw new Error("wallet_transaction_has_no_instructions");
-      const transaction = new Transaction({ feePayer: wallet.publicKey, recentBlockhash: latest.blockhash }).add(...instructions);
-      const result = await submitWalletTransaction({
-        connection,
-        signer: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
-        transaction,
-        journal: journal.current,
-        operationId,
-        trackedTokenAccounts: tracked,
-        ...(options.retryOfSignature ? { retryOfSignature: options.retryOfSignature } : {}),
-        ...(options.noTokenBalanceAction ? { noTokenBalanceAction: options.noTokenBalanceAction, noTokenProgramId: options.noTokenProgramId ?? page.context.programId } : {}),
-        ...(options.ataPreparationPlan ? { ataPreparationPlan: options.ataPreparationPlan } : {}),
-        requirePostStateReadback: true,
-        postStateVerifier: (receipt) => verifyActionReadback(connection, page.context!, evidence, receipt),
+      const scopePrefix = `${page.genesis}:${page.context.addresses.pool.toBase58()}:${wallet.publicKey.toBase58()}:`;
+      const result = await journal.current.withSigningGate(scopePrefix, async () => {
+        await journal.current.stageEvidence(operationId, evidence);
+        const latest = await connection.getLatestBlockhash("confirmed");
+        const instructions = operation.instructions ?? (operation.instruction ? [operation.instruction] : []);
+        if (instructions.length === 0) throw new Error("wallet_transaction_has_no_instructions");
+        const transaction = new Transaction({ feePayer: wallet.publicKey, recentBlockhash: latest.blockhash }).add(...instructions);
+        return submitWalletTransaction({
+          connection,
+          signer: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction! },
+          transaction,
+          journal: journal.current,
+          operationId,
+          trackedTokenAccounts: tracked,
+          ...(options.retryOfSignature ? { retryOfSignature: options.retryOfSignature } : {}),
+          ...(options.noTokenBalanceAction ? { noTokenBalanceAction: options.noTokenBalanceAction, noTokenProgramId: options.noTokenProgramId ?? page.context!.programId } : {}),
+          ...(options.ataPreparationPlan ? { ataPreparationPlan: options.ataPreparationPlan } : {}),
+          requirePostStateReadback: true,
+          postStateVerifier: (receipt) => verifyActionReadback(connection, page.context!, evidence, receipt),
+        });
       });
       setNotice(result.state === "confirmed" && result.postStateVerified === true ? `${operation.action} confirmed and reconciled at slot ${result.receipt?.confirmationSlot ?? "unknown"}.` : result.state === "rejected" && result.retryAllowed ? `${operation.action} was rejected; RPC confirms unchanged balances and pool state. A manual retry is available.` : `${operation.action} outcome unresolved. Do not retry; refresh or reconcile the recorded signature first.`);
     } catch (error) {
@@ -400,7 +404,7 @@ export function EtfTransactionsPage() {
 
   const button = (label: string, blocked: string | null, onClick: () => void, risk = false) => <div className="tx-action-row" key={label}>
     <button type="button" className={risk ? "etf-refresh tx-risk" : "etf-refresh"} disabled={blocked !== null || !canSign || page.loading} onClick={onClick}>{busy ? "Waiting for RPC…" : label}</button>
-    <small>{blocked ?? (canSign ? "Ready for wallet approval after a fresh read." : !wallet.connected ? "Connect a wallet to enable signing." : !acceptedContext ? "Blocked until an accepted, verified Devnet deployment is present." : unresolvedEntries.length ? "Reconcile the unresolved signature before any new signing." : !journalReady ? "Durable IndexedDB journal is unavailable." : "Risk action is paused by missing verified inputs.")}</small>
+    <small>{blocked ?? (canSign ? "Ready for wallet approval after a fresh read." : !wallet.connected ? "Connect a wallet to enable signing." : !acceptedContext ? "Blocked until an accepted, verified Devnet deployment is present." : unresolvedEntries.length ? "Reconcile the unresolved signature before any new signing." : !journalReady ? "Durable IndexedDB journal is unavailable." : !signingLockAvailable ? "Browser cross-tab signing lock is unavailable; signing is disabled." : "Risk action is paused by missing verified inputs.")}</small>
   </div>;
 
   const buildEvidence = (action: ReceiptAction, expected: Partial<ActionEvidence> = {}): ActionEvidence => ({ action, baseline: snapshot, wallet: walletAddress ?? "", ...expected });
@@ -499,7 +503,7 @@ export function EtfTransactionsPage() {
     <section className="etf-section">
       <div className="etf-section-head"><div><p className="etf-eyebrow">RPC receipt journal</p><h2>Signatures & reconciliation</h2></div><span className={tone(unresolvedEntries.length ? "bad" : "good")}>{unresolvedEntries.length ? `${unresolvedEntries.length} unresolved — signing blocked` : "No unresolved signatures"}</span></div>
       {page.journalError ? <div className="etf-notice etf-notice-error">Durable browser journal unavailable: {page.journalError}. Signing is disabled.</div> : null}
-      {!page.entries.length ? <article className="etf-card etf-empty">No wallet operations have been recorded for this exact Devnet, pool and wallet.</article> : <div className="etf-card-grid">{page.entries.flatMap((entry) => entry.attempts.map((attempt) => <article className="etf-card tx-receipt-card" key={`${entry.operationId}:${attempt.signature}`}><p className="etf-eyebrow">{entry.operationId.split(":").at(-2)} · {attempt.state}</p><h3>RPC transaction receipt</h3><dl className="etf-fields"><div><dt>Signature</dt><dd><a className="etf-value" href={`https://explorer.solana.com/tx/${attempt.signature}?cluster=devnet`} target="_blank" rel="noreferrer">{attempt.signature} ↗</a></dd></div><div><dt>Confirmation / slot</dt><dd><code className="etf-value">{exact(attempt.receipt?.confirmationStatus)} / {exact(attempt.receipt?.confirmationSlot)}</code></dd></div><div><dt>RPC network fee</dt><dd><code className="etf-value">{exact(attempt.receipt?.networkFeeLamports)} lamports · separate from ATA rent and protocol swap fee</code></dd></div>{entry.evidence?.action === "prepare_accounts" ? <div><dt>ATA rent · exact readback</dt><dd><code className="etf-value">{entry.evidence.expectedNewAccounts?.map((account) => { const lamports = attempt.receipt?.accountLamportDeltas?.find((row) => row.account === account.address); return `${account.address}: ${lamports?.postLamports ?? "unresolved"} lamports`; }).join(" · ") ?? "Unresolved"}</code></dd></div> : null}<div><dt>Lamport account changes</dt><dd><code className="etf-value">{attempt.receipt?.accountLamportDeltas?.map((row) => `${row.account}: ${row.deltaLamports}`).join(" · ") ?? "Incomplete RPC lamport metadata"}</code></dd></div><div><dt>Readback</dt><dd><code className="etf-value">{attempt.postStateVerified === true ? "Verified" : "Unresolved"}</code></dd></div><div><dt>Token/share deltas</dt><dd><code className="etf-value">{attempt.receipt?.tokenDeltas?.map((row) => `${row.account}: ${row.delta} ${row.mint}`).join(" · ") ?? "Incomplete RPC token metadata"}</code></dd></div><div><dt>Swap fee counter</dt><dd><code className="etf-value">Shown from fresh pool snapshot after full reconciliation; never combined with network fee.</code></dd></div></dl>{attempt.state === "unknown" ? <button type="button" className="etf-refresh" disabled={busy || !context} onClick={() => void reconcile(entry.operationId)}>Reconcile signature before any retry</button> : null}</article>))}</div>}
+      {!page.entries.length ? <article className="etf-card etf-empty">No wallet operations have been recorded for this exact Devnet, pool and wallet.</article> : <div className="etf-card-grid">{page.entries.flatMap((entry) => entry.attempts.map((attempt) => <article className="etf-card tx-receipt-card" key={`${entry.operationId}:${attempt.signature}`}><p className="etf-eyebrow">{entry.operationId.split(":").at(-2)} · {attempt.state}</p><h3>RPC transaction receipt</h3><dl className="etf-fields"><div><dt>Signature</dt><dd><a className="etf-value" href={`https://explorer.solana.com/tx/${attempt.signature}?cluster=devnet`} target="_blank" rel="noreferrer">{attempt.signature} ↗</a></dd></div><div><dt>Confirmation / slot</dt><dd><code className="etf-value">{exact(attempt.receipt?.confirmationStatus)} / {exact(attempt.receipt?.confirmationSlot)}</code></dd></div><div><dt>RPC network fee</dt><dd><code className="etf-value">{exact(attempt.receipt?.networkFeeLamports)} lamports · separate from account lamport changes and protocol swap fee</code></dd></div>{entry.evidence?.action === "prepare_accounts" ? <div><dt>ATA account lamport readback</dt><dd><code className="etf-value">{entry.evidence.expectedNewAccounts?.map((account) => { const lamports = attempt.receipt?.accountLamportDeltas?.find((row) => row.account === account.address); return `${account.address}: pre ${lamports?.preLamports ?? "unresolved"} → post ${lamports?.postLamports ?? "unresolved"}; Δ ${lamports?.deltaLamports ?? "unresolved"} lamports`; }).join(" · ") ?? "Unresolved"}</code></dd></div> : null}<div><dt>Lamport account changes</dt><dd><code className="etf-value">{attempt.receipt?.accountLamportDeltas?.map((row) => `${row.account}: ${row.deltaLamports}`).join(" · ") ?? "Incomplete RPC lamport metadata"}</code></dd></div><div><dt>Readback</dt><dd><code className="etf-value">{attempt.postStateVerified === true ? "Verified" : "Unresolved"}</code></dd></div><div><dt>Token/share deltas</dt><dd><code className="etf-value">{attempt.receipt?.tokenDeltas?.map((row) => `${row.account}: ${row.delta} ${row.mint}`).join(" · ") ?? "Incomplete RPC token metadata"}</code></dd></div><div><dt>Swap fee counter</dt><dd><code className="etf-value">Shown from fresh pool snapshot after full reconciliation; never combined with network fee.</code></dd></div></dl>{attempt.state === "unknown" ? <button type="button" className="etf-refresh" disabled={busy || !context} onClick={() => void reconcile(entry.operationId)}>Reconcile signature before any retry</button> : null}</article>))}</div>}
     </section>
     <footer className="etf-footer"><span>LIVE SOLANA DEVNET · RPC CONFIRMATION REQUIRED</span><span>Manual poke is eligibility-only · swap requires a distinct funded trader · no success from submission alone</span></footer>
   </main>;
