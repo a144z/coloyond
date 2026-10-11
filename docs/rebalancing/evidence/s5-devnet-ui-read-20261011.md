@@ -73,3 +73,15 @@ At 2026-10-11 06:40:08 UTC, I refreshed the same browser route against the confi
 | Transaction state | No transaction, signature, wallet prompt, or token/share delta |
 
 The UI displayed `Test USD · synthetic / unbacked; not redeemable as USDC`, and showed no program or pool identity. The test profile's 60-second bound was not widened. This snapshot is not a freshness guarantee, admission decision, or evidence that the synthetic mint is backed by USD.
+
+## Sprint 5 transaction-console read
+
+At 2026-10-11 06:51:30 UTC, the new `/etf-devnet/transactions` route refreshed the configured RPC at confirmed slot `509817496`. Actual and expected genesis both matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The wallet was disconnected; no ETF program, accepted manifest/IDL, or pool was available. Every signing control remained disabled and there was no transaction or signature.
+
+| Candidate feed | Account owner / layout / identity | Verification | Age | Confidence / price | Diagnostic result |
+|---|---|---|---:|---:|---|
+| SOL/USD | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 181 seconds | 4 bps | Stale under the draft 60-second bound |
+| BTC/USD | `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 181 seconds | 9 bps | Stale; no Devnet BTC mint admitted |
+| USD/USD | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX`; Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`; 134-byte `PriceUpdateV2`; expected feed ID | Full | 263 seconds | 10 bps | Stale under the draft 60-second bound |
+
+The UI labels the Test USD mint synthetic, unbacked, and not redeemable as USDC. The draft 60-second/100-bps limits are not approved or program-enforced. This read proves only a point-in-time RPC observation and the route's blocked state, not wallet or transaction behavior. See the [time-boxed console handoff](s5-frontend-console-handoff-20261011.md) for the exact manual steps and remaining gates.
