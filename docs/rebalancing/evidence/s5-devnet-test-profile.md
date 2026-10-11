@@ -51,3 +51,19 @@ The candidate 30-bps fee and 3,000-bps cap do not show safe economics. Existing 
 - The colleague's [preserved blueprint](../../product/blueprints/no-backend-auto-rebalancing-multi-token-etf-solana-devnet.md) remains the historical proposal. Its three-asset 40/40/20 example, 30/500/1,000-bps fee table, and scheduled `rebalance()`-as-trade claim are not adopted by this recommendation.
 
 S0B and the S5A/S5D2 production-review gate remain open. The ETF program ID, program build/deployment, authority keys, strict policy schemas, approved asset manifest, freshness/confidence/exponent limits, seed tolerance, quote band and fee policy are not frozen. No deployment, pool initialization, seed, swap, or other wallet action is enabled by this draft. `poke` remains eligibility-only; it cannot transfer pool assets or create a counterparty. Scheduler execution is a separate unproven checkpoint, and any actual swap requires a distinct trader-funded transaction.
+
+## S5E implementation blockers and bounded integration recommendations
+
+S5E code, client readers, frontend composition and host/Localnet validation may proceed against draft inputs. The draft is not a Devnet authorization. Until S5A/S0B/S5D2 review closes, fail closed for deployment, pool initialization, seed, swaps and funded use. In particular, a live seed/swap needs a fresh admitted feed under an approved policy; the latest fixed-feed Devnet evidence is stale under the 60-second diagnostic, and that ceiling must not be widened to manufacture a passing result.
+
+The following compatibility rules are recommended as explicit S5A decisions rather than silently selected implementation defaults:
+
+| Integration issue | Bounded recommendation | Gate / effect |
+|---|---|---|
+| Identity crate accepts zero-weight legs; S5B math rejects weights below 100 bps | Require every configured weight to be at least 100 bps and require the exact sum to remain 10,000 bps, matching the already-tested math domain | The identity validator and its boundary tests must enforce the same floor before S5E can accept a config. This does not change any share or weighted-swap formula. |
+| Oracle helper returns an 18-decimal USD mark while S5B math uses `USD_VALUE_SCALE = 10^12` | Keep the oracle's validated raw mantissa/exponent and pass those with the mint decimals directly to the tested `normalize_usd_value` path; do not round through `to_usd_fixed()` and then rescale | Confirm with cross-crate boundary vectors before any on-chain value is used for seed or swap. The existing S5B floor rounding remains authoritative. |
+| Opaque fee/risk parameter byte vectors do not define an executable policy | Define strict versioned schemas before accepting a risk-increasing config; reject unknown IDs, lengths, or fields | Until reviewed, no candidate fee, age, confidence, exponent, size cap, quote band or seed tolerance is production policy. |
+| Exact authorities, program ID/build, and variable account ABI are not finalized | Keep them explicit in the deployment/IDL contract; do not substitute generated placeholders or client defaults | Blocks a verified Devnet deployment and transaction builder; does not block a read-only screen or Localnet math/CPI work. |
+| Candidate fixed-feed observations are currently stale | Keep seed/swap disabled until fresh finalized account reads satisfy a reviewed limit and the on-chain parser accepts the exact Receiver-owned `PriceUpdateV2`, feed ID, Full level, owner, and fixed-address derivation | The user must not be prompted to sign a transaction that cannot meet the same on-chain checks. |
+
+These recommendations make the existing Rust boundaries compose without altering the tested share formulas, checked arithmetic, custody limits, or fee-retention model. They remain draft until their evidence and policy owners record acceptance; a draft implementation must report an explicit blocked/unconfigured state rather than emulate a passing result.
