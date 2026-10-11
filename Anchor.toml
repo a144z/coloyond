@@ -12,6 +12,7 @@ coloyond_etf = "H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9"
 
 [programs.devnet]
 coloyond_vault = "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"
+coloyond_etf = "7ZdKkNAuCEHCNZaDEXoTFfqkqFJKDj5pKjvt2Sr136LP"
 
 [provider]
 cluster = "localnet"

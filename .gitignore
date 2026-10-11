@@ -9,3 +9,9 @@ node_modules/
 /.vite/
 /public/localnet-manifest.json
 __pycache__/
+devnet-test-keypair.json
+devnet-program-keypair.json
+devnet-test-keypair-array.json
+devnet-program-keypair-array.json
+/scratch/
+programs/coloyond-etf/target/

@@ -19,9 +19,9 @@ pub use instructions::{
     ProposeResume, RedeemInKind, RedeemResultV1, ResumeRiskAfterDelay, SeedPool, SwapExactIn,
 };
 
-// Draft Localnet build ID only. It has no deployment key and must be replaced
-// after the S5A program-ID review; no Devnet binary may use this address.
-declare_id!("H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9");
+// Devnet program ID approved for the S5A bring-up (keypair: gitignored devnet-program-keypair.json).
+// Must be replaced at the mainnet review; no other cluster may reuse this address.
+declare_id!("7ZdKkNAuCEHCNZaDEXoTFfqkqFJKDj5pKjvt2Sr136LP");
 
 #[program]
 pub mod coloyond_etf {
