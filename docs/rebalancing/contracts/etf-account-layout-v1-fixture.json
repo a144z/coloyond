@@ -1,0 +1,98 @@
+{
+  "schema": "etf-account-layout-v1",
+  "fixtureOnly": true,
+  "warning": "Structural S5A sizing proposal only. It is not a frozen IDL, deployment manifest, policy, or approval to implement S5E.",
+  "limits": {
+    "minAssets": 2,
+    "maxAssets": 3,
+    "maxFeePolicyParamsBytes": 256,
+    "maxRiskPolicyParamsBytes": 256,
+    "maxCanonicalConfigBytes": 1155
+  },
+  "canonicalConfigExpectedBytes": 486,
+  "accounts": {
+    "EtfPoolV1": {
+      "anchorDiscriminatorHex": "5129cb13d2cb328d",
+      "fieldsAfterDiscriminator": [
+        { "name": "version:u8", "bytes": 1 },
+        { "name": "bump:u8", "bytes": 1 },
+        { "name": "config_hash:[u8;32]", "bytes": 32 },
+        { "name": "config_bytes:Vec<u8> (u32 length + max payload)", "bytes": 1159 },
+        { "name": "share_mint:Pubkey", "bytes": 32 },
+        { "name": "initializer:Pubkey", "bytes": 32 }
+      ],
+      "space": 1265
+    },
+    "EtfPoolStateV1": {
+      "anchorDiscriminatorHex": "210c5772838a970a",
+      "fieldsAfterDiscriminator": [
+        { "name": "version:u8", "bytes": 1 },
+        { "name": "bump:u8", "bytes": 1 },
+        { "name": "pool:Pubkey", "bytes": 32 },
+        { "name": "current_governance:Pubkey", "bytes": 32 },
+        { "name": "current_guardian:Pubkey", "bytes": 32 },
+        { "name": "lifecycle:PoolLifecycleV1", "bytes": 1 },
+        { "name": "risk_paused:bool", "bytes": 1 },
+        { "name": "sequence:u64", "bytes": 8 },
+        { "name": "last_observation:Option<ObservationSummaryV1> max", "bytes": 44 },
+        { "name": "pending_resume:Option<PendingResumeV1> max", "bytes": 49 },
+        { "name": "pending_handoff:Option<PendingHandoffV1> max", "bytes": 82 },
+        { "name": "scheduler_enabled:bool", "bytes": 1 },
+        { "name": "scheduler_generation:u64", "bytes": 8 }
+      ],
+      "space": 300
+    },
+    "EtfAssetStateV1": {
+      "anchorDiscriminatorHex": "7c57605413067b6d",
+      "fieldsAfterDiscriminator": [
+        { "name": "version:u8", "bytes": 1 },
+        { "name": "bump:u8", "bytes": 1 },
+        { "name": "pool:Pubkey", "bytes": 32 },
+        { "name": "asset_index:u8", "bytes": 1 },
+        { "name": "cumulative_fee_base_units:u128", "bytes": 16 }
+      ],
+      "space": 59
+    },
+    "classicSplMint": {
+      "space": 82
+    },
+    "classicSplTokenAccount": {
+      "space": 165
+    }
+  },
+  "calculation": {
+    "assetConfigBytes": 164,
+    "canonicalConfigFixedBytesWithoutParams": 151,
+    "poolIdentityFixedBytesIncludingAnchorDiscriminator": 110,
+    "poolStateMaximumOptionBytes": {
+      "observation": 44,
+      "resume": 49,
+      "handoff": 82
+    },
+    "poolStateAllOptionsNoneSerializedBytes": 128,
+    "poolStateFixedAllocationBytes": 300,
+    "poolStateUnusedTailMustBeZero": true,
+    "assetStateFixedBytesIncludingAnchorDiscriminator": 59
+  },
+  "enumTags": {
+    "PoolLifecycleV1": {
+      "Unseeded": 0,
+      "Active": 1,
+      "Closed": 2
+    },
+    "AuthorityRoleV1": {
+      "Governance": 0,
+      "EmergencyGuardian": 1
+    },
+    "OracleModeV1": {
+      "PushFeed": 0,
+      "ReceiverFull": 1
+    }
+  },
+  "boundaryCases": {
+    "threeAssetsAndMaxParamsConfigBytes": 1155,
+    "oneByteOverEitherPolicyParamsRejected": true,
+    "configTrailingBytesRejected": true,
+    "undersizedOrOversizedDeclaredConfigRejected": true
+  }
+}
