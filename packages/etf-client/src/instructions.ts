@@ -210,7 +210,7 @@ export function buildEligibilityPokeInstruction(context: VerifiedEtfManifest, sn
 function assertGovernanceSnapshot(context: VerifiedEtfManifest, snapshot: VerifiedEtfSnapshot, expectedSequence: bigint): void {
   verifySnapshot(context, snapshot);
   if (snapshot.identity.pool !== context.addresses.pool.toBase58() || snapshot.identity.poolState !== context.addresses.poolState.toBase58() || snapshot.state.pool !== snapshot.identity.pool) throw new Error("resume_pool_snapshot_identity_mismatch");
-  if (snapshot.identity.currentGovernance !== snapshot.state.currentGovernance || snapshot.state.currentGovernance !== context.config.initialGovernanceAuthority.toBase58()) throw new Error("resume_governance_snapshot_identity_mismatch");
+  if (snapshot.identity.currentGovernance !== snapshot.state.currentGovernance) throw new Error("resume_governance_snapshot_identity_mismatch");
   if (context.config.governanceDelaySeconds !== 86_400n) throw new Error("resume_delay_config_mismatch");
   u64(expectedSequence, "expected_sequence");
   if (BigInt(snapshot.state.sequence) !== expectedSequence) throw new Error("resume_pool_state_sequence_stale");
