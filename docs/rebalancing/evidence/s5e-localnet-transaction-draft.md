@@ -154,3 +154,45 @@ The harness now supplies a wrong second-asset-state PDA after the Anchor account
 | Derived pool accounts | All absent after rejection |
 
 Validation: `node --check tools/etf-localnet/run.cjs`, `bash -n tools/etf-localnet/run.sh`, `git diff --check`, and `NODE_PATH="$PWD/node_modules" COLOYOND_ETF_LOCALNET_HOME=/private/tmp/s5e-etf-localnet-atomicity-approved ./tools/etf-localnet/run.sh` passed. The latter built the SBF binary offline, ran signed Localnet transactions, reconciled their confirmed RPC results, and stopped the validator. The run is **Localnet-only atomicity evidence**; it does not prove Pyth authenticity, policy acceptance, successful seed/deposit/redemption/swap, or Devnet behavior.
+
+## Synthetic Active-pool liquidity and pause-safe exit — 11 October 2026
+
+The harness now injects a disposable Active-pool fixture into the fresh Localnet genesis, in addition to its separately initialized Unseeded pool. This lets actual SBF/SPL instructions exercise deposit/refund, a second-token CPI failure after the first token CPI, guardian pause, and in-kind redemption while paused. The Active state and reserves are synthetic genesis data; this does **not** represent a successfully seeded pool. Mints are unbacked local test tokens and no oracle data is loaded.
+
+Validation command:
+
+```sh
+node --check tools/etf-localnet/run.cjs
+bash -n tools/etf-localnet/run.sh
+NODE_PATH="$PWD/node_modules" \
+  COLOYOND_ETF_LOCALNET_HOME=/private/tmp/s5e-etf-localnet-liquidity-20261011 \
+  ./tools/etf-localnet/run.sh
+git diff --check
+```
+
+The command exited `0` with `LOCALNET_ONLY_PASS`. The SBF binary built offline with cached platform tools v1.57. Existing LTO/syscall warnings were emitted; the validator started on loopback, confirmed the transactions, reconciled token balances and account sequence from RPC, then stopped. One initial attempt found the host Bash did not provide `mapfile`; replacing it with a Bash 3-compatible loop exposed a missing final TSV fixture row. The fixture writer now terminates the row list with a newline. The verified rerun below includes both injected token accounts.
+
+Observed fixture identities:
+
+| Item | Value |
+|---|---|
+| Localnet genesis hash | `BEhRKDt3oCokK9A93hb9HjhVECXVXMhgFEEmDryycTCQ` |
+| Draft ETF program | `H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9` |
+| Synthetic Active pool / state | `22Ae8cPyhHcJLnkZYRi6m9aKofmwh2qvQT18WCG1Az9D` / `CXY58WvW6mtXs6dAYjpB5ys7oHUVJf2coKgjBk7gi1d8` |
+| Synthetic share mint | `FwhgZY7mLTU1AbNim1x32VoRyWLEZJ627shvWRMUHW85` |
+| Synthetic input mints | `5k6xDe2pG3mBw1P6EDJQ9Kp8EFQW2ymj3Pj3V3YfqGDF` (9 decimals), `3iaV9adkMiJB15jUpnRNXjGdcN4FSnM9ZHcCguAsiUdu` (6 decimals); both unbacked |
+
+| Operation | Confirmed signature | Slot | Transaction fee |
+|---|---|---:|---:|
+| Proportional deposit | `wrSzVjQRhQJg3yYEcATRzvJqJeKFD2sqpCPERebtBHns7EWnatPudAUcRAFpkQFp4B4KSrRGpt73VoyzQ133cBi` | 12 | 5,000 lamports |
+| Underfunded second-token deposit (rejected) | `2giTHx43dcNhYeULL8Dx9XRQ6uDCZd3vJTosZ7yzxD31cWEk24Gvrb7sz3D47iLJjaryYFtYwyu8zKd6oCxe5uCr` | 13 | 5,000 lamports |
+| Guardian risk pause | `61kVjSJRDKkm3mrjqBuj8YEmAKvXeWAkBKZK45NKMUZzQ1CBSddtb4UdxUaghTWBRwYKcpGRWELikPoYsKhk4YcV` | 14 | 5,000 lamports |
+| In-kind redemption while paused | `4RQhQmY6a9XjVv97qEj4skjvo1SCthxrfx8QtH4D2aBg2AZgZHmn9K8EYMqmStyesn54y8s3QbvuNSHJM6oTJF8q` | 15 | 5,000 lamports |
+
+Deposit was capped at `[50,000,000, 100,000]` base units. It consumed `[50,000,000, 50,000]`, refunded `[0, 50,000]`, and minted 50,000 shares. User token balances changed from `[100,000,000, 60,000]` to `[50,000,000, 10,000]`; custody changed from `[1,000,000,000, 1,000,000]` to `[1,050,000,000, 1,050,000]`; user shares changed from `100,000` to `150,000`; total share supply changed from `1,000,000` to `1,050,000`. Pool sequence advanced to 1.
+
+The next confirmed deposit attempted `[30,000,000, 50,000]` when the user's second token balance was only 10,000. The SBF path failed with classic SPL Token custom error 1 on the second transfer. RPC readback showed both user token balances, both custody balances, share balance, total share supply, and pool-state bytes unchanged from before that failed transaction. Only the 5,000-lamport network fee was charged.
+
+The guardian then paused risk actions (sequence 2). With the pause still set, redeeming 25,000 shares returned `[25,000,000, 25,000]` base units in kind; the share supply fell to `1,025,000`, and sequence advanced to 3. The pool remained Active and risk-paused. This is evidence for the existing redeem handler's pause-safe behavior in this synthetic Localnet scenario.
+
+This additional evidence closes only the local synthetic Active-pool deposit/refund, partial-CPI rollback, pause, and redemption test gap. The separately initialized pool's seed remains rejected because its Localnet oracle accounts have no valid Pyth data; risk-increasing seed/swap handlers remain gated by `PolicyNotFrozen`. No Devnet wallet transaction, real pool seed, oracle verification, admitted asset, fee-policy result, or scheduler execution is established.

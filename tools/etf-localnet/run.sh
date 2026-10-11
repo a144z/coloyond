@@ -13,8 +13,23 @@ rpc_url="http://127.0.0.1:$rpc_port"
 program_id="H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9"
 program_so="$repo_root/target/deploy/coloyond_etf.so"
 runtime_dir="${COLOYOND_ETF_LOCALNET_HOME:-${TMPDIR:-/tmp}/coloyond-etf-localnet}"
-ledger_dir="$runtime_dir/ledger"
-log_file="$runtime_dir/validator.log"
+run_dir="$runtime_dir/run-$$"
+ledger_dir="$run_dir/ledger"
+log_file="$run_dir/validator.log"
+fixture_dir="$run_dir/genesis-accounts"
+fixture_manifest="$run_dir/active-pool-fixture.json"
+wallet_file="$run_dir/throwaway-wallet.json"
+validator_pid=""
+
+cleanup() {
+  if [[ -n "$validator_pid" ]]; then
+    kill "$validator_pid" 2>/dev/null || true
+    wait "$validator_pid" 2>/dev/null || true
+    echo "Stopped Localnet validator. Log retained at $log_file."
+  fi
+  rm -f "$wallet_file"
+}
+trap cleanup EXIT INT TERM
 
 for tool in cargo-build-sbf solana-test-validator; do
   if [[ ! -x "$solana_bin_dir/$tool" ]]; then
@@ -28,8 +43,8 @@ if [[ ! -x "$sbf_rustc" ]]; then
 fi
 
 export PATH="$solana_bin_dir:$(dirname "$sbf_rustc"):$PATH"
-mkdir -p "$runtime_dir"
-chmod 700 "$runtime_dir"
+mkdir -p "$run_dir" "$fixture_dir"
+chmod 700 "$run_dir" "$fixture_dir"
 if solana cluster-version --url "$rpc_url" >/dev/null 2>&1; then
   echo "Refusing to replace the RPC service already listening at $rpc_url. Stop it or select a different COLOYOND_ETF_LOCALNET_RPC_PORT." >&2
   exit 1
@@ -48,22 +63,27 @@ if [[ ! -s "$program_so" ]]; then
   exit 1
 fi
 
+echo "Preparing disposable genesis-injected Active-pool fixtures (Localnet only)..."
+node "$repo_root/tools/etf-localnet/run.cjs" --prepare-genesis-fixture \
+  "$fixture_dir" "$fixture_manifest" "$wallet_file"
+validator_args=(
+  --reset --ledger "$ledger_dir"
+  --bind-address 127.0.0.1
+  --rpc-port "$rpc_port"
+  --faucet-port "$faucet_port"
+  --gossip-port "$gossip_port"
+  --dynamic-port-range "$dynamic_ports"
+  --bpf-program "$program_id" "$program_so"
+)
+while IFS=$'\t' read -r address account_file; do
+  [[ -n "$address" ]] || continue
+  validator_args+=(--account "$address" "$account_file")
+done < "$fixture_dir/accounts.tsv"
+
 echo "Starting isolated Localnet at $rpc_url (no Devnet/Mainnet RPC is used)..."
-solana-test-validator --reset --ledger "$ledger_dir" \
-  --bind-address 127.0.0.1 \
-  --rpc-port "$rpc_port" \
-  --faucet-port "$faucet_port" \
-  --gossip-port "$gossip_port" \
-  --dynamic-port-range "$dynamic_ports" \
-  --bpf-program "$program_id" "$program_so" \
+solana-test-validator "${validator_args[@]}" \
   >"$log_file" 2>&1 &
 validator_pid=$!
-cleanup() {
-  kill "$validator_pid" 2>/dev/null || true
-  wait "$validator_pid" 2>/dev/null || true
-  echo "Stopped Localnet validator. Log retained at $log_file."
-}
-trap cleanup EXIT INT TERM
 
 ready=false
 for _ in $(seq 1 60); do
@@ -86,5 +106,7 @@ fi
 
 export COLOYOND_ETF_LOCALNET_RPC_URL="$rpc_url"
 export COLOYOND_ETF_LOCALNET_PROGRAM_ID="$program_id"
+export COLOYOND_ETF_LOCALNET_FIXTURE_MANIFEST="$fixture_manifest"
+export COLOYOND_ETF_LOCALNET_WALLET_FILE="$wallet_file"
 export NODE_PATH="${NODE_PATH:-$repo_root/node_modules}"
 node "$repo_root/tools/etf-localnet/run.cjs"
