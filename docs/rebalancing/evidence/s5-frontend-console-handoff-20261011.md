@@ -1,9 +1,10 @@
 # Sprint 5 Devnet frontend console handoff
 
-**Captured:** 2026-10-11 06:51 UTC
+**Updated:** 2026-10-11 07:15 UTC
 **Time box:** started 06:36:16 UTC; hard deadline 07:36:16 UTC; implementation cutoff 07:31:16 UTC.
 **Branch:** `feature/portfolio-rebalancing`
-**Latest pushed implementation commit:** `edba616d0132d770cb3ae0a30135af7116d436fa` — `feat(etf-ui): add fail-closed Devnet transaction console`
+**Feature branch base before this handoff refresh:** `782b1ae752e3dcf4a7f11871b1775bf278e71348` — `docs(s5): update console safety checkpoint status`
+**Console implementation commit:** `edba616d0132d770cb3ae0a30135af7116d436fa` — `feat(etf-ui): add fail-closed Devnet transaction console`
 **Prior pushed policy/read evidence commit:** `d89c0af45db05f0edc7488cb9032a12b34e36ed1` — `docs(s5): bound devnet test profile and live read`
 
 Both commits use author and committer `wlkit <114655923+wlkit@users.noreply.github.com>`. The implementation commit was pushed to `origin/feature/portfolio-rebalancing`; `main` was not targeted. The full colleague proposal remains preserved in [the blueprint](../../product/blueprints/no-backend-auto-rebalancing-multi-token-etf-solana-devnet.md), and is not replaced by this status note.
@@ -41,12 +42,26 @@ The fix changed `src/ui/etf/EtfTransactionsPage.tsx` and `src/ui/etf/IndexedDbSu
 
 The UI now requires browser cross-tab locking before it enables signing. No wallet was connected, no transaction was signed, and the absence of the accepted deployment manifest continues to block every ETF transaction.
 
+## Latest live console check
+
+At 2026-10-11 07:15:32 UTC, the existing frontend route refreshed against `https://api.devnet.solana.com` at confirmed slot `509823543`. It continued to verify the expected Devnet genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; no wallet was connected. The accepted deployment manifest was unavailable, the program and pool had no verified identity, every transaction action remained disabled, and the signature journal had no unresolved entries. No transaction was prepared, signed, submitted, or confirmed.
+
+| Candidate read | Current diagnostic observation | Admission status |
+|---|---|---|
+| SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Receiver-owned 134-byte `PriceUpdateV2`, expected feed ID, `Full`; 19 seconds old, 4 bps confidence | Fresh only under the unapproved draft diagnostic; candidate, not admitted |
+| BTC/USD `4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo` | Receiver-owned 134-byte `PriceUpdateV2`, expected feed ID, `Full`; 652 seconds old, 8 bps confidence | Stale under draft diagnostic; candidate only, and no BTC mint is admitted |
+| USD/USD `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Receiver-owned 134-byte `PriceUpdateV2`, expected feed ID, `Full`; 1,322 seconds old, 10 bps confidence | Stale under draft diagnostic; reference only and does not prove Test USD backing |
+
+The generated draft IDL exists at repository path `idl/coloyond_etf.json`, but the frontend's `/idl/coloyond_etf.json` public URL has no corresponding file under `public/`. The expected `/etf-devnet/deployment-manifest.json` is also absent. The console correctly remains gated at the missing accepted manifest; publishing build artifacts is still part of the deployment handoff and must not be replaced with a guessed or draft-as-accepted manifest.
+
 ## Validation
 
 - `node --import tsx --test packages/etf-client/test/*.test.ts` — **73/73 passed**.
 - `npm run typecheck` — passed.
 - `npm run build` — passed. Vite reported the existing large JavaScript chunk warning.
 - `git diff HEAD --check` — passed before commit.
+- Rerun at 2026-10-11 07:16 UTC: client suite **73/73**, journal-lock suite **3/3**, application typecheck, production build, and `git diff --check` all passed; the build retains the large-chunk warning.
+- `git fetch origin --prune` at 2026-10-11 07:16 UTC — no incoming branch changes; local branch matched `origin/feature/portfolio-rebalancing` before this handoff update.
 - Live browser at `http://127.0.0.1:5173/etf-devnet/transactions` — loaded the real RPC snapshot and showed the genesis verified, the missing accepted manifest, all signing controls disabled, and candidate oracle/mint evidence. No wallet was connected and no transaction was prepared or signed.
 - `npm run test --prefix packages/etf-client` cannot create tsx's temporary IPC socket in this shell (`listen EPERM`). Running the same tests through Node's test runner, as above, succeeds.
 
