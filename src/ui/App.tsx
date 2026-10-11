@@ -1,12 +1,17 @@
 import { ColoyondApp } from "./ColoyondApp.js";
 import { AuctionWorkbench } from "./rebalancing/AuctionWorkbench.js";
 import { SymmetryDevnetPage } from "./portfolio/SymmetryDesk.js";
+import { DevnetReadPage } from "./etf/DevnetReadPage.js";
 
 export function App() {
-  if (window.location.pathname.replace(/\/$/, "") === "/rebalancing-lab") {
+  const path = window.location.pathname.replace(/\/$/, "");
+  if (path === "/etf-devnet") {
+    return <DevnetReadPage />;
+  }
+  if (path === "/rebalancing-lab") {
     return <AuctionWorkbench />;
   }
-  if (window.location.pathname.replace(/\/$/, "") === "/symmetry-devnet") {
+  if (path === "/symmetry-devnet") {
     return <SymmetryDevnetPage />;
   }
   return <ColoyondApp />;
