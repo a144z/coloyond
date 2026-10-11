@@ -102,7 +102,7 @@ The current repository pins `pyth-solana-receiver-sdk = 1.2.0`, whose Rust `Pric
 
 The public TypeScript SDK's `buildUpdatePriceFeedInstructions` targets the separate PythPushOracle program and derives the fixed PDA from shard ID and feed ID. Its `fetchPriceFeedAccount` then decodes that PDA using the Receiver `priceUpdateV2` account coder. The fixed/ephemeral distinction therefore concerns address derivation, lifecycle and updater path; it does not by itself imply a different serialized Rust type. The direct observation asserts Full verification in the actual decoded account. The Pyth guide currently documents Receiver SDK compatibility up to Anchor 0.31.1 while this repository pins Anchor 0.32.1; native tests and the live account probe compile with the pinned versions, but an ETF SBF consumer transaction remains for S5H after S5E.
 
-No S5A oracle mode change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and fresh/stale fail-closed behavior across several point-in-time Devnet reads. The latest confirmed feed slot `509731704` had all three feeds within the diagnostic 60-second age ceiling; see the latest replayable read below. Earlier slots, including `509714460`, had all three feeds stale, and slot `509680211` had only SOL fresh (11 seconds) while BTC and USDC were stale at 309 seconds. This variation is not a freshness guarantee. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
+No S5A oracle mode change is proposed: fixed sponsored shard-0 feeds remain primary because they match the always-current read model and official SDK update path. S5C has directly confirmed account owner, SDK layout, Full verification, embedded feed ID, positive prices, confidence, and fresh/stale fail-closed behavior across several point-in-time Devnet reads. The latest confirmed feed slot `509737667` had only SOL within the diagnostic 60-second age ceiling (6 seconds); BTC and USDC were 61 seconds old and rejected. The earlier `509731704` basket was within the diagnostic ceiling, while slots such as `509714460` had all three feeds stale. This variation is not a freshness guarantee. Before acceptance, freeze confidence/exponent limits, rerun the probe at the chosen policy, and consume the data in the reviewed ETF SBF build. If a candidate fails a future policy or parser check, return a reviewed S5A amendment; do not hand-parse production account bytes or fall back to Partial verification.
 
 
 ## Probe response integrity — offline checks
@@ -185,7 +185,7 @@ All three decoded accounts have the expected Receiver owner, 134-byte allocation
 
 
 
-## Latest replayable current-cluster feed read — 11 October 2026
+## Previous replayable current-cluster feed read — 11 October 2026
 
 The read-only probe captured the confirmed-commitment Devnet JSON-RPC exchanges in [the raw replay fixture](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-509731704-20261011T011029.173938Z.json). At account-context slot `509731704`, cluster time was `1791681027` (2026-10-11 01:10:27 UTC), against genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. Offline replay through the pinned Rust SDK reproduced all three account decodes and adapter results. All accounts are owned by the Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`, have 134-byte allocations, the expected embedded feed IDs, and `Full` verification.
 
@@ -196,6 +196,18 @@ The read-only probe captured the confirmed-commitment Devnet JSON-RPC exchanges 
 | USDC/USD | `99987602 ± 92148`, exponent `-8` | `1791680992` | 35 s | 10 bps | pass | `94924fff46f0d4720c25ff724cfae1406d91ca1e5ce5cb3e69c45b2428bf2516` |
 
 The adapter pass used only the diagnostic maximum age of 60 seconds and `u16::MAX` confidence bps. These values do not constitute approved production limits. This single fresh basket does not erase earlier stale observations or establish an updater SLA. Replay validates the captured bytes and pinned parser, not current liveness, SPL-mint backing, approved policy, S5C acceptance, or S5E/Devnet admission. No transaction was sent.
+
+## Latest replayable current-cluster feed read — 11 October 2026
+
+The read-only probe captured confirmed-commitment Devnet JSON-RPC exchanges in [the raw replay fixture](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-509737667-20261011T013414.241319Z.json). At account-context slot `509737667`, cluster time was `1791682452` (2026-10-11 01:34:12 UTC), against genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. Offline replay through the pinned Rust SDK reproduced all three decodes. All accounts remain Receiver-owned, 134 bytes, bound to the expected feed IDs and `Full` verified.
+
+| Feed | Price ± confidence × 10^exponent | Publish time | Age | Confidence | Adapter at diagnostic limits | Account-data SHA-256 |
+|---|---:|---:|---:|---:|---|---|
+| SOL/USD | `11011735457 ± 3287115`, exponent `-8` | `1791682446` | 6 s | 3 bps | pass | `96e9f3601af1066ca4972c04b825867bc30625a1e355e4c48de0f05c111137b8` |
+| BTC/USD | `8296392973700 ± 6737165704`, exponent `-8` | `1791682391` | 61 s | 9 bps | fail: stale | `137c8bf24f7bab7e68ce5c065fcb324902f00879a75c5a9568c6c804fd472274` |
+| USDC/USD | `99988470 ± 91529`, exponent `-8` | `1791682391` | 61 s | 10 bps | fail: stale | `1246e962ba86a2fba047c9f62b6ea033aa0266df9b2aeb37d38850f4ae5281b3` |
+
+The adapter uses diagnostic limits only: maximum age 60 seconds and maximum confidence `u16::MAX` bps. SOL passes this diagnostic check, while BTC and USDC are one second too old, so the complete basket does not pass. This single observation is not an approved risk threshold, freshness SLA, publisher liveness guarantee, SPL-mint backing claim, or S5C/S5E admission. No transaction was sent.
 
 ## Primary sources
 
