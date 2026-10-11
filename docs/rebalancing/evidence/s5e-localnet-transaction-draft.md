@@ -137,3 +137,20 @@ From a checkout that contains the `cf4fcbc` mode correction and the harness file
 The harness should report actual initialization/readbacks plus rejection reconciliation on the current source. It remains a Localnet check. The next user-facing milestone still requires accepted S5A policy, exact admitted assets/oracle accounts and a reviewed deployment manifest, followed by an actual wallet-signed Devnet transaction. None of that is proven by this evidence.
 
 For manual harness steps, the user does not need to sign: the script creates a throwaway signer locally. To inspect a confirmed signature while the validator is running, use the emitted local RPC URL and signature with `solana confirm -v <signature> --url http://127.0.0.1:18899`; the automatic run stops the validator on completion, so retain the JSON output and log for evidence.
+
+## Late initialization failure and atomic rollback — 11 October 2026
+
+The harness now supplies a wrong second-asset-state PDA after the Anchor account constraints have passed. The SBF handler creates the pool, pool state, share mint, and first asset's custody/state, then rejects the second asset group with custom error `6004` (`InvalidRemainingAccounts`). The confirmed failed transaction rolled the earlier allocations back: every pool/state/share/custody/asset-state PDA was absent on RPC afterward, both user token balances were unchanged, and payer lamport loss exactly matched the transaction fee.
+
+| Evidence | Observed value |
+|---|---|
+| Source branch / program source base | `feature/portfolio-rebalancing` / `204d3087da2c8c31b23ddc31de4a1471fce26d94` |
+| SBF artifact SHA-256 | `30716d8bf9cdff633f3166ce90bdc0ed869235bd05a6738d64339262e9efea04` |
+| Localnet genesis | `8BrDubCCfVZVpYV5Xkv1pwyxD8cVo682ygpHpNVzWCsZ` |
+| Rejected signature / slot | `4GrxHBNGpz9MBwz6i6Yq5iCyxRRbXgdbpifa8a7UVnPWq5Sa6isHhYD5zhyPpTwxkMjfxQmSW14DRUUE553MBvRF` / `7` |
+| Payer lamports before / after | `9,992,968,240` / `9,992,963,240` |
+| Transaction fee | `5,000` lamports; payer loss equals fee |
+| User token balances | `1,000,000,000` and `1,000,000` base units before and after |
+| Derived pool accounts | All absent after rejection |
+
+Validation: `node --check tools/etf-localnet/run.cjs`, `bash -n tools/etf-localnet/run.sh`, `git diff --check`, and `NODE_PATH="$PWD/node_modules" COLOYOND_ETF_LOCALNET_HOME=/private/tmp/s5e-etf-localnet-atomicity-approved ./tools/etf-localnet/run.sh` passed. The latter built the SBF binary offline, ran signed Localnet transactions, reconciled their confirmed RPC results, and stopped the validator. The run is **Localnet-only atomicity evidence**; it does not prove Pyth authenticity, policy acceptance, successful seed/deposit/redemption/swap, or Devnet behavior.

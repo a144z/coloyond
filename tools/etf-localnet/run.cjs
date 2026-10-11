@@ -194,7 +194,7 @@ function mintToInstruction(mint, destination, authority, amount) {
   });
 }
 
-function initInstruction(config, pdas, mints, payer, badState = null) {
+function initInstruction(config, pdas, mints, payer, badState = null, badAssetStateIndex = null) {
   const data = Buffer.concat([
     instructionDiscriminator("initialize_pool"),
     config.hash,
@@ -214,7 +214,11 @@ function initInstruction(config, pdas, mints, payer, badState = null) {
     keys.push(
       { pubkey: mints[index].publicKey, isSigner: false, isWritable: false },
       { pubkey: pdas.custodies[index], isSigner: false, isWritable: true },
-      { pubkey: pdas.assetStates[index], isSigner: false, isWritable: true },
+      {
+        pubkey: index === badAssetStateIndex ? Keypair.generate().publicKey : pdas.assetStates[index],
+        isSigner: false,
+        isWritable: true,
+      },
     );
   }
   return new TransactionInstruction({ programId: PROGRAM_ID, keys, data });
@@ -426,6 +430,28 @@ async function main() {
   const badStateBalancesAfter = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
   ensure(JSON.stringify(tokenBeforeBadState) === JSON.stringify(badStateBalancesAfter), "Wrong-state-PDA rejection changed user token balances");
 
+  // Fail only after the handler has created the pool, pool state, share mint,
+  // and first asset's custody/state. Solana transaction atomicity must remove
+  // every partial account and return all rent, leaving only the network fee.
+  const tokenBeforeLateInit = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
+  const payerLamportsBeforeLateInit = await connection.getBalance(payer.publicKey, "confirmed");
+  const lateInitReceipt = await sendTransaction(
+    connection,
+    payer,
+    new Transaction().add(initInstruction(config, pdas, mints, payer, null, 1)),
+    [],
+    "error",
+  );
+  ensure(customErrorCode(lateInitReceipt.error) === 6004, "Late init rejection did not reach the second asset-state account check");
+  await assertAbsent(connection, accountAddresses, "late second-asset-state rejection");
+  const tokenAfterLateInit = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
+  ensure(JSON.stringify(tokenBeforeLateInit) === JSON.stringify(tokenAfterLateInit), "Late init rejection changed user token balances");
+  const payerLamportsAfterLateInit = await connection.getBalance(payer.publicKey, "confirmed");
+  ensure(
+    BigInt(payerLamportsBeforeLateInit) - BigInt(payerLamportsAfterLateInit) === BigInt(lateInitReceipt.feeLamports),
+    "Late init rollback did not restore rent; payer loss must equal the transaction fee",
+  );
+
   const tokenBeforeInit = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
   const initReceipt = await sendTransaction(connection, payer, new Transaction().add(initInstruction(config, pdas, mints, payer)), [], "either");
   if (initReceipt.error) {
@@ -534,10 +560,22 @@ async function main() {
     custody: pdas.custodies.map((address) => address.toBase58()),
     assetState: pdas.assetStates.map((address) => address.toBase58()),
     successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, createShareAtaReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
-    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, duplicateInitReceipt, seedReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    rejectedTransactions: [wrongFeedReceipt, badStateReceipt, lateInitReceipt, duplicateInitReceipt, seedReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    lateInitializationRollback: {
+      signature: lateInitReceipt.signature,
+      slot: lateInitReceipt.slot,
+      customErrorCode: customErrorCode(lateInitReceipt.error),
+      payerLamportsBefore: payerLamportsBeforeLateInit,
+      payerLamportsAfter: payerLamportsAfterLateInit,
+      transactionFeeLamports: lateInitReceipt.feeLamports,
+      payerLossEqualsTransactionFee: BigInt(payerLamportsBeforeLateInit) - BigInt(payerLamportsAfterLateInit) === BigInt(lateInitReceipt.feeLamports),
+      allDerivedAccountsAbsent: true,
+      tokenBalancesUnchanged: true,
+    },
     tokenBalanceChecks: [
       { action: "wrong-feed config rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeWrongFeed[index], after: wrongFeedBalancesAfter[index] })) },
       { action: "invalid pool-state PDA rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeBadState[index], after: badStateBalancesAfter[index] })) },
+      { action: "late second-asset-state rejection after partial PDA/SPL allocation", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeLateInit[index], after: tokenAfterLateInit[index] })) },
       { action: "duplicate initialization rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeDuplicate[index], after: duplicateTokenAfter[index] })) },
       { action: "seed rejected on absent Localnet oracle data", accounts: [...userTokenAccounts, ...pdas.custodies, shareAta].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeSeed[index], after: balancesAfterSeed[index] })) },
     ],
@@ -547,6 +585,7 @@ async function main() {
       "Pool/config/state/share/custody/asset-state PDA contents and allocations reconciled from RPC",
       "Wrong pinned feed config rejected with no derived accounts or token changes",
       "Invalid pool-state PDA rejected with no derived accounts or token changes",
+      "Second asset-state PDA rejected after partial init allocations; transaction rollback removed all derived accounts, restored rent, and preserved token balances",
       "Duplicate initialization rejected with all existing account data unchanged",
       "Seed attempt rejected on incomplete Localnet oracle accounts; token/share balances and pool state unchanged",
     ],
