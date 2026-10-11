@@ -239,3 +239,11 @@ The latest probe captured finalized Mainnet-beta slot `455479127` and Devnet slo
 - [Pyth Solana Rust account parser source](https://github.com/pyth-network/pyth-sdk-rs/blob/main/pyth-sdk-solana/src/state.rs)
 - [Pyth price safety guidance](https://docs.pyth.network/price-feeds/core/best-practices)
 - [Pyth confidence intervals and executable-price mitigations](https://docs.pyth.network/price-feeds/core/best-practices#confidence-intervals)
+
+## Three-read finalized Devnet refresh — 11 October 2026
+
+A bounded read-only refresh captured three consecutive finalized Devnet `getMultipleAccounts` batches at slots `509787793`, `509788333`, and `509788637`. The observations were about 128 seconds and 72 seconds apart. Each raw JSON-RPC exchange is preserved in [capture one](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-finalized-509787793-20261011T045330.069424Z.json), [capture two](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-finalized-509788333-20261011T045538.548085Z.json), and [capture three](../../../tools/rebalancing/etf-oracle-probe/snapshots/devnet-finalized-509788637-20261011T045650.654983Z.json). All three replay offline through the pinned SDK. Each batch reports the expected Receiver owner, 134-byte allocation, feed IDs, and `Full` verification.
+
+Across all three observations, account bytes and publish time remained unchanged: SOL/BTC/USDC publish time was `1791694334`; account-data SHA-256 values were `fc59481a4d9e0ea49027cd8228c5fc571ff2440dd934ac6766ac0aba04e6969b`, `08a391a35c7e2703b7173936bee817fa5c686582d26f8df0229ed42b2ba6dbaa`, and `6e2f455ec6f21d7eff084046cbbbe5ff1ec7908ee90deefa86f7c9996d76c54f`, respectively. The corresponding per-feed publish ages were 74, 203, and 274 seconds in every batch. Thus every feed failed the probe's diagnostic 60-second age check in all three reads; confidence ratios were 4/9/10 bps. No transaction was sent.
+
+These repeated point samples show that this fixed Devnet basket was stale during this short observation window. They do not establish a general availability or freshness SLA, identify publisher/updater root cause, prove Pyth-wide availability, select production age/confidence limits, or establish S0B/S5C/S5E admission. Keep the diagnostic 60-second ceiling unchanged pending reviewed risk and liveness evidence.
