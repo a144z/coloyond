@@ -57,3 +57,19 @@ At `2026-10-11 13:49:03 Asia/Hong_Kong`, the app-shell **Real ETF Devnet read** 
 | USD/USD `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Full | 231 seconds | 11 bps |
 
 The page showed the same exact embedded feed IDs, Receiver owner, and 134-byte layout as the expected accounts. Freshness/confidence policy remains unconfigured, so even the 21-second SOL observation is not an approved eligibility result. The Test USD mint remained labeled synthetic, unbacked, and not redeemable as USDC. This is one additional read snapshot, not evidence of continuous freshness, wallet connection, or transaction behavior.
+
+## Time-boxed Sprint 5 refresh
+
+At 2026-10-11 06:40:08 UTC, I refreshed the same browser route against the configured RPC. The request completed at confirmed slot `509814637`; the actual and expected Devnet genesis hashes both matched `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The result is a new point-in-time RPC observation, not a transaction proof.
+
+| Field | Fresh observation |
+|---|---|
+| Program / pool | Not configured / not deployed |
+| Connected wallet | None |
+| SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | Receiver owner and 134-byte `PriceUpdateV2`; expected feed ID; `Full`; age 10 seconds; confidence/price 4 bps |
+| USD/USD reference `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | Receiver owner and 134-byte `PriceUpdateV2`; expected feed ID; `Full`; age 82 seconds; confidence/price 9 bps |
+| Candidate asset mint | Test USD `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`; classic Token Program; 6 decimals; supply `16286767455804381005`; active mint authority `GrNg1XM2ctzeE2mXxXCfhcTUbejM8Z4z4wNVTy2FjMEz`; active freeze authority `CJtyoKSLrktozQzjERTiK3btQtiTK3nN4QrqGHLidyCT` |
+| Policy / eligibility | Freshness and confidence policy remained unconfigured. The 82-second USD reference fails the unchanged 60-second proposed test bound; no risk-increasing action is eligible. |
+| Transaction state | No transaction, signature, wallet prompt, or token/share delta |
+
+The UI displayed `Test USD · synthetic / unbacked; not redeemable as USDC`, and showed no program or pool identity. The test profile's 60-second bound was not widened. This snapshot is not a freshness guarantee, admission decision, or evidence that the synthetic mint is backed by USD.
