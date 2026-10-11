@@ -409,7 +409,8 @@ async function main() {
     "error",
   );
   await assertAbsent(connection, [wrongFeedPdas.pool, wrongFeedPdas.poolState, wrongFeedPdas.shareMint, ...wrongFeedPdas.custodies, ...wrongFeedPdas.assetStates], "wrong-feed config rejection");
-  ensure(JSON.stringify(tokenBeforeWrongFeed) === JSON.stringify(await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)))), "Wrong-feed rejection changed user token balances");
+  const wrongFeedBalancesAfter = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
+  ensure(JSON.stringify(tokenBeforeWrongFeed) === JSON.stringify(wrongFeedBalancesAfter), "Wrong-feed rejection changed user token balances");
 
   // A mismatched state PDA must fail Anchor account validation before init creates anything.
   const tokenBeforeBadState = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
@@ -422,7 +423,8 @@ async function main() {
     "error",
   );
   await assertAbsent(connection, accountAddresses, "wrong-state-PDA rejection");
-  ensure(JSON.stringify(tokenBeforeBadState) === JSON.stringify(await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)))), "Wrong-state-PDA rejection changed user token balances");
+  const badStateBalancesAfter = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
+  ensure(JSON.stringify(tokenBeforeBadState) === JSON.stringify(badStateBalancesAfter), "Wrong-state-PDA rejection changed user token balances");
 
   const tokenBeforeInit = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
   const initReceipt = await sendTransaction(connection, payer, new Transaction().add(initInstruction(config, pdas, mints, payer)), [], "either");
@@ -494,9 +496,12 @@ async function main() {
   }
 
   const duplicateBefore = await connection.getMultipleAccountsInfo([pdas.pool, pdas.poolState, pdas.shareMint, ...pdas.custodies, ...pdas.assetStates], "confirmed");
+  const tokenBeforeDuplicate = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
   const duplicateInitReceipt = await sendTransaction(connection, payer, new Transaction().add(initInstruction(config, pdas, mints, payer)), [], "error");
   const duplicateAfter = await connection.getMultipleAccountsInfo([pdas.pool, pdas.poolState, pdas.shareMint, ...pdas.custodies, ...pdas.assetStates], "confirmed");
   ensure(duplicateBefore.every((account, index) => account && duplicateAfter[index] && account.data.equals(duplicateAfter[index].data)), "Duplicate-init rejection changed derived account state");
+  const duplicateTokenAfter = await Promise.all(userTokenAccounts.map((address) => tokenAmount(connection, address)));
+  ensure(JSON.stringify(tokenBeforeDuplicate) === JSON.stringify(duplicateTokenAfter), "Duplicate-init rejection changed user token balances");
 
   const shareAta = associatedTokenAddress(payer.publicKey, pdas.shareMint);
   const createShareAtaReceipt = await sendTransaction(connection, payer, new Transaction().add(createAtaInstruction(payer.publicKey, shareAta, payer.publicKey, pdas.shareMint)));
@@ -530,6 +535,12 @@ async function main() {
     assetState: pdas.assetStates.map((address) => address.toBase58()),
     successfulTransactions: [mintReceipt, tokenReceipt, initReceipt, createShareAtaReceipt].map(({ signature, slot, feeLamports }) => ({ signature, slot, feeLamports })),
     rejectedTransactions: [wrongFeedReceipt, badStateReceipt, duplicateInitReceipt, seedReceipt].map(({ signature, slot, feeLamports, error }) => ({ signature, slot, feeLamports, error })),
+    tokenBalanceChecks: [
+      { action: "wrong-feed config rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeWrongFeed[index], after: wrongFeedBalancesAfter[index] })) },
+      { action: "invalid pool-state PDA rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeBadState[index], after: badStateBalancesAfter[index] })) },
+      { action: "duplicate initialization rejection", accounts: userTokenAccounts.map((address, index) => ({ address: address.toBase58(), before: tokenBeforeDuplicate[index], after: duplicateTokenAfter[index] })) },
+      { action: "seed rejected on absent Localnet oracle data", accounts: [...userTokenAccounts, ...pdas.custodies, shareAta].map((address, index) => ({ address: address.toBase58(), before: balancesBeforeSeed[index], after: balancesAfterSeed[index] })) },
+    ],
     checks: [
       "ETF SBF program loaded as executable in a fresh Localnet genesis",
       "Local wallet signed classic SPL mint setup and pool initialization transactions",
@@ -542,7 +553,7 @@ async function main() {
     gaps: [
       "No confirmed Devnet transaction or program deployment.",
       "No genuine Pyth feed update/Full verification was used; the Localnet seed rejection is caused by absent feed data.",
-      "Seed/deposit/redeem/swap are not a usable flow: the initialized pool starts paused, seed requires unpaused and then returns PolicyNotFrozen, and no resume instruction exists.",
+      "Delayed governance resume exists in the current draft, but this harness does not transact it. Seed/deposit/redeem/swap remain unusable: valid seed and swap still return PolicyNotFrozen, and seed did not reach that gate because Localnet has no Pyth account data.",
       "This harness does not validate fee/economic policy, approved mint/feed manifest, governance, or scheduler behavior.",
     ],
   };
