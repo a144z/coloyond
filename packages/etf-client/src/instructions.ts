@@ -10,7 +10,7 @@ const SYSTEM_PROGRAM = SystemProgram.programId;
 const ASSOCIATED_TOKEN_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 export type AssetWalletAccounts = Readonly<{ mint: string; tokenAccount: string }>;
-export type BuildOperation = Readonly<{ instruction: TransactionInstruction; action: "initialize" | "seed" | "deposit" | "redeem" | "swap" | "pause" | "poke"; riskIncreasing: boolean }>;
+export type BuildOperation = Readonly<{ instruction: TransactionInstruction; action: "initialize" | "seed" | "deposit" | "redeem" | "swap" | "pause" | "poke" | "resume_propose" | "resume_execute" | "resume_cancel"; riskIncreasing: boolean }>;
 
 function u64(value: bigint, label: string): Buffer {
   if (typeof value !== "bigint" || value < 0n || value > U64_MAX) throw new Error(`${label}_outside_u64`);
@@ -205,6 +205,60 @@ export function buildEligibilityPokeInstruction(context: VerifiedEtfManifest, sn
   // This surface intentionally contains no token program, custody, share mint, or counterparty account.
   const keys = [account(caller, true), account(context.addresses.pool), account(context.addresses.poolState, false, true), ...optionalFeedKeys(context)];
   return { instruction: instruction(context, "poke", keys, Buffer.alloc(0)), action: "poke", riskIncreasing: false };
+}
+
+function assertGovernanceSnapshot(context: VerifiedEtfManifest, snapshot: VerifiedEtfSnapshot, expectedSequence: bigint): void {
+  verifySnapshot(context, snapshot);
+  if (snapshot.identity.pool !== context.addresses.pool.toBase58() || snapshot.identity.poolState !== context.addresses.poolState.toBase58() || snapshot.state.pool !== snapshot.identity.pool) throw new Error("resume_pool_snapshot_identity_mismatch");
+  if (snapshot.identity.currentGovernance !== snapshot.state.currentGovernance) throw new Error("resume_governance_snapshot_identity_mismatch");
+  if (context.config.governanceDelaySeconds !== 86_400n) throw new Error("resume_delay_config_mismatch");
+  u64(expectedSequence, "expected_sequence");
+  if (BigInt(snapshot.state.sequence) !== expectedSequence) throw new Error("resume_pool_state_sequence_stale");
+}
+
+function governanceAccounts(signer: PublicKey, pool: PublicKey, poolState: PublicKey): AccountMeta[] {
+  return [account(signer, true), account(pool), account(poolState, false, true)];
+}
+
+/** Builds only the current governance authority's proposal; the pool remains paused during the delay. */
+export function buildProposeResumeInstruction(context: VerifiedEtfManifest, snapshot: VerifiedEtfSnapshot, governance: PublicKey, expectedSequence: bigint): BuildOperation {
+  assertGovernanceSnapshot(context, snapshot, expectedSequence);
+  if (!governance.equals(new PublicKey(snapshot.state.currentGovernance))) throw new Error("resume_governance_signer_not_authorized_by_rpc_state");
+  if (snapshot.state.lifecycle === "closed") throw new Error("pool_closed");
+  if (!snapshot.state.riskPaused) throw new Error("pool_not_paused_for_resume");
+  if (snapshot.state.pendingResume !== null) throw new Error("resume_proposal_already_pending");
+  if (expectedSequence === U64_MAX) throw new Error("resume_proposal_sequence_exhausted");
+  return { instruction: instruction(context, "propose_resume", governanceAccounts(governance, context.addresses.pool, context.addresses.poolState), Buffer.alloc(0)), action: "resume_propose", riskIncreasing: false };
+}
+
+function pendingResume(snapshot: VerifiedEtfSnapshot, proposalNonce: bigint): Readonly<{ proposer: string; executeAfter: bigint }> {
+  u64(proposalNonce, "proposal_nonce");
+  if (proposalNonce === 0n) throw new Error("resume_proposal_nonce_invalid");
+  const proposal = snapshot.state.pendingResume;
+  if (proposal === null) throw new Error("resume_proposal_not_pending");
+  if (BigInt(proposal.nonce) !== proposalNonce) throw new Error("resume_proposal_nonce_stale");
+  if (BigInt(snapshot.state.sequence) < proposalNonce) throw new Error("resume_proposal_sequence_invalid");
+  return { proposer: proposal.proposer, executeAfter: BigInt(proposal.executeAfter) };
+}
+
+/** Builds permissionless delayed execution only from a verified RPC snapshot at or past the on-chain deadline. */
+export function buildResumeRiskAfterDelayInstruction(context: VerifiedEtfManifest, snapshot: VerifiedEtfSnapshot, executor: PublicKey, proposalNonce: bigint, expectedSequence: bigint): BuildOperation {
+  assertGovernanceSnapshot(context, snapshot, expectedSequence);
+  const proposal = pendingResume(snapshot, proposalNonce);
+  if (proposal.proposer !== snapshot.state.currentGovernance) throw new Error("resume_proposal_governance_mismatch");
+  if (snapshot.state.lifecycle === "closed") throw new Error("pool_closed");
+  if (!snapshot.state.riskPaused) throw new Error("pool_not_paused_for_resume");
+  if (snapshot.network.blockTime === null) throw new Error("resume_rpc_block_time_unavailable");
+  if (BigInt(snapshot.network.blockTime) < proposal.executeAfter) throw new Error("resume_delay_not_elapsed_in_rpc_snapshot");
+  return { instruction: instruction(context, "resume_risk_after_delay", governanceAccounts(executor, context.addresses.pool, context.addresses.poolState), u64(proposalNonce, "proposal_nonce")), action: "resume_execute", riskIncreasing: true };
+}
+
+/** Builds governance cancellation while the proposal is still pending; no pool assets or token accounts are involved. */
+export function buildCancelResumeProposalInstruction(context: VerifiedEtfManifest, snapshot: VerifiedEtfSnapshot, governance: PublicKey, proposalNonce: bigint, expectedSequence: bigint): BuildOperation {
+  assertGovernanceSnapshot(context, snapshot, expectedSequence);
+  if (!governance.equals(new PublicKey(snapshot.state.currentGovernance))) throw new Error("resume_governance_signer_not_authorized_by_rpc_state");
+  pendingResume(snapshot, proposalNonce);
+  return { instruction: instruction(context, "cancel_resume_proposal", governanceAccounts(governance, context.addresses.pool, context.addresses.poolState), u64(proposalNonce, "proposal_nonce")), action: "resume_cancel", riskIncreasing: false };
 }
 
 export function assertClassicTokenProgram(context: VerifiedEtfManifest): void {

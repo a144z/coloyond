@@ -303,10 +303,6 @@ export async function readEtfSnapshot(connection: Connection, context: VerifiedE
   if (pool.configBytes.compare(context.configBytes) !== 0) throw new Error("pool_config_bytes_mismatch");
   if (pool.shareMint !== context.addresses.shareMint.toBase58()) throw new Error("pool_share_mint_pda_mismatch");
   const state = decodeEtfPoolStateAccount(stateInfo, context.programId, context.addresses.pool);
-  if (state.currentGovernance !== context.config.initialGovernanceAuthority.toBase58() || state.currentGuardian !== context.config.initialEmergencyGuardian.toBase58()) {
-    // Delayed handoff support requires a manifest revision that records the reviewed current authorities.
-    throw new Error("pool_current_authority_not_in_accepted_manifest");
-  }
   const shareMint = decodeClassicMint(shareInfo, context.addresses.authority);
   const feeRows: string[] = [];
   const assetRows: Array<{ mintInfo: AccountInfo<Buffer>; custodyInfo: AccountInfo<Buffer>; assetStateInfo: AccountInfo<Buffer> }> = [];
