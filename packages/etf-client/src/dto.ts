@@ -33,7 +33,7 @@ export type OracleValue = {
   exponent: number;
   publishTime: DecimalInteger;
   ageSeconds: DecimalInteger;
-  accountStatus: string;
+  verification: "full";
 };
 
 export type AvailableOracleObservation = OracleValue & { status: "available" };

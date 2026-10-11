@@ -146,15 +146,8 @@ def _validate_oracle(fixture, path, errors):
     if not _bounded_json_integer(exponent, I32_MIN, I32_MAX):
         errors.append(f"{path}.exponent: expected signed i32 JSON number")
 
-    if mode == "receiver_full":
-        if fixture.get("verification") != "full":
-            errors.append(f"{path}.verification: receiver_full requires full verification")
-        if "accountStatus" in fixture:
-            errors.append(f"{path}.accountStatus: receiver_full must use verification, not push-feed status")
-    else:
-        if "verification" in fixture:
-            errors.append(f"{path}.verification: push_feed must not invent a Receiver verification field")
-        _text(fixture.get("accountStatus"), f"{path}.accountStatus", errors)
+    if fixture.get("verification") != "full":
+        errors.append(f"{path}.verification: {mode} requires full verification")
 
 
 def _validate_observation(fixture, path, errors):

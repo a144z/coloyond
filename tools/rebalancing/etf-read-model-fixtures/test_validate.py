@@ -166,15 +166,26 @@ class ReadModelFixtureValidatorTests(unittest.TestCase):
                     )
                 )
 
-    def test_receiver_and_push_feed_oracle_shapes_are_not_interchangeable(self):
+    def test_receiver_and_push_feed_modes_both_require_full_verification(self):
         document = load_fixture()
-        receiver = document["fixtures"][0]["oracle"]
-        receiver["verification"] = "partial"
-        push = next(item for item in document["fixtures"] if item["id"] == "oracle-available-push-feed")
-        push["verification"] = "full"
-        errors = validate_document(document)
-        self.assertTrue(any("receiver_full requires full verification" in error for error in errors))
-        self.assertTrue(any("must not invent a Receiver verification field" in error for error in errors))
+        self.assertEqual(validate_document(document), [])
+
+        oracle_fixtures = (
+            ("snapshot-available-receiver-full", "oracle"),
+            ("oracle-available-push-feed", None),
+        )
+        for fixture_id, nested_oracle in oracle_fixtures:
+            for verification in (None, "partial", "verified"):
+                with self.subTest(fixture_id=fixture_id, verification=verification):
+                    candidate = copy.deepcopy(document)
+                    fixture = next(item for item in candidate["fixtures"] if item["id"] == fixture_id)
+                    oracle = fixture[nested_oracle] if nested_oracle else fixture
+                    if verification is None:
+                        del oracle["verification"]
+                    else:
+                        oracle["verification"] = verification
+                    errors = validate_document(candidate)
+                    self.assertTrue(any("requires full verification" in error for error in errors))
 
     def test_oracle_exponent_uses_explicit_pyth_i32_wire_range(self):
         document = load_fixture()

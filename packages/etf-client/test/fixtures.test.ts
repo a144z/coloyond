@@ -232,11 +232,25 @@ test("the shared corpus keeps required tagged-state and precision examples", () 
   assert.ok(errors.some((error) => error.includes("missing confirmed wallet-action example")));
 });
 
-test("oracle verification is mode-specific", () => {
-  const bad = structuredClone(document) as { fixtures: Record<string, unknown>[] };
-  const push = bad.fixtures.find((fixture) => fixture.id === "oracle-available-push-feed")!;
-  push.verification = "full";
-  assert.ok(validateReadModelDocument(bad).some((error) => error.includes("push_feed must not invent")));
+test("receiver_full and push_feed modes both require Full verification", () => {
+  assert.deepEqual(validateReadModelDocument(document), []);
+
+  for (const [fixtureId, nestedOracle] of [
+    ["snapshot-available-receiver-full", true],
+    ["oracle-available-push-feed", false],
+  ] as const) {
+    for (const verification of [undefined, "partial", "verified"] as const) {
+      const candidate = structuredClone(document) as { fixtures: Record<string, unknown>[] };
+      const fixture = candidate.fixtures.find((entry) => entry.id === fixtureId)!;
+      const oracle = nestedOracle ? fixture.oracle as Record<string, unknown> : fixture;
+      if (verification === undefined) delete oracle.verification;
+      else oracle.verification = verification;
+      assert.ok(
+        validateReadModelDocument(candidate).some((error) => error.includes("requires full verification")),
+        `${fixtureId} must reject verification ${String(verification)}`,
+      );
+    }
+  }
 });
 
 test("unknown enums, unsafe numeric wire values, and missing-vs-zero are rejected", () => {

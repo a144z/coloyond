@@ -74,13 +74,7 @@ function validateOracle(oracle: UnknownRecord, path: string, errors: string[]): 
     oracle.exponent < I32_MIN || oracle.exponent > I32_MAX
   ) errors.push(`${path}.exponent: expected signed i32 JSON number`);
 
-  if (mode === "receiver_full") {
-    if (oracle.verification !== "full") errors.push(`${path}.verification: receiver_full requires full verification`);
-    if ("accountStatus" in oracle) errors.push(`${path}.accountStatus: receiver_full must use verification, not push-feed status`);
-  } else {
-    if ("verification" in oracle) errors.push(`${path}.verification: push_feed must not invent a Receiver verification field`);
-    text(oracle.accountStatus, `${path}.accountStatus`, errors);
-  }
+  if (oracle.verification !== "full") errors.push(`${path}.verification: ${mode} requires full verification`);
 }
 
 function validateSnapshot(fixture: UnknownRecord, path: string, errors: string[]): void {

@@ -45,6 +45,21 @@
       "value": "partial"
     },
     {
+      "id": "receiver-missing-verification",
+      "expectedValid": false,
+      "operation": "delete",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "verification"]
+    },
+    {
+      "id": "receiver-unknown-verification",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "verification"],
+      "value": "verified"
+    },
+    {
       "id": "oracle-publish-time-min-i64",
       "expectedValid": true,
       "operation": "set",
@@ -77,12 +92,35 @@
       "value": "9223372036854775808"
     },
     {
-      "id": "push-feed-invents-receiver-verification",
-      "expectedValid": false,
+      "id": "push-feed-full-verification",
+      "expectedValid": true,
       "operation": "set",
       "fixtureId": "oracle-available-push-feed",
       "path": ["verification"],
       "value": "full"
+    },
+    {
+      "id": "push-feed-missing-verification",
+      "expectedValid": false,
+      "operation": "delete",
+      "fixtureId": "oracle-available-push-feed",
+      "path": ["verification"]
+    },
+    {
+      "id": "push-feed-partial-verification",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "oracle-available-push-feed",
+      "path": ["verification"],
+      "value": "partial"
+    },
+    {
+      "id": "push-feed-unknown-verification",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "oracle-available-push-feed",
+      "path": ["verification"],
+      "value": "verified"
     },
     {
       "id": "failed-snapshot-carries-balances",
