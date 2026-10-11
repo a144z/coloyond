@@ -5,7 +5,6 @@ small reserve corpus makes a direct scan over every possible output practical.
 """
 
 import csv
-from math import gcd
 from pathlib import Path
 
 
@@ -14,17 +13,14 @@ EXPECTED_ROWS = 37_800
 
 
 def exhaustive_max_output(balance_in, balance_out, weight_in, weight_out, amount_in):
-    """Return the greatest output satisfying the reduced exact integer invariant."""
-    divisor = gcd(weight_in, weight_out)
-    input_power = weight_in // divisor
-    output_power = weight_out // divisor
-    invariant_before = balance_in**input_power * balance_out**output_power
+    """Scan raw-bps integer powers to avoid the reference's GCD reduction."""
+    invariant_before = balance_in**weight_in * balance_out**weight_out
     maximum = 0
 
     for amount_out in range(balance_out + 1):
         invariant_after = (
-            (balance_in + amount_in) ** input_power
-            * (balance_out - amount_out) ** output_power
+            (balance_in + amount_in) ** weight_in
+            * (balance_out - amount_out) ** weight_out
         )
         if invariant_after < invariant_before:
             break
