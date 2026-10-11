@@ -3,3 +3,7 @@ export * from "./validate.js";
 export * from "./devnet-read.js";
 export * from "./receipt.js";
 export * from "./wallet-submit.js";
+export * from "./manifest.js";
+export * from "./readback.js";
+export * from "./instructions.js";
+export * from "./shares.js";
