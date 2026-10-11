@@ -8,13 +8,15 @@ pub mod pda;
 pub mod state;
 
 pub(crate) use instructions::{
-    __client_accounts_deposit_proportional, __client_accounts_initialize_pool,
-    __client_accounts_pause_risk, __client_accounts_poke, __client_accounts_redeem_in_kind,
-    __client_accounts_seed_pool, __client_accounts_swap_exact_in,
+    __client_accounts_cancel_resume_proposal, __client_accounts_deposit_proportional,
+    __client_accounts_initialize_pool, __client_accounts_pause_risk, __client_accounts_poke,
+    __client_accounts_propose_resume, __client_accounts_redeem_in_kind,
+    __client_accounts_resume_risk_after_delay, __client_accounts_seed_pool,
+    __client_accounts_swap_exact_in,
 };
 pub use instructions::{
-    DepositProportional, DepositResultV1, InitializePool, PauseRisk, Poke, RedeemInKind,
-    RedeemResultV1, SeedPool, SwapExactIn,
+    CancelResumeProposal, DepositProportional, DepositResultV1, InitializePool, PauseRisk, Poke,
+    ProposeResume, RedeemInKind, RedeemResultV1, ResumeRiskAfterDelay, SeedPool, SwapExactIn,
 };
 
 // Draft Localnet build ID only. It has no deployment key and must be replaced
@@ -73,5 +75,23 @@ pub mod coloyond_etf {
 
     pub fn pause_risk(ctx: Context<PauseRisk>) -> Result<()> {
         instructions::risk::pause_risk(ctx)
+    }
+
+    pub fn propose_resume(ctx: Context<ProposeResume>) -> Result<()> {
+        instructions::governance::propose_resume(ctx)
+    }
+
+    pub fn resume_risk_after_delay(
+        ctx: Context<ResumeRiskAfterDelay>,
+        proposal_nonce: u64,
+    ) -> Result<()> {
+        instructions::governance::resume_risk_after_delay(ctx, proposal_nonce)
+    }
+
+    pub fn cancel_resume_proposal(
+        ctx: Context<CancelResumeProposal>,
+        proposal_nonce: u64,
+    ) -> Result<()> {
+        instructions::governance::cancel_resume_proposal(ctx, proposal_nonce)
     }
 }
