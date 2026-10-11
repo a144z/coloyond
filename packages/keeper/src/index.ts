@@ -4,6 +4,8 @@ export type { ConfirmationResult, KeeperObserver, KeeperRuntime, SimulationResul
 export { decodeAuctionPolicy, decodeGovernance, decodeIntent, decodeVault } from "./codec.js";
 export { actionApplied, actionKey, actionStillCurrent, selectEligibleAction, validFillCandidate, validStartCandidate } from "./selector.js";
 export { buildS2DInstruction, loadRuntimeSignerFromEnvironment, PROGRAM_ID, SOL_USD_FEED, SolanaKeeperRuntime, TOKEN_PROGRAM, USDC_USD_FEED } from "./solana.js";
+export { EXECUTION_PROVIDERS, executionProvider, executionSelectionFromEnvironment, isExecutionProviderId, selectExecutionProvider } from "./executionLayer.js";
+export type { ExecutionProvider, ExecutionProviderId, ExecutionSelection } from "./executionLayer.js";
 export { buildActivateConditionInstruction, buildExecuteConditionRuleInstruction, buildObserveConditionInstruction, buildProposeConditionRuleInstruction, conditionStateAddress } from "./conditionInstructions.js";
 export type { ConditionBoundsInput, ConditionPredicateInput, ConditionRuleConfigInput } from "./conditionInstructions.js";
 export * from "./conditions/index.js";
