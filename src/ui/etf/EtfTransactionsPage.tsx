@@ -314,11 +314,16 @@ export function EtfTransactionsPage() {
       let probe: DeploymentProbe | null = null;
       let snapshot: EtfPoolSnapshot | null = null;
       try {
-        const [manifestResponse, idlResponse] = await Promise.all([fetch(MANIFEST_URL, { cache: "no-store" }), fetch(IDL_URL, { cache: "no-store" })]);
-        const [manifest, idl] = await Promise.all([
-          readDeploymentJson(manifestResponse, "accepted_deployment_manifest"),
-          readDeploymentJson(idlResponse, "accepted_etf_idl"),
+        const [manifestResult, idlResult] = await Promise.allSettled([
+          fetch(MANIFEST_URL, { cache: "no-store" }).then((response) => readDeploymentJson(response, "accepted_deployment_manifest")),
+          fetch(IDL_URL, { cache: "no-store" }).then((response) => readDeploymentJson(response, "accepted_etf_idl")),
         ]);
+        const missingResources = [manifestResult, idlResult]
+          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+          .map((result) => result.reason instanceof Error ? result.reason.message : "Deployment resource read failed.");
+        if (missingResources.length) throw new Error(missingResources.join(" · "));
+        const manifest = (manifestResult as PromiseFulfilledResult<unknown>).value;
+        const idl = (idlResult as PromiseFulfilledResult<unknown>).value;
         context = verifyEtfManifest(manifest, idl, genesis);
         probe = await probeEtfDeployment(connection, context);
         if (probe.program === "verified" && probe.pool === "initialized") snapshot = await readEtfSnapshot(connection, context, { walletAddress: walletAddress ?? undefined, commitment: "confirmed" });
