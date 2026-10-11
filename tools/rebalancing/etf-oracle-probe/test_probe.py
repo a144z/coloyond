@@ -10,6 +10,7 @@ from pathlib import Path
 from probe import (
     DEVNET_GENESIS_HASH,
     FEEDS,
+    NETWORKS,
     RECEIVER,
     build_snapshot,
     validate_account_batch_result,
@@ -43,11 +44,12 @@ def rpc_call(method, params, value):
     return {"request": request, "response": response}
 
 
-def snapshot_fixture(commitment="confirmed"):
+def snapshot_fixture(commitment="confirmed", network="devnet"):
     values = [account(name.encode()) for name in FEEDS]
     accounts_result = result(values, slot=42)
+    genesis_hash = NETWORKS[network]["genesis_hash"]
     return build_snapshot(
-        rpc_call("getGenesisHash", [], DEVNET_GENESIS_HASH),
+        rpc_call("getGenesisHash", [], genesis_hash),
         rpc_call(
             "getMultipleAccounts",
             [list(FEEDS.values()), {"encoding": "base64", "commitment": commitment}],
@@ -56,6 +58,7 @@ def snapshot_fixture(commitment="confirmed"):
         rpc_call("getBlockTime", [42], 1_800_000_000),
         captured_at_utc="2026-10-11T00:00:00Z",
         commitment=commitment,
+        network=network,
     )
 
 
@@ -83,6 +86,13 @@ class OracleProbeResponseTests(unittest.TestCase):
 
     def test_accepts_pinned_devnet_genesis(self):
         self.assertEqual(validate_devnet_genesis(DEVNET_GENESIS_HASH), DEVNET_GENESIS_HASH)
+
+    def test_binds_mainnet_genesis_to_mainnet_endpoint(self):
+        snapshot = snapshot_fixture("finalized", "mainnet-beta")
+        rebuilt = validate_snapshot(snapshot)
+        self.assertEqual(snapshot["cluster"], "solana-mainnet-beta")
+        self.assertEqual(snapshot["rpc_url"], NETWORKS["mainnet-beta"]["rpc_url"])
+        self.assertEqual(rebuilt[0], NETWORKS["mainnet-beta"]["genesis_hash"])
 
     def test_rejects_non_devnet_or_malformed_genesis(self):
         for value in (
@@ -218,6 +228,13 @@ class OracleProbeResponseTests(unittest.TestCase):
 
         snapshot["commitment"] = "confirmed"
         with self.assertRaisesRegex(RuntimeError, "differs from the pinned query"):
+            validate_snapshot(snapshot)
+
+    def test_snapshot_cannot_relabel_mainnet_capture_as_devnet(self):
+        snapshot = snapshot_fixture("finalized", "mainnet-beta")
+        snapshot["cluster"] = "solana-devnet"
+        snapshot["rpc_url"] = NETWORKS["devnet"]["rpc_url"]
+        with self.assertRaisesRegex(RuntimeError, "cluster mismatch"):
             validate_snapshot(snapshot)
 
     def test_snapshot_rejects_mutated_account_digest_or_owner(self):

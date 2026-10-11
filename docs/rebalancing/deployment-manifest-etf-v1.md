@@ -35,7 +35,7 @@ The current first choice is the fixed shard-0 sponsored feed account path becaus
 
 ## Candidate Pyth feed set
 
-These candidate values were initially for identity discovery. Confirmed and finalized Devnet snapshots now verify account existence, Receiver ownership, `PriceUpdateV2` layout, embedded feed IDs and `Full` verification at their respective points in time. The latest finalized snapshot finds all three stale under the diagnostic age limit. Mainnet account reads, independent PDA derivation, repeated freshness under approved bounds and on-chain consumption remain open. Pyth's published 55-second heartbeat and 0.5% deviation are nominal updater criteria, not a freshness guarantee.
+These candidate values were initially for identity discovery. Confirmed and finalized snapshots now verify account existence, Receiver ownership, `PriceUpdateV2` layout, embedded feed IDs and `Full` verification on both clusters. Latest finalized Mainnet SOL/USDC were 10 seconds old; latest Devnet SOL/BTC were 140 seconds old and USDC 476 seconds old. Independent PDA derivation, repeated freshness under approved bounds and on-chain consumption remain open. Pyth's published 55-second heartbeat and 0.5% deviation are nominal updater criteria, not a freshness guarantee. See [S0B cross-cluster feed evidence](evidence/s0b-feed-observations-20261011.md).
 
 | Pool asset label | Feed | Stable Pyth Core feed ID | Candidate shard-0 account | Devnet mint and backing status |
 |---|---|---|---|---|

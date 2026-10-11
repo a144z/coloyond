@@ -14,8 +14,20 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-RPC = "https://api.devnet.solana.com"
-DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+NETWORKS = {
+    "devnet": {
+        "cluster": "solana-devnet",
+        "rpc_url": "https://api.devnet.solana.com",
+        "genesis_hash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+    },
+    "mainnet-beta": {
+        "cluster": "solana-mainnet-beta",
+        "rpc_url": "https://api.mainnet-beta.solana.com",
+        "genesis_hash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+    },
+}
+RPC = NETWORKS["devnet"]["rpc_url"]
+DEVNET_GENESIS_HASH = NETWORKS["devnet"]["genesis_hash"]
 RECEIVER = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
 FEEDS = {
     "sol": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
@@ -111,16 +123,24 @@ def validate_block_time(value):
     return value
 
 
-def validate_devnet_genesis(value):
-    """Fail closed unless the RPC reports the currently pinned Devnet genesis."""
-    if not isinstance(value, str) or value != DEVNET_GENESIS_HASH:
+def validate_cluster_genesis(network, value):
+    """Fail closed unless the RPC reports the selected cluster's pinned genesis."""
+    if network not in NETWORKS:
+        raise RuntimeError(f"unsupported cluster: {network!r}")
+    expected = NETWORKS[network]["genesis_hash"]
+    if not isinstance(value, str) or value != expected:
         raise RuntimeError(
-            f"cluster mismatch: expected Devnet genesis {DEVNET_GENESIS_HASH}, got {value!r}"
+            f"cluster mismatch: expected {network} genesis {expected}, got {value!r}"
         )
     return value
 
 
-def rpc_capture(method, params=None):
+def validate_devnet_genesis(value):
+    """Backward-compatible Devnet genesis validator."""
+    return validate_cluster_genesis("devnet", value)
+
+
+def rpc_capture(method, params=None, *, rpc_url=RPC):
     request_id = 1
     request_body = {
         "jsonrpc": "2.0",
@@ -129,7 +149,7 @@ def rpc_capture(method, params=None):
         "params": params or [],
     }
     request = urllib.request.Request(
-        RPC,
+        rpc_url,
         data=json.dumps(request_body).encode(),
         headers={"content-type": "application/json"},
     )
@@ -160,7 +180,7 @@ def _validate_capture_call(calls, name, expected_method):
     return request, result
 
 
-def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_utc, commitment="confirmed"):
+def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_utc, commitment="confirmed", network="devnet"):
     """Create one replayable record from the three exact JSON-RPC exchanges."""
     calls = {
         "getGenesisHash": genesis_call,
@@ -177,7 +197,7 @@ def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_
         calls, "getBlockTime", "getBlockTime"
     )
 
-    genesis = validate_devnet_genesis(genesis_result)
+    genesis = validate_cluster_genesis(network, genesis_result)
     slot, decoded_accounts = validate_account_batch_result(accounts_result, FEEDS.items())
     cluster_time = validate_block_time(block_time_result)
     if block_time_request.get("params") != [slot]:
@@ -198,8 +218,8 @@ def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_
     }
     return {
         "schema_version": 1,
-        "cluster": "solana-devnet",
-        "rpc_url": RPC,
+        "cluster": NETWORKS[network]["cluster"],
+        "rpc_url": NETWORKS[network]["rpc_url"],
         "commitment": commitment,
         "captured_at_utc": captured_at_utc,
         "genesis_hash": genesis,
@@ -218,7 +238,8 @@ def validate_snapshot(snapshot):
         or snapshot.get("schema_version") != 1
     ):
         raise RuntimeError("snapshot: unsupported schema version")
-    if snapshot.get("cluster") != "solana-devnet" or snapshot.get("rpc_url") != RPC:
+    network = next((key for key, value in NETWORKS.items() if value["cluster"] == snapshot.get("cluster")), None)
+    if network is None or snapshot.get("rpc_url") != NETWORKS[network]["rpc_url"]:
         raise RuntimeError("snapshot: unexpected cluster or RPC endpoint")
     commitment = snapshot.get("commitment")
     if commitment not in {"confirmed", "finalized"}:
@@ -245,7 +266,7 @@ def validate_snapshot(snapshot):
     block_time_request, block_time_result = _validate_capture_call(
         calls, "getBlockTime", "getBlockTime"
     )
-    genesis = validate_devnet_genesis(genesis_result)
+    genesis = validate_cluster_genesis(network, genesis_result)
     slot, decoded_accounts = validate_account_batch_result(accounts_result, FEEDS.items())
     cluster_time = validate_block_time(block_time_result)
 
@@ -283,7 +304,8 @@ def write_snapshot(snapshot, output_dir):
     output.mkdir(parents=True, exist_ok=True)
     slot = snapshot["account_context_slot"]
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-    target = output / f"devnet-{snapshot['commitment']}-{slot}-{timestamp}.json"
+    network_name = "devnet" if snapshot["cluster"] == "solana-devnet" else "mainnet-beta"
+    target = output / f"{network_name}-{snapshot['commitment']}-{slot}-{timestamp}.json"
     descriptor, temporary = tempfile.mkstemp(prefix=".snapshot-", suffix=".tmp", dir=output)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -339,6 +361,12 @@ def main():
         help="account-read commitment (default: confirmed)",
     )
     parser.add_argument(
+        "--network",
+        choices=tuple(NETWORKS),
+        default="devnet",
+        help="Solana cluster to read (default: devnet)",
+    )
+    parser.add_argument(
         "--replay-snapshot",
         type=Path,
         help="validate and replay a saved capture without making any RPC request",
@@ -348,16 +376,18 @@ def main():
     if args.replay_snapshot:
         snapshot = json.loads(args.replay_snapshot.read_text(encoding="utf-8"))
         genesis, slot, cluster_time, decoded_accounts = validate_snapshot(snapshot)
-        print(f"replay=offline cluster=devnet genesis={genesis} snapshot={args.replay_snapshot}")
+        print(f"replay=offline cluster={snapshot['cluster']} genesis={genesis} snapshot={args.replay_snapshot}")
     else:
-        genesis_request, genesis_response, genesis_result = rpc_capture("getGenesisHash")
-        validate_devnet_genesis(genesis_result)
+        rpc_url = NETWORKS[args.network]["rpc_url"]
+        genesis_request, genesis_response, genesis_result = rpc_capture("getGenesisHash", rpc_url=rpc_url)
+        validate_cluster_genesis(args.network, genesis_result)
         accounts_request, accounts_response, accounts_result = rpc_capture(
             "getMultipleAccounts",
             [list(FEEDS.values()), {"encoding": "base64", "commitment": args.commitment}],
+            rpc_url=rpc_url,
         )
         slot, _ = validate_account_batch_result(accounts_result, FEEDS.items())
-        block_request, block_response, _ = rpc_capture("getBlockTime", [slot])
+        block_request, block_response, _ = rpc_capture("getBlockTime", [slot], rpc_url=rpc_url)
         captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         snapshot = build_snapshot(
             {"request": genesis_request, "response": genesis_response},
@@ -365,10 +395,11 @@ def main():
             {"request": block_request, "response": block_response},
             captured_at_utc=captured_at,
             commitment=args.commitment,
+            network=args.network,
         )
         genesis, slot, cluster_time, decoded_accounts = validate_snapshot(snapshot)
         snapshot_path = write_snapshot(snapshot, args.snapshot_dir)
-        print(f"cluster=devnet genesis={genesis} snapshot_file={snapshot_path}")
+        print(f"cluster={args.network} genesis={genesis} snapshot_file={snapshot_path}")
 
     decode_accounts_with_pinned_sdk(slot, cluster_time, decoded_accounts)
 
