@@ -3,10 +3,16 @@ use anchor_spl::token::Token;
 
 use crate::pda;
 
+pub mod governance;
 pub mod initialize;
 pub mod liquidity;
 pub mod risk;
 
+pub(crate) use governance::{
+    __client_accounts_cancel_resume_proposal, __client_accounts_propose_resume,
+    __client_accounts_resume_risk_after_delay,
+};
+pub use governance::{CancelResumeProposal, ProposeResume, ResumeRiskAfterDelay};
 pub use initialize::*;
 pub use liquidity::*;
 pub use risk::*;
