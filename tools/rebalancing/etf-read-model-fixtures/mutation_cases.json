@@ -45,6 +45,38 @@
       "value": "partial"
     },
     {
+      "id": "oracle-publish-time-min-i64",
+      "expectedValid": true,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "publishTime"],
+      "value": "-9223372036854775808"
+    },
+    {
+      "id": "oracle-publish-time-max-i64",
+      "expectedValid": true,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "publishTime"],
+      "value": "9223372036854775807"
+    },
+    {
+      "id": "oracle-publish-time-below-min-i64",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "publishTime"],
+      "value": "-9223372036854775809"
+    },
+    {
+      "id": "oracle-publish-time-above-max-i64",
+      "expectedValid": false,
+      "operation": "set",
+      "fixtureId": "snapshot-available-receiver-full",
+      "path": ["oracle", "publishTime"],
+      "value": "9223372036854775808"
+    },
+    {
       "id": "push-feed-invents-receiver-verification",
       "expectedValid": false,
       "operation": "set",
