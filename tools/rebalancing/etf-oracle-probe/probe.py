@@ -160,7 +160,7 @@ def _validate_capture_call(calls, name, expected_method):
     return request, result
 
 
-def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_utc):
+def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_utc, commitment="confirmed"):
     """Create one replayable record from the three exact JSON-RPC exchanges."""
     calls = {
         "getGenesisHash": genesis_call,
@@ -184,9 +184,11 @@ def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_
         raise RuntimeError("snapshot: getBlockTime request does not match account context slot")
     if genesis_request.get("params") != []:
         raise RuntimeError("snapshot: getGenesisHash request parameters must be empty")
+    if commitment not in {"confirmed", "finalized"}:
+        raise RuntimeError("snapshot: unsupported commitment")
     if accounts_request.get("params") != [
         list(FEEDS.values()),
-        {"encoding": "base64", "commitment": "confirmed"},
+        {"encoding": "base64", "commitment": commitment},
     ]:
         raise RuntimeError("snapshot: getMultipleAccounts request differs from the pinned query")
 
@@ -198,7 +200,7 @@ def build_snapshot(genesis_call, accounts_call, block_time_call, *, captured_at_
         "schema_version": 1,
         "cluster": "solana-devnet",
         "rpc_url": RPC,
-        "commitment": "confirmed",
+        "commitment": commitment,
         "captured_at_utc": captured_at_utc,
         "genesis_hash": genesis,
         "account_context_slot": slot,
@@ -218,7 +220,8 @@ def validate_snapshot(snapshot):
         raise RuntimeError("snapshot: unsupported schema version")
     if snapshot.get("cluster") != "solana-devnet" or snapshot.get("rpc_url") != RPC:
         raise RuntimeError("snapshot: unexpected cluster or RPC endpoint")
-    if snapshot.get("commitment") != "confirmed":
+    commitment = snapshot.get("commitment")
+    if commitment not in {"confirmed", "finalized"}:
         raise RuntimeError("snapshot: unexpected commitment")
     captured_at = snapshot.get("captured_at_utc")
     if not isinstance(captured_at, str) or not captured_at.endswith("Z"):
@@ -250,7 +253,7 @@ def validate_snapshot(snapshot):
         raise RuntimeError("snapshot: getGenesisHash request parameters must be empty")
     if accounts_request.get("params") != [
         list(FEEDS.values()),
-        {"encoding": "base64", "commitment": "confirmed"},
+        {"encoding": "base64", "commitment": commitment},
     ]:
         raise RuntimeError("snapshot: getMultipleAccounts request differs from the pinned query")
     if snapshot.get("genesis_hash") != genesis:
@@ -280,7 +283,7 @@ def write_snapshot(snapshot, output_dir):
     output.mkdir(parents=True, exist_ok=True)
     slot = snapshot["account_context_slot"]
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-    target = output / f"devnet-{slot}-{timestamp}.json"
+    target = output / f"devnet-{snapshot['commitment']}-{slot}-{timestamp}.json"
     descriptor, temporary = tempfile.mkstemp(prefix=".snapshot-", suffix=".tmp", dir=output)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -330,6 +333,12 @@ def main():
         help="directory for immutable JSON captures (default: probe/snapshots)",
     )
     parser.add_argument(
+        "--commitment",
+        choices=("confirmed", "finalized"),
+        default="confirmed",
+        help="account-read commitment (default: confirmed)",
+    )
+    parser.add_argument(
         "--replay-snapshot",
         type=Path,
         help="validate and replay a saved capture without making any RPC request",
@@ -345,7 +354,7 @@ def main():
         validate_devnet_genesis(genesis_result)
         accounts_request, accounts_response, accounts_result = rpc_capture(
             "getMultipleAccounts",
-            [list(FEEDS.values()), {"encoding": "base64", "commitment": "confirmed"}],
+            [list(FEEDS.values()), {"encoding": "base64", "commitment": args.commitment}],
         )
         slot, _ = validate_account_batch_result(accounts_result, FEEDS.items())
         block_request, block_response, _ = rpc_capture("getBlockTime", [slot])
@@ -355,6 +364,7 @@ def main():
             {"request": accounts_request, "response": accounts_response},
             {"request": block_request, "response": block_response},
             captured_at_utc=captured_at,
+            commitment=args.commitment,
         )
         genesis, slot, cluster_time, decoded_accounts = validate_snapshot(snapshot)
         snapshot_path = write_snapshot(snapshot, args.snapshot_dir)

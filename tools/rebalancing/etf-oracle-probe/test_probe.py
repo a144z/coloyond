@@ -43,18 +43,19 @@ def rpc_call(method, params, value):
     return {"request": request, "response": response}
 
 
-def snapshot_fixture():
+def snapshot_fixture(commitment="confirmed"):
     values = [account(name.encode()) for name in FEEDS]
     accounts_result = result(values, slot=42)
     return build_snapshot(
         rpc_call("getGenesisHash", [], DEVNET_GENESIS_HASH),
         rpc_call(
             "getMultipleAccounts",
-            [list(FEEDS.values()), {"encoding": "base64", "commitment": "confirmed"}],
+            [list(FEEDS.values()), {"encoding": "base64", "commitment": commitment}],
             accounts_result,
         ),
         rpc_call("getBlockTime", [42], 1_800_000_000),
         captured_at_utc="2026-10-11T00:00:00Z",
+        commitment=commitment,
     )
 
 
@@ -206,6 +207,18 @@ class OracleProbeResponseTests(unittest.TestCase):
             path = write_snapshot(snapshot, directory)
             self.assertEqual(json.loads(path.read_text()), snapshot)
             self.assertFalse(list(Path(directory).glob(".snapshot-*.tmp")))
+
+    def test_finalized_commitment_is_pinned_and_replayable(self):
+        snapshot = snapshot_fixture("finalized")
+        self.assertEqual(snapshot["commitment"], "finalized")
+        self.assertEqual(validate_snapshot(snapshot)[1], 42)
+        with tempfile.TemporaryDirectory() as directory:
+            path = write_snapshot(snapshot, directory)
+            self.assertIn("devnet-finalized-42-", path.name)
+
+        snapshot["commitment"] = "confirmed"
+        with self.assertRaisesRegex(RuntimeError, "differs from the pinned query"):
+            validate_snapshot(snapshot)
 
     def test_snapshot_rejects_mutated_account_digest_or_owner(self):
         snapshot = snapshot_fixture()
