@@ -1,5 +1,36 @@
 # Sprint 5 Devnet frontend console handoff
 
+## Decision-ready deployment handoff — 11 October 2026
+
+**Current blocker:** the console can read Devnet, but no accepted ETF deployment manifest, verified deployed program, or pool exists. All transaction controls correctly remain disabled. There is no deployment transaction ready for signature.
+
+### Two ways to close the deployment blocker
+
+1. **Colleague-led deployment:** after the policy, authority, build, and Localnet gates below are closed, the colleague deploys the reviewed program and sends only public, verifiable facts: Devnet genesis/RPC, program and ProgramData addresses, deployment signature and slot, upgrade authority, verified artifact/build hash, accepted manifest and matching IDL, admitted mint/feed addresses, and links to RPC verification. Do not send or request private keys. This is the shortest route if the colleague already has the approved deployment setup and authority.
+2. **User-reviewed deployment flow:** prepare an unsigned deployment review package for the user to inspect, including the exact reviewed artifact/hash, program ID, payer/upgrade authority, Devnet endpoint/genesis, full deployment command or wallet-visible transaction, rent/network-fee estimate, and recovery/reconciliation steps. The user decides whether to sign. This path is **not ready to present for signing yet**: the program ID and accepted manifest are absent, required policy/CPI evidence is open, and `solana`, `anchor`, and `cargo build-sbf` are unavailable in the current shell. The app-connected wallet is not by itself a program-deployment interface. See the [wallet-reviewed deployment runbook](../ops/s5-devnet-wallet-reviewed-deployment.md).
+
+These paths can proceed in parallel through code and evidence preparation; only one authorized deployment should be published as the accepted deployment. A deployment alone does not authorize pool initialization or any later transaction.
+
+### Blueprint pillar progress and remaining sequence
+
+The S5 draft contains the multi-token pool structure, pause/delayed-resume, seed, proportional deposit/refund, in-kind redemption, distinct trader-funded weighted swap, and eligibility-only `poke`. The frontend has live Devnet reads, transaction builders, and receipt/readback reconciliation behind a fail-closed manifest/pool gate. This is implementation progress only: no Devnet ETF transaction, successful SPL CPI flow, dynamic-fee behavior, or Cron→TukTuk execution has been proven. `poke` cannot move assets or provide a swap counterparty; Test USD remains synthetic and unbacked.
+
+Remaining steps, in order:
+
+1. Close S0B/S5A/S5C/S5D2 Devnet-test decisions and record exact asset admission, oracle limits, fee/risk schema, and deployment/governance/guardian authorities; keep production policy separate.
+2. Finish successful Localnet/SBF SPL CPI and rollback evidence for initialization/seed, deposit/refund, in-kind exit while paused, and separate trader-funded swap; keep wrong-feed, stale-oracle, adverse-direction, oversize, and invalid-account rejection evidence.
+3. Reproducibly build and verify the chosen program ID/artifact; deploy through one of the two paths above; reconcile the confirmed deployment signature and Program/ProgramData on RPC.
+4. Publish the accepted manifest and matching IDL from those verified facts; refresh the admitted feeds and verify owner/layout/feed identity/Full/freshness/confidence on live RPC.
+5. Then prepare the first wallet-reviewed pool transaction. Reconcile each confirmed signature and token/share/fee delta before success or retry. Prove scheduler task creation, external crank, funding/recovery, repeated runs, and safe shutdown separately before claiming automation.
+
+### Traceable validation and evidence
+
+- [Latest frontend/RPC validation and scheduler-state read](s5-frontend-console-handoff-20261011.md#scheduler-state-visibility-follow-up--11-october-2026) — validation commands, observed slot/genesis, feed candidates, and explicit limits of the evidence.
+- [Detailed live Devnet account/feed read](s5-devnet-ui-read-20261011.md) — exact observed RPC identities and candidate account facts; not deployment or transaction proof.
+- [Wallet-reviewed deployment runbook](../ops/s5-devnet-wallet-reviewed-deployment.md) — stop gates, signer separation, review, submission, and RPC reconciliation.
+- [Preserved colleague blueprint](../../product/blueprints/no-backend-auto-rebalancing-multi-token-etf-solana-devnet.md) and [Sprint 5 plan](../../product/onchain-portfolio-rebalancing-plan.md) — source architecture and sprint alignment.
+- [Sprint checklist](../../product/onchain-portfolio-rebalancing-sprint-checklist.md) — current unit/checkpoint ledger.
+
 **Updated:** 2026-10-11 07:15 UTC
 **Time box:** started 06:36:16 UTC; hard deadline 07:36:16 UTC; implementation cutoff 07:31:16 UTC.
 **Branch:** `feature/portfolio-rebalancing`
