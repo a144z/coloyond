@@ -1,6 +1,6 @@
 # S5A bounded Devnet test-profile recommendation
 
-**Status: draft recommendation only — not frozen, not admitted, and not authorization to deploy or transact.** This note narrows a possible first interactive Devnet test to two assets. It does not replace the S5A production-policy review, S0B asset/oracle admission, S5D2 economics review, or the preserved colleague blueprint.
+**Status: admitted for Devnet-only mechanics testing on 2026-10-11; see the dated admission record at the end of this note.** The production S5A and S5D2 policy reviews stay open and separate, and this admission is not yet authorization to transact: it authorizes the colleague deployment route and requires the deployment facts before any wallet action.
 
 ## Bounded recommendation
 
@@ -108,3 +108,9 @@ The following compatibility rules are recommended as explicit S5A decisions rath
 | Candidate fixed-feed observations are currently stale | Keep seed/swap disabled until fresh finalized account reads satisfy a reviewed limit and the on-chain parser accepts the exact Receiver-owned `PriceUpdateV2`, feed ID, Full level, owner, and fixed-address derivation | The user must not be prompted to sign a transaction that cannot meet the same on-chain checks. |
 
 These recommendations make the existing Rust boundaries compose without altering the tested share formulas, checked arithmetic, custody limits, or fee-retention model. They remain draft until their evidence and policy owners record acceptance; a draft implementation must report an explicit blocked/unconfigured state rather than emulate a passing result.
+
+## Profile admitted for Devnet-only testing — 2026-10-11
+
+The user admitted this bounded profile for Devnet mechanics testing and selected the colleague deployment route (handoff path 1). The admitted values are the time-boxed table above, unchanged: the WSOL plus exact Test USD basket at 5,000/5,000 bps; fixed shard-0 `PushFeed` mode with Receiver ownership, `PriceUpdateV2` layout, exact feed IDs and `Full` verification; a hard 60-second maximum age that is explicitly not widened to fit observed Devnet staleness; a 100 bps maximum confidence ratio; the inclusive exponent range `[-17, 0]`; seed composition within 50 bps; a fixed 30 bps swap fee; a 100 bps gross input cap; a 200 bps oracle-parity loss band; distinct nonzero governance and guardian keys; immediate guardian pause with a 86,400-second delayed governance resume; oracle-, scheduler- and pause-independent in-kind redemption; and an eligibility-only `poke` with no scheduler role in the first manual pool test.
+
+Still open after this admission, in order: the exact governance, guardian and upgrade-authority keys; the program ID, build/artifact hash and IDL that the colleague's deployment must supply as public facts; an S0B refresh of the point-in-time mint and feed observations; and the S5A/S5D2 production-policy review, which this admission does not close. The later scheduler checkpoint follows the [execution-layer decision](execution-layer-decision-20261011.md): MagicBlock's crank holds first proof priority, Cron→TukTuk is the named second candidate and permissionless manual `poke` stays the fallback. Until the deployment facts arrive and are read back from RPC, no wallet transaction is authorized by this admission.
