@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 pub enum EtfError {
     #[msg("ETF config is not canonical or exceeds the bounded v1 format")]
     InvalidConfig,
-    #[msg("Only the explicitly unconfigured, risk-disabled draft schema is accepted")]
+    #[msg("Policy schema is unknown or outside the bounded Devnet test profile")]
     UnknownPolicySchema,
     #[msg("ETF risk policy has not passed the S5A policy freeze")]
     PolicyNotFrozen,
@@ -16,6 +16,8 @@ pub enum EtfError {
     InvalidTokenAccount,
     #[msg("Oracle account does not match the immutable pinned feed identity or layout")]
     InvalidOracleAccount,
+    #[msg("Oracle price is stale, invalid, partially verified, or outside the test profile")]
+    InvalidOraclePrice,
     #[msg("Oracle feed must carry Full Pyth verification")]
     InvalidOracleVerification,
     #[msg("Pool is paused for risk-increasing actions")]

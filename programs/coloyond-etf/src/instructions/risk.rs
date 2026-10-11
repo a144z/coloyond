@@ -7,7 +7,7 @@ use crate::{
         load_program_account, save_program_account, unpack_mint, unpack_token_account,
         validate_pool_accounts, validate_pool_state_accounts,
     },
-    config::{decode_inert_config, validate_oracle_feed_accounts},
+    config::{decode_devnet_mechanics_config, validate_devnet_oracle_prices},
     errors::EtfError,
     pda,
     state::{EtfAssetStateV1, PoolLifecycleV1, SHARE_DECIMALS},
@@ -56,8 +56,13 @@ pub fn seed_pool<'info>(
         &ctx.accounts.share_mint.to_account_info(),
         &ctx.accounts.authority.to_account_info(),
     )?;
-    let config = decode_inert_config(&pool.config_bytes)?;
-    validate_oracle_feed_accounts(&config, oracle_accounts(ctx.accounts))?;
+    let (config, mechanics) = decode_devnet_mechanics_config(&pool.config_bytes)?;
+    validate_devnet_oracle_prices(
+        &config,
+        oracle_accounts(ctx.accounts),
+        &Clock::get()?,
+        mechanics,
+    )?;
     validate_seed_accounts(
         ctx.accounts.pool.key(),
         &config,
@@ -103,8 +108,13 @@ pub fn swap_exact_in<'info>(
         ctx.accounts.authority.key(),
         EtfError::InvalidConfig
     );
-    let config = decode_inert_config(&pool.config_bytes)?;
-    validate_oracle_feed_accounts(&config, oracle_accounts(ctx.accounts))?;
+    let (config, mechanics) = decode_devnet_mechanics_config(&pool.config_bytes)?;
+    validate_devnet_oracle_prices(
+        &config,
+        oracle_accounts(ctx.accounts),
+        &Clock::get()?,
+        mechanics,
+    )?;
     validate_swap_accounts(
         ctx.accounts.pool.key(),
         &config,
@@ -143,8 +153,13 @@ pub fn poke(ctx: Context<Poke>) -> Result<()> {
         state.lifecycle != PoolLifecycleV1::Closed,
         EtfError::PoolClosed
     );
-    let config = decode_inert_config(&pool.config_bytes)?;
-    validate_oracle_feed_accounts(&config, oracle_accounts(ctx.accounts))?;
+    let (config, mechanics) = decode_devnet_mechanics_config(&pool.config_bytes)?;
+    validate_devnet_oracle_prices(
+        &config,
+        oracle_accounts(ctx.accounts),
+        &Clock::get()?,
+        mechanics,
+    )?;
     err!(EtfError::PolicyNotFrozen)
 }
 

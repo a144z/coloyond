@@ -196,3 +196,21 @@ The next confirmed deposit attempted `[30,000,000, 50,000]` when the user's seco
 The guardian then paused risk actions (sequence 2). With the pause still set, redeeming 25,000 shares returned `[25,000,000, 25,000]` base units in kind; the share supply fell to `1,025,000`, and sequence advanced to 3. The pool remained Active and risk-paused. This is evidence for the existing redeem handler's pause-safe behavior in this synthetic Localnet scenario.
 
 This additional evidence closes only the local synthetic Active-pool deposit/refund, partial-CPI rollback, pause, and redemption test gap. The separately initialized pool's seed remains rejected because its Localnet oracle accounts have no valid Pyth data; risk-increasing seed/swap handlers remain gated by `PolicyNotFrozen`. No Devnet wallet transaction, real pool seed, oracle verification, admitted asset, fee-policy result, or scheduler execution is established.
+
+## Synthetic Full Pyth profile preflight on Localnet — 11 October 2026
+
+The S5E draft now recognizes one exact two-asset Devnet-test config and validates the pinned Pyth `PriceUpdateV2` owner, layout, feed identity, `Full` verification, freshness, confidence, and exponent before `seed_pool`, `swap_exact_in`, and `poke` reach their still-closed policy gate. This run injected synthetic Localnet mints at the exact candidate mint addresses and serialized synthetic Receiver-owned Pyth accounts at the exact SOL/USD and USD/USD candidate feed addresses. It initialized the profile pool, then submitted an actual Localnet `poke`; on-chain validation reached `PolicyNotFrozen` (`6002`) and RPC confirmed the pool-state bytes were unchanged. `poke` remains eligibility-only.
+
+| Evidence | Observed value |
+|---|---|
+| Source branch / base | `feature/portfolio-rebalancing` / `f2377a0d` (colleague rebalance-lock change integrated) |
+| SBF artifact SHA-256 | `163649935cf6159e08da08b59f5c19d08203d1213cc76bad7015c035df927397` |
+| Localnet genesis | `HS5mAPqXsQgWCnJVKdJ9hvdbTSKG7bSRjm2CZJ7Y4JPx` |
+| Draft ETF program | `H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9` |
+| Profile pool / state | `C4dnRBkD63UEUXC31xXNStZyyZoKmRhN3u5zgD4hjTJM` / `BL4CXuueo3dshvTiPXwqP2bDUchhacSPaEtp5KqX19rF` |
+| Candidate feed accounts | SOL/USD `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE`; USD/USD `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` |
+| Confirmed profile initialization | `5c4nAtqPkrWyVe5uWqseLsBTjh2oGRcQKMdZcDetYrLBcxG4srz2UfuYGT4ATu8UxBYcJjDNGcGEQpLfenqzXGz7`, slot 12, 5,000-lamport fee |
+| Confirmed eligibility-only `poke` rejection | `2YwEUkccxDx15Dx9qBShXUga2QB7yUYcPrMKyptfLNPQRnSGkTNhbp5ukkJisMEmRWi4j45cZr1ZneP7oFyVrUwL`, slot 13, custom error `6002` (`PolicyNotFrozen`), 5,000-lamport fee |
+| Readback after rejection | `poolStateUnchanged = true` |
+
+`cargo fmt --all -- --check`, `cargo test --manifest-path programs/coloyond-etf/Cargo.toml --offline` (15/15), `node --check tools/etf-localnet/run.cjs`, `bash -n tools/etf-localnet/run.sh`, and the full offline SBF/Localnet harness passed. The harness printed `LOCALNET_ONLY_PASS` and stopped the validator. It also reran the existing synthetic init/rejection and Active-pool lifecycle cases. This proves only the Localnet parser/preflight path against fabricated account data; it does not prove a live Pyth update, Devnet address admission, accepted policy, seed, swap, dynamic fee, or frontend wallet transaction. No Devnet signature or production-policy decision is claimed.

@@ -11,7 +11,7 @@ use anchor_spl::token::spl_token::{
 };
 
 use crate::{
-    config::decode_inert_config,
+    config::decode_supported_config,
     errors::EtfError,
     pda,
     state::{EtfPoolStateV1, EtfPoolV1},
@@ -98,7 +98,7 @@ pub fn validate_pool_state_accounts(
 ) -> Result<(EtfPoolV1, EtfPoolStateV1)> {
     let pool: EtfPoolV1 = load_program_account(pool_account)?;
     require!(pool.version == EtfPoolV1::VERSION, EtfError::InvalidConfig);
-    let config = decode_inert_config(&pool.config_bytes)?;
+    let config = decode_supported_config(&pool.config_bytes)?;
     let config_hash = config
         .config_hash()
         .map_err(|_| error!(EtfError::InvalidConfig))?;

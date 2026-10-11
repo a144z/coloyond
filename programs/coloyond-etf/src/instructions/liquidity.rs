@@ -235,7 +235,7 @@ pub fn redeem_in_kind<'info>(
 }
 
 fn load_config(pool: &EtfPoolV1) -> Result<EtfPoolConfigV1> {
-    crate::config::decode_inert_config(&pool.config_bytes)
+    crate::config::decode_supported_config(&pool.config_bytes)
 }
 
 fn validate_share_mint(

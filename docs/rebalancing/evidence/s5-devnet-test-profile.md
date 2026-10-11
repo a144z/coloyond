@@ -38,6 +38,20 @@ The user authorized bounded technical choices for a Devnet test profile so indep
 
 The 50-bps seed composition check and 200-bps conservative quote-loss formula are bounded implementation proposals added for this time-boxed test profile; they have not been independently reviewed or implemented in S5E. The existing candidate 3,000-bps input cap is **superseded for this test proposal** by the stricter 100-bps cap, but remains historical model evidence rather than a production decision. Fixed 30 bps likewise remains only a test proposal. The program must recognize a strict, versioned test policy schema and enforce these values on-chain before any such action can be considered; client-only checks are insufficient.
 
+### Strict policy wire IDs — implemented decoder, still draft policy
+
+The S5E decoder now recognizes one exact two-asset Devnet test-profile identity. The policy IDs are the SHA-256 digests of the UTF-8 domain labels below; both policy parameter vectors must be empty, so code-versioned constants cannot be widened by a config payload. The profile requires math version `1`, the ordered WSOL/Test USD mint pair above, 5,000/5,000 weights, fixed SOL/USD and USD/USD feeds, and classic SPL tokens. The compiled mechanics are maximum age 60 seconds, maximum confidence ratio 100 bps, exponent range `[-17, 0]`, maximum gross input 100 bps of pre-trade input custody, quote-loss bound 200 bps, seed composition deviation 50 bps, and fixed fee 30 bps.
+
+| Config field | Required test-profile value |
+|---|---|
+| `fee_policy_id` | SHA-256(`coloyond:etf:policy:fee-fixed-30bps:v1`) = `a4d6a53f3e088f435965c8e032346a018ac908a775398cfb714e94412b79edb1` |
+| `fee_policy_params` | empty |
+| `risk_policy_id` | SHA-256(`coloyond:etf:policy:risk-devnet-mechanics:v1`) = `da9f6b20a4ece49e997acf4095760f153985487f8365029b51d861c8ff3ff2a8` |
+| `risk_policy_params` | empty |
+| `math_version` | `1` |
+
+Focused S5E unit coverage accepts this exact fixture and rejects substituted policy IDs, nonempty policy payloads, a different mint, non-50/50 weights, or another math version. Risk instructions invoke the Pyth SDK validator with this profile's age, confidence, exponent, owner/layout/feed-ID and `Full` requirements before reaching the existing fail-closed policy gate. Synthetic SDK-backed unit cases accept the inclusive 60-second age boundary and reject 61 seconds and confidence above 100 bps. A subsequent SBF/Localnet transaction also initialized this exact test-profile config and submitted `poke` against synthetic Receiver-owned `PriceUpdateV2` accounts; the confirmed `PolicyNotFrozen` rejection proves validation reached the gate and the pool state stayed byte-for-byte unchanged. This is parser/preflight evidence only: the feeds are synthetic, no seed or swap succeeds, and the test profile remains unadmitted. It does not pass S0B, S5A production review, S5D2 economics review, deployment, or any wallet/Devnet gate. See the [dated SBF preflight record](s5e-localnet-transaction-draft.md#synthetic-full-pyth-profile-preflight-on-localnet--11-october-2026).
+
 Even with these proposed values, the current observed USD reference feed age is 82 seconds and fails the 60-second test bound. The Test USD mint's active mint/freeze authorities and near-maximum supply make it suitable only for openly labeled Devnet mechanics testing, not backed-value validation. Therefore the profile intentionally remains blocked for a risk-increasing transaction until the live basket is fresh and a deployed program enforces the same policy.
 
 ## Oracle checks and draft parameters
