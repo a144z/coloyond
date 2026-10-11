@@ -13,5 +13,7 @@ devnet-test-keypair.json
 devnet-program-keypair.json
 devnet-test-keypair-array.json
 devnet-program-keypair-array.json
+etf-program-keypair.json
+etf-program-keypair-array.json
 /scratch/
 programs/coloyond-etf/target/

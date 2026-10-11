@@ -21,7 +21,7 @@ pub use instructions::{
 
 // Devnet program ID approved for the S5A bring-up (keypair: gitignored devnet-program-keypair.json).
 // Must be replaced at the mainnet review; no other cluster may reuse this address.
-declare_id!("7ZdKkNAuCEHCNZaDEXoTFfqkqFJKDj5pKjvt2Sr136LP");
+declare_id!("DVvBu6GDonibiR5aPqW27tt5RLcA5c4foVKojicxNm6q");
 
 #[program]
 pub mod coloyond_etf {
