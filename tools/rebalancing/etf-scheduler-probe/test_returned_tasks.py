@@ -87,6 +87,68 @@ def returned(*tasks, task_accounts=()):
 
 
 class ReturnedTaskWireTests(unittest.TestCase):
+    def test_source_shaped_single_poke_requeue_fixture(self):
+        # Candidate-only fixture: account keys and instruction bytes stand in
+        # for a future frozen ETF IDL. This is not the production poke payload
+        # and is not serialized with Helium's Rust types.
+        accounts = [b"P" * 32, b"V" * 32, b"F" * 32]
+        instruction = bytes((0,)) + vector(bytes((1, 2))) + vector(b"fixture-poke")
+        compiled = (
+            bytes((0, 0, 3))
+            + items(accounts)
+            + items([instruction])
+            + items([])
+        )
+        source = b"\0" + compiled
+        payload = returned(
+            task(
+                trigger=b"\1" + struct.pack("<q", 1_800_000_000),
+                source=source,
+                free_tasks=1,
+                description="ETF poke",
+            )
+        )
+        self.assertEqual(
+            payload.hex(),
+            "010000000100d2496b000000000000000303000000"
+            "5050505050505050505050505050505050505050505050505050505050505050"
+            "5656565656565656565656565656565656565656565656565656565656565656"
+            "4646464646464646464646464646464646464646464646464646464646464646"
+            "01000000000200000001020c000000666978747572652d706f6b650000000000"
+            "010800000045544620706f6b6500000000",
+        )
+        self.assertLessEqual(len(payload), 1_000)
+
+        parsed = parse_run_task_return(payload)
+        self.assertEqual(parsed.tasks_accounts, ())
+        self.assertEqual(len(parsed.tasks), 1)
+        child = parsed.tasks[0]
+        self.assertEqual((child.trigger, child.timestamp), ("timestamp", 1_800_000_000))
+        self.assertEqual(child.transaction_kind, "compiled")
+        self.assertEqual(child.account_class_counts, (0, 0, 3))
+        self.assertEqual(child.accounts, tuple(accounts))
+        self.assertEqual(len(child.instructions), 1)
+        self.assertEqual(child.instructions[0].program_id_index, 0)
+        self.assertEqual(child.instructions[0].account_indexes, bytes((1, 2)))
+        self.assertEqual(child.instructions[0].data, b"fixture-poke")
+        self.assertEqual(child.free_tasks, 1)
+        self.assertEqual(child.crank_reward, None)
+        self.assertEqual(child.description, "ETF poke")
+
+        self.assertTrue(
+            validate_compiled_requeue(
+                parsed,
+                parent_free_tasks=1,
+                queue_capacity=8,
+                min_crank_reward=5,
+                free_task_ids=[7],
+                task_queue=TASK_QUEUE,
+                free_task_accounts=[
+                    FreeTaskAccount(derive_tuktuk_task_address(TASK_QUEUE, 7), True)
+                ],
+            )
+        )
+
     def test_parses_compiled_task_with_timestamp_instructions_and_signer_seeds(self):
         payload = returned(
             task(
