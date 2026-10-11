@@ -204,6 +204,10 @@ export function RebalanceDesk({ desk }: { desk: RebalanceDeskView }) {
         <DeskSection area="cr-desk-targets-block" index="02" title="Target weights">
           <AllocationEditor desk={desk} />
           <div className="cr-pt-total"><span>Targets total {targetsValid ? "exactly 100%" : `of ${desk.targetsTotal}%`}</span><strong>{desk.targetsTotal}%</strong></div>
+          <div className="cr-desk-target-tools">
+            <button className="cr-pt-reset" disabled={running} onClick={desk.matchLive}>match live weights</button>
+            <button className="cr-pt-remove" disabled={running || !desk.canUndo} onClick={desk.undo}>undo edit</button>
+          </div>
           {!targetsValid && <p className="cr-error">Targets must total exactly 100% before the desk will swap. <button className="cr-pt-reset" onClick={desk.normalizeTargets}>normalize to 100</button></p>}
         </DeskSection>
         <DeskSection area="cr-desk-plan" index="03" title="Trades to restore target">
