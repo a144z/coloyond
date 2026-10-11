@@ -98,25 +98,32 @@ pub fn quote_deposit(
 }
 
 /// Apply a completed proportional deposit after both token CPIs have
-/// succeeded. The instruction must perform transfers and this mutation in one
-/// Solana transaction; a failed CPI rolls all account writes back.
+/// succeeded. Stage every checked result before mutating the account so a
+/// method-level error leaves the complete Vault unchanged. The instruction
+/// still composes transfers and this mutation in one Solana transaction.
 pub fn apply_deposit(vault: &mut Vault, quote: DepositQuote) -> Result<()> {
     let recomputed = quote_deposit(vault, quote.amounts_in, quote.shares_out)?;
     require!(recomputed == quote, VaultError::TransferAmountMismatch);
+
+    let mut accounted_amounts = vault.accounted_amounts;
     for i in 0..ASSET_COUNT {
         require!(quote.amounts_in[i] > 0, VaultError::ZeroAmount);
-        vault.accounted_amounts[i] = vault.accounted_amounts[i]
+        accounted_amounts[i] = accounted_amounts[i]
             .checked_add(quote.amounts_in[i])
             .ok_or(VaultError::ArithmeticOverflow)?;
     }
-    vault.total_shares = vault
+    let total_shares = vault
         .total_shares
         .checked_add(quote.shares_out)
         .ok_or(VaultError::ArithmeticOverflow)?;
-    vault.sequence = vault
+    let sequence = vault
         .sequence
         .checked_add(1)
         .ok_or(VaultError::ArithmeticOverflow)?;
+
+    vault.accounted_amounts = accounted_amounts;
+    vault.total_shares = total_shares;
+    vault.sequence = sequence;
     Ok(())
 }
 
@@ -154,6 +161,8 @@ pub fn quote_redemption(vault: &Vault, shares_to_burn: u64) -> Result<Redemption
 }
 
 /// Apply a completed burn/exit after both outbound token CPIs succeeded.
+/// Stage every checked result before mutating the account so a method-level
+/// error leaves the complete Vault unchanged.
 pub fn apply_redemption(
     vault: &mut Vault,
     shares_to_burn: u64,
@@ -162,17 +171,22 @@ pub fn apply_redemption(
     require!(shares_to_burn > 0, VaultError::ZeroShares);
     let recomputed = quote_redemption(vault, shares_to_burn)?;
     require!(recomputed == quote, VaultError::TransferAmountMismatch);
+
+    let mut accounted_amounts = vault.accounted_amounts;
     for i in 0..ASSET_COUNT {
-        vault.accounted_amounts[i] = vault.accounted_amounts[i]
+        accounted_amounts[i] = accounted_amounts[i]
             .checked_sub(quote.amounts_out[i])
             .ok_or(VaultError::BalanceDeficit)?;
-        vault.bootstrap_reserve[i] = quote.reserve_after[i];
     }
-    vault.total_shares = quote.remaining_supply;
-    vault.sequence = vault
+    let sequence = vault
         .sequence
         .checked_add(1)
         .ok_or(VaultError::ArithmeticOverflow)?;
+
+    vault.accounted_amounts = accounted_amounts;
+    vault.bootstrap_reserve = quote.reserve_after;
+    vault.total_shares = quote.remaining_supply;
+    vault.sequence = sequence;
     Ok(())
 }
 

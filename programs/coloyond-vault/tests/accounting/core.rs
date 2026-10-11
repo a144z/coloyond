@@ -4,6 +4,41 @@ use crate::{
 };
 use anchor_lang::prelude::Pubkey;
 
+#[derive(Debug, PartialEq, Eq)]
+struct VaultSnapshot {
+    version: u8,
+    bump: u8,
+    status: u8,
+    authority: Pubkey,
+    configuration_revision: u64,
+    assets: [AssetConfig; 2],
+    share_mint: Pubkey,
+    total_shares: u64,
+    minimum_locked_shares: u64,
+    accounted_amounts: [u64; 2],
+    bootstrap_reserve: [u64; 2],
+    bounty_liabilities: [u64; 2],
+    sequence: u64,
+}
+
+fn snapshot(vault: &Vault) -> VaultSnapshot {
+    VaultSnapshot {
+        version: vault.version,
+        bump: vault.bump,
+        status: vault.status,
+        authority: vault.authority,
+        configuration_revision: vault.configuration_revision,
+        assets: vault.assets,
+        share_mint: vault.share_mint,
+        total_shares: vault.total_shares,
+        minimum_locked_shares: vault.minimum_locked_shares,
+        accounted_amounts: vault.accounted_amounts,
+        bootstrap_reserve: vault.bootstrap_reserve,
+        bounty_liabilities: vault.bounty_liabilities,
+        sequence: vault.sequence,
+    }
+}
+
 fn asset(decimals: u8, target_bps: u16) -> AssetConfig {
     AssetConfig {
         mint: Pubkey::new_unique(),
@@ -199,4 +234,80 @@ fn planning_quote_leaves_state_unchanged_until_record_step() {
         (v.accounted_amounts, v.total_shares, v.sequence),
         after_deposit
     );
+}
+
+#[test]
+fn deposit_late_asset_overflow_leaves_the_entire_vault_unchanged() {
+    let mut v = vault([1_000, u64::MAX], 1_000, 1);
+    v.bounty_liabilities[1] = 1;
+    v.bootstrap_reserve[1] = 1;
+    let quote = accounting::quote_deposit(&v, [1, u64::MAX / 1_000 + 1], 1).unwrap();
+    let before = snapshot(&v);
+
+    assert_eq!(
+        accounting::apply_deposit(&mut v, quote).unwrap_err(),
+        VaultError::ArithmeticOverflow.into()
+    );
+    assert_eq!(snapshot(&v), before);
+}
+
+#[test]
+fn deposit_share_supply_or_sequence_overflow_leaves_the_entire_vault_unchanged() {
+    let mut v = vault([1_000, 1_000], u64::MAX - 1, 1);
+    v.bounty_liabilities = [999, 999];
+    v.bootstrap_reserve = [1_000, 1_000];
+    let quote = accounting::quote_deposit(&v, [1, 1], 1).unwrap();
+    let before = snapshot(&v);
+
+    assert_eq!(
+        accounting::apply_deposit(&mut v, quote).unwrap_err(),
+        VaultError::ArithmeticOverflow.into()
+    );
+    assert_eq!(snapshot(&v), before);
+
+    let mut v = vault([1_000, 1_000], 1_000, 1);
+    v.sequence = u64::MAX;
+    let quote = accounting::quote_deposit(&v, [10, 10], 1).unwrap();
+    let before = snapshot(&v);
+
+    assert_eq!(
+        accounting::apply_deposit(&mut v, quote).unwrap_err(),
+        VaultError::ArithmeticOverflow.into()
+    );
+    assert_eq!(snapshot(&v), before);
+}
+
+#[test]
+fn redemption_sequence_overflow_leaves_the_entire_vault_unchanged() {
+    let mut v = vault([1_000, 2_000], 1_000, 1);
+    v.sequence = u64::MAX;
+    let quote = accounting::quote_redemption(&v, 100).unwrap();
+    let before = snapshot(&v);
+
+    assert_eq!(
+        accounting::apply_redemption(&mut v, 100, quote).unwrap_err(),
+        VaultError::ArithmeticOverflow.into()
+    );
+    assert_eq!(snapshot(&v), before);
+}
+
+#[test]
+fn tampered_quotes_leave_the_entire_vault_unchanged() {
+    let mut v = vault([1_000, 2_000], 1_000, 1);
+    let mut deposit = accounting::quote_deposit(&v, [100, 200], 1).unwrap();
+    deposit.amounts_in[1] += 1;
+    let before = snapshot(&v);
+    assert_eq!(
+        accounting::apply_deposit(&mut v, deposit).unwrap_err(),
+        VaultError::TransferAmountMismatch.into()
+    );
+    assert_eq!(snapshot(&v), before);
+
+    let mut redemption = accounting::quote_redemption(&v, 100).unwrap();
+    redemption.reserve_after[0] += 1;
+    assert_eq!(
+        accounting::apply_redemption(&mut v, 100, redemption).unwrap_err(),
+        VaultError::TransferAmountMismatch.into()
+    );
+    assert_eq!(snapshot(&v), before);
 }
