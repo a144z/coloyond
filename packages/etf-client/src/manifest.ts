@@ -217,7 +217,14 @@ export function derivePythFixedFeedAccount(pushOracleProgramId: PublicKey, feedI
 }
 
 type IdlInstruction = { name: string; discriminator: number[]; accounts: { name: string; writable?: boolean; signer?: boolean; optional?: boolean; address?: string }[]; args: { name: string; type: unknown }[] };
-const EXPECTED_IDL_SURFACE: Readonly<Record<string, Readonly<{ discriminator: readonly number[]; accounts: readonly string[]; args: readonly string[] }>>> = {
+type ExpectedIdlSurface = Readonly<{
+  discriminator: readonly number[];
+  accounts: readonly string[];
+  args: readonly string[];
+  accountFlags?: readonly Readonly<{ signer: boolean; writable: boolean }>[];
+  argTypes?: readonly string[];
+}>;
+const EXPECTED_IDL_SURFACE: Readonly<Record<string, ExpectedIdlSurface>> = {
   initialize_pool: { discriminator: [95, 180, 10, 172, 84, 174, 232, 40], accounts: ["payer", "pool", "pool_state", "share_mint", "authority", "token_program", "system_program"], args: ["config_hash", "config_bytes"] },
   seed_pool: { discriminator: [111, 214, 148, 46, 108, 2, 217, 18], accounts: ["seed", "pool", "pool_state", "share_mint", "authority", "token_program", "oracle_feed_0", "oracle_feed_1", "oracle_feed_2"], args: ["amounts", "min_shares_out"] },
   deposit_proportional: { discriminator: [63, 57, 128, 46, 164, 238, 143, 133], accounts: ["user", "pool", "pool_state", "share_mint", "authority", "token_program"], args: ["max_inputs", "min_shares_out"] },
@@ -225,6 +232,9 @@ const EXPECTED_IDL_SURFACE: Readonly<Record<string, Readonly<{ discriminator: re
   swap_exact_in: { discriminator: [104, 104, 131, 86, 161, 189, 180, 216], accounts: ["trader", "pool", "pool_state", "authority", "token_program", "oracle_feed_0", "oracle_feed_1", "oracle_feed_2"], args: ["asset_in", "asset_out", "amount_in", "min_amount_out"] },
   pause_risk: { discriminator: [221, 2, 34, 100, 217, 178, 42, 15], accounts: ["guardian", "pool", "pool_state", "share_mint", "authority"], args: [] },
   poke: { discriminator: [46, 24, 16, 107, 212, 9, 17, 5], accounts: ["caller", "pool", "pool_state", "oracle_feed_0", "oracle_feed_1", "oracle_feed_2"], args: [] },
+  propose_resume: { discriminator: [101, 206, 195, 58, 159, 84, 16, 59], accounts: ["governance", "pool", "pool_state"], args: [], accountFlags: [{ signer: true, writable: false }, { signer: false, writable: false }, { signer: false, writable: true }] },
+  resume_risk_after_delay: { discriminator: [62, 120, 18, 234, 169, 77, 91, 35], accounts: ["executor", "pool", "pool_state"], args: ["proposal_nonce"], accountFlags: [{ signer: true, writable: false }, { signer: false, writable: false }, { signer: false, writable: true }], argTypes: ["u64"] },
+  cancel_resume_proposal: { discriminator: [214, 159, 34, 123, 49, 111, 127, 76], accounts: ["governance", "pool", "pool_state"], args: ["proposal_nonce"], accountFlags: [{ signer: true, writable: false }, { signer: false, writable: false }, { signer: false, writable: true }], argTypes: ["u64"] },
 };
 
 function requireIdl(value: unknown, expectedProgramId: string): Readonly<Record<string, unknown>> {
@@ -242,6 +252,8 @@ function requireIdl(value: unknown, expectedProgramId: string): Readonly<Record<
     if (!Array.isArray(actual.discriminator) || actual.discriminator.join(",") !== expected.discriminator.join(",")) throw new Error(`idl_discriminator_mismatch_${name}`);
     if (!Array.isArray(actual.accounts) || actual.accounts.map((item) => item?.name).join(",") !== expected.accounts.join(",")) throw new Error(`idl_account_order_mismatch_${name}`);
     if (!Array.isArray(actual.args) || actual.args.map((item) => item?.name).join(",") !== expected.args.join(",")) throw new Error(`idl_argument_order_mismatch_${name}`);
+    if (expected.accountFlags?.some((flags, index) => (actual.accounts[index]?.signer ?? false) !== flags.signer || (actual.accounts[index]?.writable ?? false) !== flags.writable)) throw new Error(`idl_account_flags_mismatch_${name}`);
+    if (expected.argTypes?.some((type, index) => actual.args[index]?.type !== type)) throw new Error(`idl_argument_type_mismatch_${name}`);
   }
   return deepFreeze(structuredClone(idl));
 }
