@@ -501,6 +501,7 @@ a { color: inherit; }
 .cr-desk-target-delta { font: 11px/1.4 monospace; text-transform: uppercase; letter-spacing: 1.1px; color: var(--muted); white-space: nowrap; }
 .cr-desk-allocation .cr-desk-target { grid-template-columns: auto minmax(0, 1fr) minmax(140px, 2fr) auto auto auto; }
 .cr-desk-lock { min-height: 34px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 7px; background: var(--field); color: var(--muted); font: 10px/1 monospace; text-transform: uppercase; letter-spacing: 1.1px; cursor: pointer; }
+.cr-desk-target-tools { display: flex; justify-content: flex-end; gap: 10px; margin: 8px 0 0; }
 .cr-desk-lock[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .cr-desk-lock:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 @media (width <= 720px) {

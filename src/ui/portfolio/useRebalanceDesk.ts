@@ -17,6 +17,7 @@ import {
   round2,
   seedBasket,
   simulateMarketMove,
+  targetsFromWeights,
   normalizeTargets as normalizeTargetsOf,
   targetsTotal as targetsTotalOf,
   totalValueUsd,
@@ -61,6 +62,9 @@ export interface RebalanceDeskView {
   setTarget: (symbol: string, pct: number) => void;
   normalizeTargets: () => void;
   toggleLocked: (symbol: string) => void;
+  matchLive: () => void;
+  canUndo: boolean;
+  undo: () => void;
   simulateMarket: () => void;
   rebalanceNow: () => void;
   resetBasket: () => void;
@@ -152,6 +156,24 @@ export function useRebalanceDesk(): RebalanceDeskView {
   // Persist after commit; updaters stay pure because React may replay them.
   useEffect(() => writeCore(core), [core]);
 
+  // Undo history is a session thing, kept out of storage. Only target-vector
+  // and lock edits push, and a burst of slider or handle movement collapses
+  // into a single step through the timestamp, so one undo walks back one
+  // deliberate move rather than every integer it slid across.
+  const [history, setHistory] = useState<{ assets: DeskAsset[]; locked: string[] }[]>([]);
+  const coreRef = useRef(core);
+  useEffect(() => {
+    coreRef.current = core;
+  });
+  const lastEditAtRef = useRef(0);
+  const pushHistory = useCallback(() => {
+    const now = Date.now();
+    if (now - lastEditAtRef.current > 350) {
+      setHistory((past) => [...past.slice(-19), { assets: coreRef.current.assets, locked: coreRef.current.locked }]);
+    }
+    lastEditAtRef.current = now;
+  }, []);
+
   const weights = useMemo(() => weightsPct(core.assets), [core.assets]);
   const drift = useMemo(() => driftPp(core.assets), [core.assets]);
   const totalUsd = useMemo(() => totalValueUsd(core.assets), [core.assets]);
@@ -172,14 +194,16 @@ export function useRebalanceDesk(): RebalanceDeskView {
   }, []);
 
   const setTarget = useCallback((symbol: string, pct: number) => {
+    pushHistory();
     const next = Number.isFinite(pct) ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
     setCore((current) => ({ ...current, assets: current.assets.map((asset) => (asset.symbol === symbol ? { ...asset, targetPct: next } : asset)) }));
-  }, []);
+  }, [pushHistory]);
 
   const normalizeTargets = useCallback(() => {
+    pushHistory();
     setCore((current) => ({ ...current, assets: normalizeTargetsOf(current.assets) }));
     setStatus("Targets normalized to total exactly 100%.");
-  }, []);
+  }, [pushHistory]);
 
   const simulateMarket = useCallback(() => {
     if (runningRef.current) return;
@@ -230,15 +254,35 @@ export function useRebalanceDesk(): RebalanceDeskView {
 
   const resetBasket = useCallback(() => {
     setCore(seedCore());
+    setHistory([]);
     setStatus("The basket is back on the saved seed set by the strategy.");
   }, []);
 
   const toggleLocked = useCallback((symbol: string) => {
+    pushHistory();
     setCore((current) => ({
       ...current,
       locked: current.locked.includes(symbol) ? current.locked.filter((lockedSymbol) => lockedSymbol !== symbol) : [...current.locked, symbol],
     }));
-  }, []);
+  }, [pushHistory]);
+
+  const matchLive = useCallback(() => {
+    pushHistory();
+    setCore((current) => ({ ...current, assets: targetsFromWeights(current.assets) }));
+    setStatus("Targets now mirror the live weights, so drift starts at zero.");
+  }, [pushHistory]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) {
+      setStatus("Nothing to undo yet.");
+      return;
+    }
+    const last = history[history.length - 1];
+    setCore((current) => ({ ...current, assets: last.assets, locked: last.locked }));
+    setHistory(history.slice(0, -1));
+    setStatus("The last edit is undone.");
+    lastEditAtRef.current = 0;
+  }, [history]);
 
   return {
     assets: core.assets,
@@ -260,6 +304,9 @@ export function useRebalanceDesk(): RebalanceDeskView {
     setTarget,
     normalizeTargets,
     toggleLocked,
+    matchLive,
+    canUndo: history.length > 0,
+    undo,
     simulateMarket,
     rebalanceNow,
     resetBasket,

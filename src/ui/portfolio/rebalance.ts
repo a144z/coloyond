@@ -162,6 +162,23 @@ export function normalizeTargets(assets: DeskAsset[]): DeskAsset[] {
   return assets.map((asset, index) => ({ ...asset, targetPct: whole[index] }));
 }
 
+// Targets mirrored from the live weights, largest-remainder rounded, so one
+// tap can end the drift by adopting where the basket actually sits.
+export function targetsFromWeights(assets: DeskAsset[]): DeskAsset[] {
+  const weights = weightsPct(assets);
+  const whole = weights.map(Math.floor);
+  let rest = 100 - whole.reduce((sum, value) => sum + value, 0);
+  const byFraction = weights.map((value, index) => ({ index, fraction: value - Math.floor(value) })).sort((a, b) => b.fraction - a.fraction);
+  let at = 0;
+  while (rest > 0 && at < byFraction.length) {
+    whole[byFraction[at].index] += 1;
+    rest -= 1;
+    at += 1;
+  }
+  if (rest > 0 && whole.length > 0) whole[0] += rest;
+  return assets.map((asset, index) => ({ ...asset, targetPct: whole[index] ?? 0 }));
+}
+
 // Pure share algebra for the allocation editor. Every edit returns whole
 // percents summing to exactly 100, so the desk can never leave the strict
 // total: setting one share rescales the others with largest-remainder

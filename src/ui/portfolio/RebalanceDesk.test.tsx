@@ -13,7 +13,7 @@ const vite = await createServer({
 });
 
 const { RebalanceDesk } = await vite.ssrLoadModule("/src/ui/portfolio/RebalanceDesk.tsx");
-const { sharesForSet, sharesForTransfer } = await vite.ssrLoadModule("/src/ui/portfolio/rebalance.ts");
+const { sharesForSet, sharesForTransfer, targetsFromWeights } = await vite.ssrLoadModule("/src/ui/portfolio/rebalance.ts");
 
 function deskView(overrides = {}) {
   const touched: string[] = [];
@@ -41,6 +41,9 @@ function deskView(overrides = {}) {
       setTarget: (symbol: string) => { touched.push(symbol); },
       normalizeTargets: () => undefined,
       toggleLocked: () => undefined,
+      matchLive: () => undefined,
+      canUndo: false,
+      undo: () => undefined,
       simulateMarket: () => undefined,
       rebalanceNow: () => undefined,
       resetBasket: () => undefined,
@@ -155,7 +158,8 @@ test("a locked token shows pressed lock, disabled sliders and a frozen handle", 
   const html = render(view);
   assert.equal(count(html, /aria-pressed="true"/g), 1);
   assert.equal(count(html, />locked</g), 1);
-  assert.equal(count(html, /disabled=""/g), 4);
+  // Handle, locked slider, locked field, inert undo chip, rebalance-now.
+  assert.equal(count(html, /disabled=""/g), 5);
 });
 
 test("sharesForSet honours locks: a locked token or target blocks the move", () => {
@@ -179,6 +183,34 @@ test("sharesForTransfer freezes a pair when either side is locked", () => {
     { symbol: "SOL", targetPct: 60 },
     { symbol: "USDC", targetPct: 40 },
   ]);
+});
+
+test("the target tools row offers match live and an undo that is inert without history", () => {
+  const { view } = deskView();
+  const html = render(view);
+  assert.match(html, /<button[^>]*>match live weights<\/button>/);
+  assert.match(html, /<button[^>]*disabled[^>]*>undo edit<\/button>/);
+});
+
+test("with history the undo chip is live", () => {
+  const { view } = deskView({ canUndo: true });
+  assert.match(render(view), /<button class="cr-pt-remove">undo edit<\/button>/);
+});
+
+test("targetsFromWeights mirrors live weights to whole percents totaling 100", () => {
+  const clean = targetsFromWeights([
+    { symbol: "A", name: "A", color: "#000", valueUsd: 7000, targetPct: 1 },
+    { symbol: "B", name: "B", color: "#000", valueUsd: 3000, targetPct: 1 },
+  ]);
+  assert.deepEqual(clean.map((asset: { targetPct: number }) => asset.targetPct), [70, 30]);
+  const split = targetsFromWeights([
+    { symbol: "A", name: "A", color: "#000", valueUsd: 1000, targetPct: 1 },
+    { symbol: "B", name: "B", color: "#000", valueUsd: 1000, targetPct: 1 },
+    { symbol: "C", name: "C", color: "#000", valueUsd: 1000, targetPct: 1 },
+  ]);
+  assert.deepEqual(split.map((asset: { targetPct: number }) => asset.targetPct), [34, 33, 33]);
+  const zero = targetsFromWeights([{ symbol: "A", name: "A", color: "#000", valueUsd: 0, targetPct: 1 }]);
+  assert.deepEqual(zero.map((asset: { targetPct: number }) => asset.targetPct), [100]);
 });
 
 test.after(() => vite.close());
