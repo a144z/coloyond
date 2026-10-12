@@ -1,8 +1,6 @@
 package com.coloyond.protocols.portfolio
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PortfolioAddressesTest {
@@ -16,11 +14,8 @@ class PortfolioAddressesTest {
 
     @Test
     fun seedConstantsMatchTheRustPdaSeeds() {
-        assertEquals("portfolio_owner_registry_v2", PortfolioAddresses.OWNER_REGISTRY_SEED)
-        assertEquals("portfolio_vault_v2", PortfolioAddresses.VAULT_SEED)
-        assertEquals("portfolio_authority_v2", PortfolioAddresses.AUTHORITY_SEED)
-        assertEquals("portfolio_custody_v2", PortfolioAddresses.CUSTODY_SEED)
-        assertEquals("portfolio_controller_v2", PortfolioAddresses.CONTROLLER_SEED)
+        assertEquals("etf_pool", PortfolioAddresses.POOL_SEED)
+        assertEquals("etf_vault", PortfolioAddresses.VAULT_SEED)
     }
 
     @Test
@@ -34,21 +29,17 @@ class PortfolioAddressesTest {
     }
 
     @Test
-    fun vaultPdaChangesWithGeneration() {
-        val owner = "Sysvar11111111111111111111111111111111"
-        val first = PortfolioAddresses.vault(owner, 0uL)
-        val second = PortfolioAddresses.vault(owner, 1uL)
-        assertNotEquals(first, second)
-        assertTrue(first.isNotBlank())
-        assertTrue(second.isNotBlank())
+    fun poolPdaDerivesOffAdminAndPoolId() {
+        // Cross-checked against `coloyond_portfolio::pda::pool` for the same
+        // admin bytes (base58 of `[7u8; 32]`) and little-endian pool ids.
+        val admin = "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx"
+        assertEquals("F9pNCkgH1t9C2QtVeK2bHbmm8gZAAyuMdYkazkhaWbCB", PortfolioAddresses.pool(admin, 0uL))
+        assertEquals("27U7xR8rPUSQCd2TDvHN6XSkHBAcwj4k76YKeBTZeUwf", PortfolioAddresses.pool(admin, 1uL))
     }
 
     @Test
-    fun controllerPdaDerivesFromVaultNotOwner() {
-        val owner = "Sysvar11111111111111111111111111111111"
-        val vaultAddress = PortfolioAddresses.vault(owner, 0uL)
-        val controller = PortfolioAddresses.controller(vaultAddress, 0uL)
-        assertNotEquals(controller, vaultAddress)
-        assertTrue(controller.isNotBlank())
+    fun vaultPdaDerivesFromPool() {
+        val poolAddress = "F9pNCkgH1t9C2QtVeK2bHbmm8gZAAyuMdYkazkhaWbCB"
+        assertEquals("z4gRugwGrxQLtss31qrL3kKxcu3jki3789gPUfmSxVx", PortfolioAddresses.vault(poolAddress))
     }
 }
