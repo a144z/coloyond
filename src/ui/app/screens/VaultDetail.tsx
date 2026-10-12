@@ -1,3 +1,4 @@
+import {RebalanceExplorer} from '../components/ui/RebalanceExplorer.js';
 import { PortfolioArt, PortfolioShare, cardInput } from '../components/ui/PortfolioArt.js';
 import { useEffect, useState } from 'react';
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store.js';
@@ -146,6 +147,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         </div>
       </div>
 
+      <div className="mt-5"><RebalanceExplorer targets={vault.targets} /></div>
       <div className="mt-5">
         <LedgerPanel stripe="On-chain accounts" meta="standard SPL">
           <KeyValue rows={[
@@ -297,7 +299,7 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
             for (const segment of segments) {
               const id = segment.key as AssetId;
               if (locked[id] !== undefined) continue; // pinned weights are not draggable
-              next[id] = Math.round(segment.pct);
+              next[id] = segment.pct;
             }
             return next;
           })}

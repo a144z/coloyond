@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';import test from 'node:test';
+import {exampleAssets,rebalanceIllustration} from './illustration.js';
+test('40/20/40 SOL up ETH down sells overweight SOL and buys ETH plus cash',()=>{const r=rebalanceIllustration(exampleAssets({wsol:40,teth:20,dusd:40},{wsol:20,teth:-20}));assert.equal(r.total,1040);assert.ok(Math.abs(r.rows[0].actualPct-46.153846)<.00001);assert.equal(r.rows[0].deltaValue,-64);assert.equal(r.rows[1].deltaValue,48);assert.equal(r.rows[2].deltaValue,16);assert.ok(Math.abs(r.rows.reduce((s,a)=>s+a.deltaValue,0))<1e-9);for(const row of r.rows)assert.ok(Math.abs(row.targetUnits*row.price/r.total*100-row.targetPct)<1e-9);});
+test('no price movement requires no trade',()=>{const r=rebalanceIllustration(exampleAssets({wsol:40,teth:20,dusd:40}));assert.equal(r.sells.length,0);assert.equal(r.buys.length,0);});
+test('reverse shock reverses sell/buy direction',()=>{const r=rebalanceIllustration(exampleAssets({wsol:40,teth:20,dusd:40},{wsol:-20,teth:20}));assert.ok(r.buys.some(a=>a.id==='wsol'));assert.ok(r.sells.some(a=>a.id==='teth'));});
+test('rejects incomplete targets and invalid prices',()=>{assert.throws(()=>rebalanceIllustration(exampleAssets({wsol:40,teth:20})));assert.throws(()=>rebalanceIllustration([{id:'bad',symbol:'X',color:'#000000',price:0,units:1,targetPct:100}]));});

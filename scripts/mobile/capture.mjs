@@ -28,6 +28,9 @@ const before=await page.getByRole('textbox',{name:'Exact target percentage for W
 await page.getByRole('slider',{name:'Target slider for tBTC'}).fill('10');
 if (before!==await page.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue()) throw Error('Locked weight changed');
 await page.screenshot({ path: out+'03-mix.png' });
+await page.getByRole('button',{name:'Illustrate rebalance',exact:true}).click();
+await page.getByRole('button',{name:'Show price drift',exact:true}).waitFor();
+await page.getByRole('button',{name:'Show price drift',exact:true}).click();
 await page.getByRole('button', {name:/Unlock WSOL weight/}).click();
 await page.getByRole('button',{name:'Add an executable asset'}).click();
 await page.getByRole('dialog').waitFor();

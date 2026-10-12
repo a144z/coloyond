@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';import test from 'node:test';
+import {normalizeShares,sharesForDesiredPct,sharesFromTargets} from './WeightSliders.js';
+test('exact 40/20/40 mix remains exact with a locked SOL target',()=>{let s={wsol:60,dusd:40,tbtc:0,teth:0};s=sharesForDesiredPct(s,'wsol',40);assert.ok(Math.abs(normalizeShares(s).wsol!-40)<1e-9);s=sharesForDesiredPct(s,'teth',20,undefined,{wsol:40});const p=normalizeShares(s,undefined,{wsol:40});assert.ok(Math.abs(p.wsol!-40)<1e-9);assert.ok(Math.abs(p.teth!-20)<1e-9);assert.ok(Math.abs(p.dusd!-40)<1e-9);});
+test('100 percent clears other unlocked raw shares instead of approximating',()=>{const s=sharesForDesiredPct({wsol:60,dusd:40,tbtc:0,teth:0},'wsol',100);assert.deepEqual(normalizeShares(s),{wsol:100});});
+test('fractional targets survive edit initialization',()=>{const target={wsol:40.25,dusd:39.5,teth:20.25};const next=normalizeShares(sharesFromTargets(target));for(const [id,pct] of Object.entries(target))assert.ok(Math.abs(next[id as 'wsol']!-pct)<1e-9);});

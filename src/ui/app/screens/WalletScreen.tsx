@@ -1,3 +1,5 @@
+import {transactionJournal,reconcileWalletTransaction,describeTxError} from '../lib/solana/tx.js';
+import {SignatureLink} from '../components/ui/primitives.js';
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useStore } from '../lib/store.js';
@@ -33,6 +35,8 @@ export function WalletScreen() {
   const wrap = useStore((s) => s.wrap);
   const pushScreen = useStore((s) => s.pushScreen);
 
+  const [checkingPending,setCheckingPending] = useState(false);
+  const [pendingMessage,setPendingMessage] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
   const [wrapOpen, setWrapOpen] = useState(false);
   const [wrapAmount, setWrapAmount] = useState('0.10');
@@ -51,6 +55,7 @@ export function WalletScreen() {
       : null;
 
   const bookMeta = priceBookMeta(price);
+  const pending = transactionJournal.read(address);
 
   return (
     <Screen>
@@ -62,6 +67,7 @@ export function WalletScreen() {
           : 'Your device wallet signs portfolio setup and owner actions, holds your SOL and token balances, and funds devnet transactions.'}
       />
 
+      {pending ? <div className="mb-4"><Notice tone="brass" title="Submitted · confirmation unresolved"><p className="text-[12px]">Check this signature before sending another transaction.</p><SignatureLink sig={pending.signature}/><div className="mt-3"><Button full loading={checkingPending} onClick={async()=>{setCheckingPending(true);try{const result=await reconcileWalletTransaction(address);setPendingMessage(result?'Confirmed. Refreshing wallet and portfolio reads.':'The blockhash expired with no transaction found. You may review a new transaction.');void useStore.getState().refreshBalances();for(const v of useStore.getState().vaults)void useStore.getState().refreshVaultBalances(v.id);}catch(e){setPendingMessage(describeTxError(e));}finally{setCheckingPending(false);}}}>Check confirmation</Button></div>{pendingMessage?<p className="mt-2 text-[11px]">{pendingMessage}</p>:null}</Notice></div>:null}
       <LedgerPanel stripe={external ? 'Connected wallet' : 'Owner address'} meta={shortKey(address)}>
         <p className="break-all font-mono text-[11.5px] leading-relaxed font-bold">{address}</p>
         <div className="mt-2.5 flex items-center justify-between gap-3">

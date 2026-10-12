@@ -13,7 +13,9 @@
     "test:mobile": "node scripts/mobile/capture.mjs",
     "video:studio": "remotion studio remotion/index.tsx --public-dir=remotion/public",
     "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2",
-    "test:video-camera": "node --import tsx scripts/mobile/verify-video-camera.mjs"
+    "test:video-camera": "node --import tsx scripts/mobile/verify-video-camera.mjs",
+    "test:proof": "node --import tsx --test src/ui/app/lib/solana/tx-core.test.ts src/ui/app/lib/solana/vault-state.test.ts src/ui/app/lib/rebalance/illustration.test.ts src/ui/app/components/ui/WeightSliders.test.ts",
+    "evidence:record": "node scripts/submission/record-ui.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",

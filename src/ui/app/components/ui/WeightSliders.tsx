@@ -94,29 +94,7 @@ export function WeightSliders({
   }
 
   function handleSliderChange(id: AssetId, desiredPct: number) {
-    // Reverse-engineer the raw share from the desired normalized percentage.
-    // The normalization formula: pct_i = remaining * share_i / unlockedTotal
-    // Solving for share_i: share_i = pct_i * total_other_unlocked / (remaining - pct_i)
-    const unlockedSpecs = specs.filter((s) => locked[s.id] === undefined);
-    const lockedSum = specs.reduce((sum, spec) => {
-      const pin = locked[spec.id];
-      if (pin === undefined) return sum;
-      return sum + Math.max(0, Math.min(100, pin));
-    }, 0);
-    const remaining = Math.max(0, 100 - lockedSum);
-    // Edge case: desired percentage >= remaining, or no remaining budget
-    if (remaining <= 0 || desiredPct >= remaining - 0.05) {
-      onChange({ ...shares, [id]: desiredPct >= remaining ? 10000 : 0 });
-      return;
-    }
-    // Sum of all other unlocked assets' shares (excluding this one)
-    const totalOther = unlockedSpecs.reduce((sum, spec) => {
-      if (spec.id === id) return sum;
-      return sum + Math.max(0, shares[spec.id] ?? 0);
-    }, 0);
-    // Reverse-engineer the raw share
-    const newShare = totalOther > 0 ? (desiredPct * totalOther) / (remaining - desiredPct) : desiredPct;
-    onChange({ ...shares, [id]: Math.max(0, Math.round(newShare)) });
+    onChange(sharesForDesiredPct(shares,id,desiredPct,assetIds,locked));
   }
 
   return (
@@ -244,8 +222,8 @@ function shareAfterUnlock(
     }
   }
   const remaining = Math.max(0, 100 - lockedSum);
-  if (remaining <= 0 || unlockedTotal <= 0) return Math.round(pin);
-  return Math.max(0, Math.round((unlockedTotal * pin) / remaining));
+  if (remaining <= 0 || unlockedTotal <= 0) return pin;
+  return Math.max(0, (unlockedTotal * pin) / remaining);
 }
 
 /** Normalize raw shares into target percentages that sum to 100 (empty input → empty record). Locked assets keep their pinned percentage. */
@@ -267,7 +245,38 @@ export function normalizeShares(
 export function sharesFromTargets(targets: Record<string, number>, assetIds?: readonly AssetId[]): Record<AssetId, number> {
   const out = Object.fromEntries(assetList().map((s) => [s.id, 0])) as Record<AssetId, number>;
   for (const spec of assetList().filter((asset) => !assetIds || assetIds.includes(asset.id))) {
-    out[spec.id] = Math.round(targets[spec.id] ?? 0);
+    out[spec.id] = targets[spec.id] ?? 0;
   }
   return out;
+}
+
+/** Desired percentages retain fractional raw shares; early rounding would turn 40% into 40.3%. */
+export function sharesForDesiredPct(shares:Record<AssetId,number>,id:AssetId,desiredPct:number,assetIds?:readonly AssetId[],locked:WeightLocks={}):Record<AssetId,number>{
+    // Reverse-engineer the raw share from the desired normalized percentage.
+    // The normalization formula: pct_i = remaining * share_i / unlockedTotal
+    // Solving for share_i: share_i = pct_i * total_other_unlocked / (remaining - pct_i)
+    const specs=assetList().filter(asset=>!assetIds||assetIds.includes(asset.id));
+    if(locked[id]!==undefined)return {...shares};
+    desiredPct=Math.max(0,Math.min(100,desiredPct));
+    const unlockedSpecs = specs.filter((s) => locked[s.id] === undefined);
+    const lockedSum = specs.reduce((sum, spec) => {
+      const pin = locked[spec.id];
+      if (pin === undefined) return sum;
+      return sum + Math.max(0, Math.min(100, pin));
+    }, 0);
+    const remaining = Math.max(0, 100 - lockedSum);
+    // Edge case: desired percentage >= remaining, or no remaining budget
+    if (remaining <= 0 || desiredPct >= remaining - 0.05) {
+      const next={...shares};
+      if(desiredPct>=remaining&&remaining>0){for(const spec of unlockedSpecs)next[spec.id]=spec.id===id?remaining:0;}else next[id]=0;
+      return next;
+    }
+    // Sum of all other unlocked assets' shares (excluding this one)
+    const totalOther = unlockedSpecs.reduce((sum, spec) => {
+      if (spec.id === id) return sum;
+      return sum + Math.max(0, shares[spec.id] ?? 0);
+    }, 0);
+    // Reverse-engineer the raw share
+    const newShare = totalOther > 0 ? (desiredPct * totalOther) / (remaining - desiredPct) : desiredPct;
+    return { ...shares, [id]: Math.max(0, newShare) };
 }

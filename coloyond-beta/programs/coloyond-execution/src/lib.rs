@@ -30,6 +30,8 @@ const CRANK_SEED: &[u8] = b"crank";
 const MARKET_CONFIG_SEED: &[u8] = b"market-config";
 const TASK_SPONSOR_RESERVE_LAMPORTS: u64 = 50_000_000;
 const ACTION_MAX_AGE_SEC: i64 = 90;
+const ORACLE_MAX_AGE_SEC: i64 = 90;
+const ORACLE_MAX_CONFIDENCE_BPS: u128 = 100;
 const USD_SCALE: u64 = 1_000_000;
 const MAX_DEVNET_USD_SUPPLY_RAW: u64 = 100_000_000_000; // 100,000 tokens at 6 decimals.
 const BPS: u128 = 10_000;
@@ -1631,9 +1633,17 @@ fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>) -> Result<u6
         ErrorCode::InvalidOracle
     );
     let price = update
-        .get_price_unchecked(&asset.feed_id)
+        .get_price_no_older_than(&Clock::get()?, ORACLE_MAX_AGE_SEC as u64, &asset.feed_id)
         .map_err(|_| error!(ErrorCode::InvalidOracle))?;
+    validate_oracle_observation(price.price, price.conf, price.publish_time, Clock::get()?.unix_timestamp)?;
     normalize_price(price.price, price.exponent)
+}
+
+fn validate_oracle_observation(price: i64, confidence: u64, published: i64, now: i64) -> Result<()> {
+    require!(price > 0, ErrorCode::InvalidOracle);
+    require!(published <= now.saturating_add(5) && published >= now.saturating_sub(ORACLE_MAX_AGE_SEC), ErrorCode::StalePrice);
+    require!((confidence as u128) * BPS <= (price as u128) * ORACLE_MAX_CONFIDENCE_BPS, ErrorCode::ConfidenceTooWide);
+    Ok(())
 }
 
 fn quote_output(
@@ -1826,7 +1836,7 @@ pub enum ErrorCode {
     InvalidAccounts,
     #[msg("Pyth price account or feed id is invalid")]
     InvalidOracle,
-    #[msg("Legacy error code; Pyth publish time is not checked")]
+    #[msg("Pyth price is stale or too far in the future")]
     StalePrice,
     #[msg("Price conversion or trade calculation overflowed")]
     MathOverflow,
@@ -1856,6 +1866,8 @@ pub enum ErrorCode {
     PriceChangeTooSmall,
     #[msg("The per-vault crank policy is missing, malformed, or owned by another vault")]
     InvalidCrankPolicy,
+    #[msg("Pyth confidence interval exceeds the 1% source policy")]
+    ConfidenceTooWide,
 }
 
 #[cfg(test)]
@@ -1883,6 +1895,17 @@ mod crank_policy_tests {
                 price: last_price,
             }],
         }
+    }
+
+    #[test]
+    fn oracle_observation_boundaries() {
+        assert!(validate_oracle_observation(100_000, 1_000, 910, 1_000).is_ok());
+        assert!(validate_oracle_observation(100_000, 1_000, 909, 1_000).is_err());
+        assert!(validate_oracle_observation(100_000, 1_000, 1_006, 1_000).is_err());
+        assert!(validate_oracle_observation(100_000, 1_001, 1_000, 1_000).is_err());
+        assert!(validate_oracle_observation(0, 0, 1_000, 1_000).is_err());
+        assert!(validate_oracle_observation(-1, 0, 1_000, 1_000).is_err());
+        assert!(validate_oracle_observation(i64::MAX, u64::MAX, 1_000, 1_000).is_err());
     }
 
     #[test]

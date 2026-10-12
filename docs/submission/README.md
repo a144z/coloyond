@@ -2,6 +2,8 @@
 
 **Current shipped stack: React + TypeScript mobile web, packaged with Capacitor in a Gradle Android APK.** Kotlin/Jetpack Compose under `apps/android/app/src/legacy*` is historical reference, not the shipped UI. The current portfolio execution program is `coloyond-beta/programs/coloyond-execution`, ID `HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d`. The older ETF/auction research programs and Glider-only release plans are separate work, not the active `/app` implementation.
 
+[Code review and targeted test results](code-review.md) · [Canonical pitch copy](pitch.md) · [Actual UI recording](evidence/actual-mobile-flow.mp4) · [Recording transcript](evidence/actual-mobile-flow-transcript.md)
+
 ## Start with evidence, not roadmap prose
 
 | Claim | Concrete evidence | What this establishes / limit |

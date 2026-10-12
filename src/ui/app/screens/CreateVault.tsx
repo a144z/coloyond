@@ -1,3 +1,4 @@
+import {RebalanceExplorer} from '../components/ui/RebalanceExplorer.js';
 import {readSharedMix} from '../lib/art/remix-link.js';
 import { PortfolioArt, PortfolioShare, cardInput } from '../components/ui/PortfolioArt.js';
 import { useEffect, useMemo, useState } from 'react';
@@ -173,7 +174,7 @@ export function CreateVault() {
               for (const segment of segments) {
                 const id = segment.key as AssetId;
                 if (locked[id] !== undefined) continue; // pinned weights are not draggable
-                next[id] = Math.round(segment.pct);
+                next[id] = segment.pct;
               }
               return next;
             })}
@@ -187,6 +188,7 @@ export function CreateVault() {
         <Button variant="secondary" full onClick={() => setPickerOpen(true)}>Add an executable asset</Button>
       </div>
 
+      {selected.length >= 2 ? <div className="mt-4"><RebalanceExplorer targets={targets} /></div> : null}
       <div className="mt-4">
         <Notice tone="brass">
           dUSD is synthetic, program-issued Devnet USD. It uses a fixed $1 demo accounting price,

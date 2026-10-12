@@ -1,3 +1,4 @@
+import {decodeVaultState} from './vault-state.js';
 import { Buffer } from 'buffer';
 import {
   AccountInfo,
@@ -161,32 +162,7 @@ export function marketAssetAccounts(state: OnChainVaultState, authority: PublicK
 export async function readVaultState(address: PublicKey): Promise<OnChainVaultState> {
   const info = await connection.getAccountInfo(address, 'confirmed');
   if (!info || !info.owner.equals(EXECUTION_PROGRAM)) throw new Error('Vault State was not found on Solana devnet.');
-  const data = Buffer.from(info.data);
-  if (data.length < 98) throw new Error('Vault State data is incomplete.');
-  let offset = 8;
-  const id = BigInt(data.readBigUInt64LE(offset).toString()); offset += 8;
-  const owner = new PublicKey(data.subarray(offset, offset + 32)); offset += 32;
-  const shareMint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32;
-  const active = data[offset] === 1; offset += 1;
-  const thresholdBps = data.readUInt16LE(offset); offset += 2;
-  const maxSlippageBps = data.readUInt16LE(offset); offset += 2;
-  offset += 1; // authority bump
-  const lastSettledNonce = BigInt(data.readBigUInt64LE(offset).toString()); offset += 8;
-  const count = data.readUInt32LE(offset); offset += 4;
-  if (count < 1 || count > 4 || data.length < offset + count * 99) throw new Error('Vault State has an invalid asset list.');
-  const byMint = mintToAssetMap();
-  const assets: OnChainVaultAsset[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32;
-    const id = byMint.get(mint.toBase58());
-    if (!id) throw new Error(`Vault State contains an unsupported mint: ${mint.toBase58()}`);
-    const decimals = data[offset]; offset += 1;
-    const targetBps = data.readUInt16LE(offset); offset += 2;
-    const feedAccount = new PublicKey(data.subarray(offset, offset + 32)); offset += 32;
-    offset += 32; // Pyth feed id
-    assets.push({ id, mint, decimals, targetBps, feedAccount });
-  }
-  return { id, owner, shareMint, active, thresholdBps, maxSlippageBps, lastSettledNonce, assets };
+  return decodeVaultState(address, info.data);
 }
 
 export async function initializeVault(
@@ -728,6 +704,7 @@ export function buildRedeemMinimums(state: OnChainVaultState, balances: Record<s
 }
 
 function targetBasisPoints(assets: AssetId[], targets: Record<string, number>): number[] {
+  if (assets.some(asset => !Number.isFinite(targets[asset] ?? 0) || (targets[asset] ?? 0) < 0 || (targets[asset] ?? 0) > 100)) throw new Error('Targets must be finite percentages from 0 to 100.');
   const weights = assets.map((asset) => Math.round((targets[asset] ?? 0) * 100));
   const remainder = 10_000 - weights.reduce((sum, weight) => sum + weight, 0);
   if (Math.abs(remainder) > weights.length || weights.length === 0) throw new Error('Target weights must total 100%.');

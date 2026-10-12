@@ -1,73 +1,12 @@
-import { WebsiteBrand } from "./Brand.js";
-import { useEffect, useState } from "react";
-import { ReferenceArt } from "./ReferenceArt.js";
-import {
-  ECOSYSTEM,
-  GAMBLE_OUTCOMES,
-  GambleOutcome,
-  PILLARS,
-  QUESTS,
-  WALLET,
-} from "./product.js";
-
-const COMPOSITION_COLORS = ["#1249ed", "#ffd523", "#8d25d9", "#ff513b"];
-
-function SectionTitle({ index, title, note }: { index: string; title: string; note?: string }) {
-  return (
-    <div className="cr-section-title">
-      <span className="cr-index">{index}</span>
-      <div><h2>{title}</h2>{note && <p>{note}</p>}</div>
-    </div>
-  );
-}
-
-export function LandingPage() {
-  const [done, setDone] = useState<Set<string>>(new Set());
-  const [gamble, setGamble] = useState<GambleOutcome | null>(null);
-  const [boostXp, setBoostXp] = useState(0);
-  const completed = QUESTS.filter((quest) => done.has(quest.id));
-  const questXp = completed.reduce((sum, quest) => sum + quest.reward, 0);
-  const rank = completed.length >= 4 ? "Builder" : completed.length >= 2 ? "Steward" : "Watch";
-  useEffect(() => { document.title = "Coloyond — System and participation"; }, []);
-  const toggleQuest = (id: string) => setDone((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-  const rollGamble = () => {
-    if (gamble) return;
-    const roll = Math.random();
-    const outcome = roll < 0.38 ? GAMBLE_OUTCOMES[0] : roll < 0.62 ? GAMBLE_OUTCOMES[1] : roll < 0.82 ? GAMBLE_OUTCOMES[2] : GAMBLE_OUTCOMES[3];
-    setGamble(outcome);
-    setBoostXp(outcome.xp);
-  };
-
-  return (
-    <div className="cr-app">
-      <div className="cr-shell">
-        <header className="cr-topbar">
-          <a className="cr-brand" href="/" aria-label="Coloyond home"><WebsiteBrand /></a>
-          <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample data</span><a className="cr-reference-link" href="/app" aria-label="Open the portfolio desk">Portfolio desk <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/etf-devnet" aria-label="Open real Solana Devnet ETF read page">Real ETF Devnet read <span aria-hidden="true">↗</span></a><a className="cr-reference-link cr-lab-link" href="/rebalancing-lab">Rebalance lab <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/symmetry-devnet">Symmetry Devnet <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a></div>
-        </header>
-
-        <section className="cr-intro" aria-labelledby="page-title">
-          <div className="cr-intro-copy"><p className="cr-eyebrow">coloyond / System / Participation</p><h1 id="page-title">Every part has a part to play.</h1><p className="cr-intro-description">A managed share starts the story. Routing, liquidity, rewards, and expression follow in that order. The portfolio desk itself lives one link away, at /app.</p><div className="cr-intro-meta"><span>Landing</span><span>coloyond</span></div></div>
-          <div className="cr-hero-art"><img src="/coloyond.jpg" alt="Coloyond geometric allocation artwork" style={{width:"100%",height:"100%",objectFit:"contain"}} /><span className="cr-art-caption">Visual study / Color expresses composition, not risk.</span></div>
-        </section>
-
-        <main className="cr-main">
-          <div className="cr-section-grid"><SectionTitle index="A /" title="The order matters" note="A system made legible, from managed share to optional play." /><div className="cr-side-note">These relationships describe the product concept. Deployment and live verification are separate gates.</div></div>
-          <div className="cr-ecosystem-grid">{PILLARS.map((pillar, index) => <article className="cr-pillar" key={pillar.title}><span className="cr-pillar-number">0{index + 1}</span><span className="cr-pillar-symbol" style={{ background: COMPOSITION_COLORS[index] }} aria-hidden="true" /><span className="cr-kicker">{pillar.label}</span><h3>{pillar.title}</h3><p>{pillar.detail}</p><ul>{pillar.points.map((point) => <li key={point}>{point}</li>)}</ul></article>)}</div>
-          <div className="cr-section-grid cr-section-spaced"><SectionTitle index="B /" title="The working sequence" note="Each layer depends on the one before it." /></div><div className="cr-stack-list">{ECOSYSTEM.map((node, index) => <article className="cr-stack-row" key={node.title}><span className="cr-index">{String(index + 1).padStart(2, "0")}</span><h3>{node.title}</h3><p>{node.detail}</p><em>{node.status}</em></article>)}</div>
-
-          <div className="cr-section-grid cr-section-spaced"><SectionTitle index="C /" title="Participation, made visible" note="Local demo state only. Quest marks and XP are not wallet or chain records." /><div className="cr-side-note">Progress belongs outside the strategy NAV. The optional roll never changes a portfolio value.</div></div>
-          <div className="cr-game-grid"><section className="cr-progress-panel"><span className="cr-kicker">Your demo progress</span><div className="cr-xp-number">{(WALLET.xp + questXp + boostXp).toLocaleString()}<small>XP</small></div><div className="cr-game-metrics"><div><span>Streak</span><strong>{WALLET.streak} days</strong></div><div><span>Quests</span><strong>{completed.length} / {QUESTS.length}</strong></div><div><span>Rank</span><strong>{rank}</strong></div></div><p>Based on a sample profile and the tasks you mark below during this visit.</p></section><section className="cr-quest-panel"><div className="cr-quest-heading"><span className="cr-kicker">01 / Useful actions</span><span>{completed.length} complete</span></div><h3>Small steps add up.</h3><div className="cr-quests">{QUESTS.map((quest) => <label className={`cr-quest ${done.has(quest.id) ? "cr-quest-done" : ""}`} key={quest.id}><input type="checkbox" checked={done.has(quest.id)} onChange={() => toggleQuest(quest.id)} /><span>{quest.title}</span><strong>+{quest.reward} XP</strong></label>)}</div><p>Mark tasks for this local preview; completion is not verified.</p></section></div>
-          <div className="cr-section-grid cr-section-spaced"><SectionTitle index="D /" title="An optional little chance" note="A simulated boost to demo XP, with no promised financial yield." /></div><section className="cr-boost-panel"><div><span className="cr-kicker">Nes / Optional play</span><h3>Roll, if you like.</h3><p>A small moment of chance after the work. It does not alter holdings, a quote, or strategy returns.</p></div><div className="cr-boost-action"><button className="cr-primary" disabled={Boolean(gamble)} onClick={rollGamble}>{gamble ? "Demo roll complete" : "Roll demo boost"} <span aria-hidden="true">↗</span></button>{gamble && <div className="cr-boost-result" role="status"><strong>{gamble.multiplier} / {gamble.label}</strong><span>{gamble.detail}</span><em>+{gamble.xp} demo XP</em></div>}</div></section>
-
-          <div className="cr-crosslink"><span>The strategy itself lives at the desk.</span><a className="cr-reference-link" href="/app">Open the portfolio desk <span aria-hidden="true">↗</span></a></div>
-        </main>
-        <footer className="cr-footer"><span>coloyond / A managed strategy, open to interpretation.</span><span>Browser prototype · Sample portfolio · Symmetry comparison is read only</span><a href="/reference/index.html">View original UI reference ↗</a></footer>
-      </div>
-    </div>
-  );
-}
+import {portfolioCardSvg,svgDataUrl} from './app/lib/art/portfolio-card.js';
+const PROOF='https://github.com/a144z/coloyond/blob/main/docs/submission/README.md';
+const REPO='https://github.com/a144z/coloyond';
+const card=svgDataUrl(portfolioCardSvg({id:'landing-everyday',name:'Everyday mix',assets:[{id:'wsol',symbol:'WSOL',weight:40,color:'#ff513b'},{id:'teth',symbol:'tETH',weight:20,color:'#8d25d9'},{id:'dusd',symbol:'dUSD',weight:40,color:'#1249ed'}]}));
+const paper='#efece6',ink='#141414',muted='#747069',line='#d8d4ca';
+export function LandingPage(){return <div style={{minHeight:'100vh',background:paper,color:ink,fontFamily:'Arial, Helvetica, sans-serif'}}><div style={{maxWidth:1280,margin:'0 auto',padding:'24px clamp(20px,4vw,56px)'}}>
+ <header style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:20,paddingBottom:24,borderBottom:`1px solid ${line}`,flexWrap:'wrap'}}><a href="/" style={{display:'flex',alignItems:'center',gap:12,color:ink,textDecoration:'none',fontSize:23,fontWeight:750,letterSpacing:-.7}}><img className="cr-brand-icon" src="/coloyond.jpg" width="42" height="42" alt="Coloyond" style={{borderRadius:8}}/>Coloyond</a><nav style={{display:'flex',gap:24,fontSize:13}}><a href="/app" style={{color:ink}}>Open app ↗</a><a href={PROOF} style={{color:ink}}>Read the proof ↗</a></nav></header>
+ <main><section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,300px),1fr))',gap:60,alignItems:'center',padding:'70px 0 60px'}}><div><p style={{font:'12px monospace',letterSpacing:2,color:muted,marginBottom:26}}>YOUR MIX. YOUR RHYTHM.</p><h1 style={{fontSize:'clamp(46px,6vw,78px)',lineHeight:1.04,letterSpacing:'-.055em',margin:'0 0 28px'}}>Your portfolio<br/>as one picture.</h1><p style={{maxWidth:490,fontSize:19,lineHeight:1.7,color:muted}}>A shareable, visual portfolio composition built for the mobile web and powered by Solana. Set your value mix. Give it a visual identity. Share it and make the next remix your own.</p><div style={{display:'flex',flexWrap:'wrap',gap:12,marginTop:30}}><a href="/app" style={{padding:'16px 24px',background:ink,color:paper,borderRadius:12,textDecoration:'none',fontSize:15,fontWeight:700}}>Compose your mix ↗</a><a href={`${REPO}/raw/refs/heads/main/releases/coloyond-android-debug.apk`} style={{padding:'16px 24px',border:`1px solid ${line}`,color:ink,borderRadius:12,textDecoration:'none',fontSize:15}}>Install Android</a></div><p style={{font:'11px monospace',lineHeight:1.7,color:muted,marginTop:26}}>SOLANA DEVNET · REACT + CAPACITOR · GENERATIVE PNG CARDS</p></div><figure style={{margin:0,textAlign:'center'}}><img src={card} alt="Coloyond portfolio card: SOL 40%, ETH 20%, dUSD 40%" style={{width:'100%',maxWidth:380,borderRadius:16,border:`1px solid ${line}`,boxShadow:'0 22px 65px #14141412'}}/><figcaption style={{font:'10px monospace',color:muted,marginTop:17}}>TARGET COMPOSITION · NOT LIVE HOLDINGS</figcaption></figure></section>
+ <section style={{padding:'32px 0 56px',borderTop:`1px solid ${line}`}}><p style={{font:'12px monospace',letterSpacing:2,color:muted}}>A MIX YOU CAN WORK WITH</p><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:18,marginTop:25}}>{[['01','Compose','Precise percentages. Sliders that respond. Lock a target while the rest of the mix adjusts.'],['02','Share & remix','Generate a 1200 × 1500 PNG. Share it, download it, or open an unsigned remix draft with the same targets.'],['03','Understand the balance','Explore SOL rising and ETH falling. See value weights drift and inspect the trades toward your target mix.'],['04','Inspect the vault','Wallet-signed owner actions, SPL custody and transferable shares on devnet. Confirmed settlement receipts are in the proof guide.']].map(([n,title,copy])=><article key={n} style={{padding:24,border:`1px solid ${line}`,borderRadius:16,background:'#faf8f5'}}><span style={{font:'11px monospace',color:muted}}>{n}</span><h2 style={{fontSize:23,letterSpacing:-.8,margin:'20px 0 12px'}}>{title}</h2><p style={{fontSize:14,lineHeight:1.7,color:muted,margin:0}}>{copy}</p></article>)}</div></section>
+ <section style={{padding:'38px 0',borderTop:`1px solid ${line}`,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,300px),1fr))',gap:40}}><div><h2 style={{fontSize:35,letterSpacing:-1.5,margin:'0 0 18px'}}>A demo with receipts.</h2><p style={{fontSize:16,lineHeight:1.7,color:muted}}>The proof guide links the current executable devnet program, observed successful SPL settlements, actual browser-flow recording, source review and build checks. The shipped Android UI is the same React app packaged with Capacitor.</p><a href={PROOF} style={{fontSize:15,color:ink,fontWeight:700}}>Inspect the code and evidence ↗</a></div><div style={{padding:24,border:`1px solid ${line}`,borderRadius:16,fontSize:13,lineHeight:1.8,color:muted}}><b style={{color:ink}}>Know the scope.</b><p>Devnet test assets include synthetic, unbacked tokens. The price-shock explorer is a fee-free illustration. Real automation needs verified prices, liquidity and a funded cranker.</p><p>Physical-device MWA acceptance and an authorized upgrade of the new oracle guards remain release checks. No mainnet performance or Glider integration is claimed.</p></div></section>
+ </main><footer style={{padding:'28px 0 12px',borderTop:`1px solid ${line}`,display:'flex',justifyContent:'space-between',gap:20,flexWrap:'wrap',font:'11px monospace',color:muted}}><span>COLOYOND · YOUR MIX. YOUR RHYTHM.</span><a href={REPO} style={{color:ink}}>GitHub ↗</a></footer>
+ </div></div>}
