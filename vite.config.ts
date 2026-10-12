@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: {
     // weights.ts imports node:crypto and hashes at module load; externalized in
     // the browser that throws and blanks the whole app. See the shim file.
-    alias: { "node:crypto": "src/ui/node-crypto-shim.ts" },
+    // Root-relative: a bare "src/…" target is looked up in node_modules and the
+    // dev import-analysis pass fails to resolve it, which blanks every route.
+    alias: { "node:crypto": "/src/ui/node-crypto-shim.ts" },
   },
 });
