@@ -64,3 +64,34 @@ pub struct CloseVault<'info> {
     #[account(mut)]
     pub vault: UncheckedAccount<'info>,
 }
+
+#[derive(Accounts)]
+#[instruction(generation: u64)]
+pub struct Tick<'info> {
+    /// CHECK: identity, PDA, nonce and generation are validated in the handler.
+    #[account(mut)]
+    pub controller: UncheckedAccount<'info>,
+    /// CHECK: identity and PDA are validated in the handler.
+    #[account(mut)]
+    pub vault: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(generation: u64, asset_in: u8, asset_out: u8, amount_in: u64)]
+pub struct ExecuteScheduledRebalance<'info> {
+    /// CHECK: identity, PDA, nonce, generation and cadence are validated in the handler.
+    #[account(mut)]
+    pub controller: UncheckedAccount<'info>,
+    /// CHECK: identity and PDA are validated in the handler.
+    #[account(mut)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: derived token authority PDA; has no required data account.
+    pub authority: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub asset_in_custody: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub asset_out_custody: UncheckedAccount<'info>,
+    pub asset_in_mint: UncheckedAccount<'info>,
+    pub asset_out_mint: UncheckedAccount<'info>,
+    pub token_program: Program<'info, Token>,
+}

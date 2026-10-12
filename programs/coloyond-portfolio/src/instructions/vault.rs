@@ -3,8 +3,13 @@ use anchor_spl::token::{self, TransferChecked};
 
 use crate::errors::PortfolioError;
 use crate::pda;
-use crate::state::{PortfolioVaultV2, VaultLifecycleV2};
-use super::{CloseVault, CreateVault, FundVault, UpdateAllocation, WithdrawInKind};
+use crate::state::{
+    AutomationControllerV2, PortfolioVaultV2, VaultLifecycleV2,
+};
+use super::{
+    CloseVault, CreateVault, ExecuteScheduledRebalance, FundVault, Tick, UpdateAllocation,
+    WithdrawInKind,
+};
 
 pub fn create_vault<'info>(
     ctx: Context<'_, '_, 'info, 'info, CreateVault<'info>>,
@@ -160,6 +165,82 @@ pub fn close_vault<'info>(
     save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
+pub fn tick<'info>(
+    ctx: Context<'_, '_, 'info, 'info, Tick<'info>>,
+    generation: u64,
+) -> Result<()> {
+    let vault = load(&ctx.accounts.vault.to_account_info())?;
+    let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
+    require_keys_eq!(
+        pda::controller(ctx.accounts.vault.to_account_info().key, generation).0,
+        *ctx.accounts.controller.to_account_info().key,
+        PortfolioError::VaultPdaMismatch
+    );
+    require!(
+        controller.generation == generation,
+        PortfolioError::RegistryNonceMismatch
+    );
+    require_keys_eq!(
+        controller.vault,
+        *ctx.accounts.vault.to_account_info().key,
+        PortfolioError::VaultPdaMismatch
+    );
+    controller.run_nonce = controller
+        .run_nonce
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
+    save_controller(
+        &ctx.accounts.controller.to_account_info(),
+        &controller,
+    )?;
+    let _ = vault;
+    Ok(())
+}
+
+pub fn execute_scheduled_rebalance<'info>(
+    ctx: Context<'_, '_, 'info, 'info, ExecuteScheduledRebalance<'info>>,
+    generation: u64,
+    asset_in: u8,
+    asset_out: u8,
+    amount_in: u64,
+) -> Result<()> {
+    let mut vault = load(&ctx.accounts.vault.to_account_info())?;
+    let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
+    require!(
+        controller.generation == generation,
+        PortfolioError::RegistryNonceMismatch
+    );
+    require_keys_eq!(
+        controller.vault,
+        *ctx.accounts.vault.to_account_info().key,
+        PortfolioError::VaultPdaMismatch
+    );
+    let now = Clock::get()?.unix_timestamp;
+    require!(now >= 0, PortfolioError::WrongLifecycle);
+    let elapsed = (now.saturating_sub(vault.last_run_unix_timestamp)) as u64;
+    require!(
+        elapsed >= controller.interval_seconds,
+        PortfolioError::WrongLifecycle
+    );
+    let index_in = usize::try_from(asset_in).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
+    let index_out = usize::try_from(asset_out).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
+    require!(
+        index_in < vault.mints.len() && index_out < vault.mints.len() && index_in != index_out,
+        PortfolioError::WeightLengthMismatch
+    );
+    require!(amount_in > 0, PortfolioError::WeightsSumMismatch);
+    require!(vault.units[index_in] <= u64::MAX - amount_in, PortfolioError::WeightsSumMismatch);
+    vault.units[index_in] = vault.units[index_in].saturating_add(amount_in);
+    vault.units[index_out] = vault.units[index_out].saturating_sub(amount_in);
+    vault.last_run_unix_timestamp = now;
+    save(&ctx.accounts.vault.to_account_info(), &vault)?;
+    controller.run_nonce = controller
+        .run_nonce
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
+    save_controller(&ctx.accounts.controller.to_account_info(), &controller)
+}
+
 fn load(account: &AccountInfo) -> Result<PortfolioVaultV2> {
     require_keys_eq!(
         *account.owner,
@@ -169,6 +250,29 @@ fn load(account: &AccountInfo) -> Result<PortfolioVaultV2> {
     let data = account.try_borrow_data()?;
     let mut input: &[u8] = &data;
     PortfolioVaultV2::try_deserialize(&mut input).map_err(Into::into)
+}
+
+fn load_controller(account: &AccountInfo) -> Result<AutomationControllerV2> {
+    require_keys_eq!(
+        *account.owner,
+        crate::ID,
+        PortfolioError::VaultPdaMismatch
+    );
+    let data = account.try_borrow_data()?;
+    let mut input: &[u8] = &data;
+    AutomationControllerV2::try_deserialize(&mut input).map_err(Into::into)
+}
+
+fn save_controller(account: &AccountInfo, value: &AutomationControllerV2) -> Result<()> {
+    require_keys_eq!(
+        *account.owner,
+        crate::ID,
+        PortfolioError::VaultPdaMismatch
+    );
+    let mut data = account.try_borrow_mut_data()?;
+    data.fill(0);
+    let mut output: &mut [u8] = &mut data;
+    value.try_serialize(&mut output).map_err(Into::into)
 }
 
 fn save<T: AccountSerialize + AnchorDeserialize + Discriminator + Owner>(account: &AccountInfo, value: &T) -> Result<()> {

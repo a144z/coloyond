@@ -7,10 +7,15 @@ pub mod state;
 
 pub(crate) use instructions::__client_accounts_close_vault;
 pub(crate) use instructions::__client_accounts_create_vault;
+pub(crate) use instructions::__client_accounts_execute_scheduled_rebalance;
 pub(crate) use instructions::__client_accounts_fund_vault;
+pub(crate) use instructions::__client_accounts_tick;
 pub(crate) use instructions::__client_accounts_update_allocation;
 pub(crate) use instructions::__client_accounts_withdraw_in_kind;
-pub use instructions::{CloseVault, CreateVault, FundVault, UpdateAllocation, WithdrawInKind};
+pub use instructions::{
+    CloseVault, CreateVault, ExecuteScheduledRebalance, FundVault, Tick, UpdateAllocation,
+    WithdrawInKind,
+};
 
 declare_id!("5oHukWBWXvySZipAd6DHSq1KHN8HLFYa38yTJdvx2V7N");
 
@@ -57,5 +62,22 @@ pub mod coloyond_portfolio {
         owner_op_sequence: u64,
     ) -> Result<()> {
         instructions::vault::close_vault(ctx, owner_op_sequence)
+    }
+
+    pub fn tick<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Tick<'info>>,
+        generation: u64,
+    ) -> Result<()> {
+        instructions::vault::tick(ctx, generation)
+    }
+
+    pub fn execute_scheduled_rebalance<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ExecuteScheduledRebalance<'info>>,
+        generation: u64,
+        asset_in: u8,
+        asset_out: u8,
+        amount_in: u64,
+    ) -> Result<()> {
+        instructions::vault::execute_scheduled_rebalance(ctx, generation, asset_in, asset_out, amount_in)
     }
 }

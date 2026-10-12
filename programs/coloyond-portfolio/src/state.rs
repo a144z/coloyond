@@ -294,4 +294,22 @@ mod tests {
             "vault state must leave slack inside the reserved space"
         );
     }
+
+    #[test]
+    fn controller_state_round_trips_and_leaves_slack() {
+        let controller = AutomationControllerV2 {
+            bump: 255,
+            vault: Pubkey::new_from_array([11; 32]),
+            generation: 7,
+            run_nonce: 42,
+            interval_seconds: 75,
+        };
+        let mut bytes = vec![0u8; CONTROLLER_SPACE];
+        let mut output: &mut [u8] = &mut bytes;
+        controller.try_serialize(&mut output).unwrap();
+        assert!(
+            output.len() < CONTROLLER_SPACE,
+            "controller state must leave slack inside the reserved space"
+        );
+    }
 }
