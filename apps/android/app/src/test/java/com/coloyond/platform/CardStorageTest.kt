@@ -51,7 +51,7 @@ class CardStorageTest {
         assertEquals(draft.id, storage.loadDraft(draft.id)?.id)
         assertEquals(listOf(draft.id), storage.listDrafts().map { it.id })
         assertNull(storage.loadDraft("cb1:${"0".repeat(64)}"))
-        assertTrue(runCatching { storage.saveDraft(records().first) }.isFailure)
+        assertTrue(runCatching { storage.saveDraft(coloyondStrategy()) }.isFailure)
     }
 
     @Test

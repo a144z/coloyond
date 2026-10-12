@@ -1,5 +1,6 @@
 package com.coloyond
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
@@ -31,15 +33,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.coloyond.di.AppContainer
+import com.coloyond.platform.ImportIntents
+import com.coloyond.platform.ValidatedImport
+import com.coloyond.ui.screens.CardJourneyScreen
 import com.coloyond.ui.rebalancing.PortfolioRoute
 import com.coloyond.ui.theme.ColoyondTheme
 import com.coloyond.wallet.WalletState
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 class MainActivity : ComponentActivity() {
+    private var lastImport by mutableStateOf<ValidatedImport?>(null)
+    private var importVersion by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // A process restart re-delivers the original intent; read it only on a fresh start.
+        if (savedInstanceState == null) handleImport(intent)
 
         val sender = ActivityResultSender(this)
         val container = (application as ColoyondApplication).container
@@ -49,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel: MainViewModel = viewModel { MainViewModel(container) }
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-                var destination by rememberSaveable { mutableStateOf("portfolio") }
+                var destination by rememberSaveable { mutableStateOf("cards") }
 
                 LaunchedEffect(destination, state.address) {
                     if (destination == "portfolio") viewModel.refreshPortfolio()
@@ -61,6 +71,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            FilterChip(selected = destination == "cards", onClick = { destination = "cards" }, label = { Text("Cards") })
                             FilterChip(selected = destination == "portfolio", onClick = { destination = "portfolio" }, label = { Text("Portfolio · Devnet") })
                             FilterChip(selected = destination == "wallet", onClick = { destination = "wallet" }, label = { Text("Wallet · Devnet") })
                         }
@@ -71,7 +82,7 @@ class MainActivity : ComponentActivity() {
                                 mockMode = state.mockMode,
                                 onRefresh = { viewModel.refreshPortfolio() },
                             )
-                            else -> WalletScreen(
+                            "wallet" -> WalletScreen(
                                 state = state,
                                 onConnect = { viewModel.connect(sender) },
                                 onSignMessage = { viewModel.signMessage(sender) },
@@ -79,10 +90,30 @@ class MainActivity : ComponentActivity() {
                                 onDisconnect = { viewModel.disconnect(sender) },
                                 onToggleMockMode = { viewModel.toggleMockMode() },
                             )
+                            else -> CardJourneyScreen(
+                                storage = container.cards,
+                                inference = container.inference,
+                                imported = lastImport,
+                                importVersion = importVersion,
+                                onImportConsumed = { lastImport = null },
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleImport(intent)
+    }
+
+    private fun handleImport(intent: Intent) {
+        ImportIntents.readValidated(intent, contentResolver)?.let {
+            lastImport = it
+            importVersion += 1
         }
     }
 }
