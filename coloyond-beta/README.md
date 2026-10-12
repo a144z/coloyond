@@ -10,7 +10,8 @@ burn shares and pay out each underlying asset pro rata.
 Each active vault registers one Hydra task at its owner-configured minimum
 interval (60 seconds by default; 5,700 Ephemeral Rollup slots). The ER program
 values the vault, calculates the required rebalance legs, and requests one
-Magic Action. The Solana vault program checks fresh Pyth prices, a strict 0.1%
+Magic Action. The Solana vault program checks the latest verified Pyth price
+updates without rejecting them by age, a strict 0.1%
 move from the last successful settlement, the minimum delay, slippage, token
 accounts, liquidity and replay nonce before atomically moving standard SPL
 assets. The first settlement establishes the price baseline; assets without an
@@ -36,8 +37,8 @@ synthetic market; there is no real DEX route on this Devnet path yet.
 The investment preview shows an estimated USD allocation from the display price
 book. SOL is wrapped to WSOL, deposited, and rebalanced by the scheduled task;
 this is not an instant exchange quote. Settlement independently uses on-chain
-Pyth prices and can wait for fresh prices or sufficient synthetic market
-inventory.
+Pyth prices and can wait for valid configured feeds or sufficient synthetic
+market inventory. The display price book is for estimates and is not an execution input.
 
 ## Development
 
