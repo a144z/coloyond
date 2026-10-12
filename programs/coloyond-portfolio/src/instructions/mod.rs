@@ -45,7 +45,7 @@ pub struct UpdateAllocation<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(owner_op_sequence: u64, amounts: Vec<u64>)]
+#[instruction(owner_op_sequence: u64, basis_points: u64)]
 pub struct WithdrawInKind<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,

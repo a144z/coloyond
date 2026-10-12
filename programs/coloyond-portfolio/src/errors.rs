@@ -28,4 +28,8 @@ pub enum PortfolioError {
     ControllerBasketMismatch,
     #[msg("Rebalance swap legs are not value-balanced within the tolerance")]
     SwapValueImbalanced,
+    #[msg("Withdrawal share must be between 1 and 10_000 basis points")]
+    WithdrawRatioInvalid,
+    #[msg("Withdrawal share would overflow the basket's u64 unit range")]
+    WithdrawShareOverflow,
 }

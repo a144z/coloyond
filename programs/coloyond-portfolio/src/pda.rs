@@ -12,36 +12,27 @@ pub fn admission() -> (Pubkey, u8) {
 }
 
 pub fn registry(owner: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[REGISTRY_SEED, owner.as_ref()],
-        &crate::ID,
-    )
+    Pubkey::find_program_address(&[REGISTRY_SEED, owner.as_ref()], &crate::ID)
 }
 
 pub fn vault(owner: &Pubkey, nonce: u64) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[VAULT_SEED, owner.as_ref(), &nonce.to_le_bytes(), ],
+        &[VAULT_SEED, owner.as_ref(), &nonce.to_le_bytes()],
         &crate::ID,
     )
 }
 
 pub fn authority(vault: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[AUTHORITY_SEED, vault.as_ref()],
-        &crate::ID,
-    )
+    Pubkey::find_program_address(&[AUTHORITY_SEED, vault.as_ref()], &crate::ID)
 }
 
 pub fn custody(vault: &Pubkey, asset_index: u8) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[CUSTODY_SEED, vault.as_ref(), &[asset_index]],
-        &crate::ID,
-    )
+    Pubkey::find_program_address(&[CUSTODY_SEED, vault.as_ref(), &[asset_index]], &crate::ID)
 }
 
 pub fn controller(vault: &Pubkey, generation: u64) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[CONTROLLER_SEED, vault.as_ref(), &generation.to_le_bytes(), ],
+        &[CONTROLLER_SEED, vault.as_ref(), &generation.to_le_bytes()],
         &crate::ID,
     )
 }

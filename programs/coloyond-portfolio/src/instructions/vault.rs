@@ -1,18 +1,15 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, TransferChecked};
-use etf_oracle::{
-    decode_fixed_feed_account, validate_fixed_feed, OracleLimits, PinnedFeed,
-};
+use etf_oracle::{decode_fixed_feed_account, validate_fixed_feed, OracleLimits, PinnedFeed};
 
+use super::{
+    CloseVault, ConfigureRebalance, CreateVault, ExecuteScheduledRebalance, FundVault, Tick,
+    UpdateAllocation, WithdrawInKind,
+};
 use crate::errors::PortfolioError;
 use crate::pda;
 use crate::state::{
     AutomationControllerV2, PortfolioAdmissionV2, PortfolioVaultV2, RecordedPrice, VaultLifecycleV2,
-    SWAP_MAX_SLIPPAGE_BPS, WEIGHTS_SUM_BPS,
-};
-use super::{
-    CloseVault, ConfigureRebalance, CreateVault, ExecuteScheduledRebalance, FundVault, Tick,
-    UpdateAllocation, WithdrawInKind,
 };
 
 pub fn create_vault<'info>(
@@ -112,7 +109,7 @@ pub fn update_allocation<'info>(
 pub fn withdraw_in_kind<'info>(
     ctx: Context<'_, '_, 'info, 'info, WithdrawInKind<'info>>,
     owner_op_sequence: u64,
-    amounts: Vec<u64>,
+    basis_points: u64,
 ) -> Result<()> {
     let mut vault = load(&ctx.accounts.vault.to_account_info())?;
     vault.assert_owner(ctx.accounts.owner.key)?;
@@ -120,16 +117,17 @@ pub fn withdraw_in_kind<'info>(
         owner_op_sequence == vault.owner_op_sequence,
         PortfolioError::RegistryNonceMismatch
     );
-    require!(
-        amounts.len() == vault.mints.len(),
-        PortfolioError::WeightLengthMismatch
-    );
+    let shares = vault.withdraw_shares(basis_points)?;
     let assets = pair_assets(&vault.mints, ctx.remaining_accounts)?;
     let authority_bump = pda::authority(ctx.accounts.vault.to_account_info().key).1;
-    let authority_seeds: &[&[u8]] = &[crate::pda::AUTHORITY_SEED, ctx.accounts.vault.to_account_info().key.as_ref(), &[authority_bump]];
+    let authority_seeds: &[&[u8]] = &[
+        crate::pda::AUTHORITY_SEED,
+        ctx.accounts.vault.to_account_info().key.as_ref(),
+        &[authority_bump],
+    ];
     let token_program = ctx.accounts.token_program.to_account_info();
     for (index, asset) in assets.iter().enumerate() {
-        let amount = amounts[index];
+        let amount = shares[index];
         if amount == 0 {
             continue;
         }
@@ -173,10 +171,7 @@ pub fn close_vault<'info>(
     save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
-pub fn tick<'info>(
-    ctx: Context<'_, '_, 'info, 'info, Tick<'info>>,
-    generation: u64,
-) -> Result<()> {
+pub fn tick<'info>(ctx: Context<'_, '_, 'info, 'info, Tick<'info>>, generation: u64) -> Result<()> {
     let vault = load(&ctx.accounts.vault.to_account_info())?;
     let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
     require_keys_eq!(
@@ -197,10 +192,7 @@ pub fn tick<'info>(
         .run_nonce
         .checked_add(1)
         .ok_or(PortfolioError::RegistryNonceMismatch)?;
-    save_controller(
-        &ctx.accounts.controller.to_account_info(),
-        &controller,
-    )?;
+    save_controller(&ctx.accounts.controller.to_account_info(), &controller)?;
     let _ = vault;
     Ok(())
 }
@@ -224,13 +216,16 @@ pub fn execute_scheduled_rebalance<'info>(
         *ctx.accounts.vault.to_account_info().key,
         PortfolioError::VaultPdaMismatch
     );
-    let index_in = usize::try_from(asset_in).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
-    let index_out = usize::try_from(asset_out).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
+    let index_in = usize::from(asset_in);
+    let index_out = usize::from(asset_out);
     require!(
         index_in < vault.mints.len() && index_out < vault.mints.len() && index_in != index_out,
         PortfolioError::WeightLengthMismatch
     );
-    require!(amount_in > 0 && amount_out > 0, PortfolioError::WeightsSumMismatch);
+    require!(
+        amount_in > 0 && amount_out > 0,
+        PortfolioError::WeightsSumMismatch
+    );
     require!(
         vault.units[index_in] <= u64::MAX - amount_in && amount_out <= vault.units[index_out],
         PortfolioError::WeightsSumMismatch
@@ -245,7 +240,9 @@ pub fn execute_scheduled_rebalance<'info>(
     );
     let mut current_prices: Vec<RecordedPrice> = Vec::new();
     for (slot, mint_key) in vault.mints.iter().enumerate() {
-        let feed_key = admission.feed_for(mint_key).ok_or(PortfolioError::FeedNotAdmitted)?;
+        let feed_key = admission
+            .feed_for(mint_key)
+            .ok_or(PortfolioError::FeedNotAdmitted)?;
         let feed_info = &ctx.remaining_accounts[slot];
         require_keys_eq!(*feed_info.key, feed_key, PortfolioError::OracleRejected);
         let price = read_pinned_price(feed_info, rebalance_oracle_limits())?;
@@ -254,74 +251,20 @@ pub fn execute_scheduled_rebalance<'info>(
             exponent: price.exponent,
         });
     }
-    let mut verified = controller.any_price_moved_enough(&current_prices)?;
-    if !verified {
-        let now_gate = Clock::get()?.unix_timestamp;
-        require!(now_gate >= 0, PortfolioError::WrongLifecycle);
-        let elapsed = (now_gate.saturating_sub(vault.last_run_unix_timestamp)) as u64;
-        verified = elapsed >= controller.interval_seconds;
-    }
+    let verified = controller.rebalance_gate_open(
+        &current_prices,
+        vault.last_run_unix_timestamp,
+        Clock::get()?.unix_timestamp,
+    )?;
     require!(verified, PortfolioError::RebalanceThresholdNotMet);
-    let price_in = current_prices[index_in];
-    let price_out = current_prices[index_out];
-    let swap_min_exp = price_in.exponent.min(price_out.exponent);
-    let in_value = u128::from(amount_in)
-        .checked_mul(
-            price_in
-                .to_shared_exponent(swap_min_exp)
-                .ok_or(PortfolioError::OracleRejected)?,
-        )
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-    let out_value = u128::from(amount_out)
-        .checked_mul(
-            price_out
-                .to_shared_exponent(swap_min_exp)
-                .ok_or(PortfolioError::OracleRejected)?,
-        )
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-    require!(out_value <= in_value, PortfolioError::SwapValueImbalanced);
-    let donation_bps = in_value
-        .checked_sub(out_value)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_mul(WEIGHTS_SUM_BPS as u128)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_div(in_value)
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-    require!(donation_bps <= SWAP_MAX_SLIPPAGE_BPS, PortfolioError::SwapValueImbalanced);
-    let basket_min_exp = current_prices.iter().map(| p | p.exponent).min().unwrap_or_else(| | 0);
-    let mut values: Vec<u128> = Vec::new();
-    let mut total_value: u128 = 0;
-    for (slot, price) in current_prices.iter().enumerate() {
-        let scaled = price
-            .to_shared_exponent(basket_min_exp)
-            .ok_or(PortfolioError::OracleRejected)?;
-        let value = u128::from(vault.units[slot])
-            .checked_mul(scaled)
-            .ok_or(PortfolioError::WeightsSumMismatch)?;
-        total_value = total_value
-            .checked_add(value)
-            .ok_or(PortfolioError::WeightsSumMismatch)?;
-        values.push(value);
-    }
-    require!(total_value > 0, PortfolioError::VaultNotEmpty);
-    let weight_out_bps = values[index_out]
-        .checked_mul(WEIGHTS_SUM_BPS as u128)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_div(total_value)
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-    let weight_in_bps = values[index_in]
-        .checked_mul(WEIGHTS_SUM_BPS as u128)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_div(total_value)
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-    require!(
-        weight_out_bps >= u128::from(vault.target_weights[index_out]),
-        PortfolioError::WrongDirection
-    );
-    require!(
-        weight_in_bps <= u128::from(vault.target_weights[index_in]),
-        PortfolioError::WrongDirection
-    );
+    vault.assert_swap_value_balanced(
+        &current_prices,
+        index_in,
+        index_out,
+        amount_in,
+        amount_out,
+    )?;
+    vault.assert_rebalance_direction(&current_prices, index_in, index_out)?;
     let authority_bump = pda::authority(ctx.accounts.vault.to_account_info().key).1;
     let authority_seeds: &[&[u8]] = &[
         crate::pda::AUTHORITY_SEED,
@@ -357,12 +300,10 @@ pub fn execute_scheduled_rebalance<'info>(
         9,
     )?;
     let now = Clock::get()?.unix_timestamp;
-    vault.units[index_in] = vault
-        .units[index_in]
+    vault.units[index_in] = vault.units[index_in]
         .checked_add(amount_in)
         .ok_or(PortfolioError::WeightsSumMismatch)?;
-    vault.units[index_out] = vault
-        .units[index_out]
+    vault.units[index_out] = vault.units[index_out]
         .checked_sub(amount_out)
         .ok_or(PortfolioError::WeightsSumMismatch)?;
     vault.last_run_unix_timestamp = now;
@@ -407,36 +348,24 @@ pub fn configure_rebalance<'info>(
 }
 
 fn load(account: &AccountInfo) -> Result<PortfolioVaultV2> {
-    require_keys_eq!(
-        *account.owner,
-        crate::ID,
-        PortfolioError::VaultPdaMismatch
-    );
+    require_keys_eq!(*account.owner, crate::ID, PortfolioError::VaultPdaMismatch);
     let data = account.try_borrow_data()?;
     let mut input: &[u8] = &data;
-    PortfolioVaultV2::try_deserialize(&mut input).map_err(Into::into)
+    PortfolioVaultV2::try_deserialize(&mut input)
 }
 
 fn load_controller(account: &AccountInfo) -> Result<AutomationControllerV2> {
-    require_keys_eq!(
-        *account.owner,
-        crate::ID,
-        PortfolioError::VaultPdaMismatch
-    );
+    require_keys_eq!(*account.owner, crate::ID, PortfolioError::VaultPdaMismatch);
     let data = account.try_borrow_data()?;
     let mut input: &[u8] = &data;
-    AutomationControllerV2::try_deserialize(&mut input).map_err(Into::into)
+    AutomationControllerV2::try_deserialize(&mut input)
 }
 
 fn load_admission(account: &AccountInfo) -> Result<PortfolioAdmissionV2> {
-    require_keys_eq!(
-        *account.owner,
-        crate::ID,
-        PortfolioError::VaultPdaMismatch
-    );
+    require_keys_eq!(*account.owner, crate::ID, PortfolioError::VaultPdaMismatch);
     let data = account.try_borrow_data()?;
     let mut input: &[u8] = &data;
-    PortfolioAdmissionV2::try_deserialize(&mut input).map_err(Into::into)
+    PortfolioAdmissionV2::try_deserialize(&mut input)
 }
 
 fn read_pinned_price(
@@ -459,7 +388,9 @@ fn pinned_from_account(account_key: &Pubkey) -> Option<PinnedFeed> {
         PinnedFeed::EthUsd,
         PinnedFeed::UsdcUsd,
     ];
-    candidates.into_iter().find(| feed | feed.address() == *account_key)
+    candidates
+        .into_iter()
+        .find(|feed| feed.address() == *account_key)
 }
 
 fn rebalance_oracle_limits() -> OracleLimits {
@@ -472,27 +403,22 @@ fn rebalance_oracle_limits() -> OracleLimits {
 }
 
 fn save_controller(account: &AccountInfo, value: &AutomationControllerV2) -> Result<()> {
-    require_keys_eq!(
-        *account.owner,
-        crate::ID,
-        PortfolioError::VaultPdaMismatch
-    );
+    require_keys_eq!(*account.owner, crate::ID, PortfolioError::VaultPdaMismatch);
     let mut data = account.try_borrow_mut_data()?;
     data.fill(0);
     let mut output: &mut [u8] = &mut data;
-    value.try_serialize(&mut output).map_err(Into::into)
+    value.try_serialize(&mut output)
 }
 
-fn save<T: AccountSerialize + AnchorDeserialize + Discriminator + Owner>(account: &AccountInfo, value: &T) -> Result<()> {
-    require_keys_eq!(
-        *account.owner,
-        crate::ID,
-        PortfolioError::VaultPdaMismatch
-    );
+fn save<T: AccountSerialize + AnchorDeserialize + Discriminator + Owner>(
+    account: &AccountInfo,
+    value: &T,
+) -> Result<()> {
+    require_keys_eq!(*account.owner, crate::ID, PortfolioError::VaultPdaMismatch);
     let mut data = account.try_borrow_mut_data()?;
     data.fill(0);
     let mut output: &mut [u8] = &mut data;
-    value.try_serialize(&mut output).map_err(Into::into)
+    value.try_serialize(&mut output)
 }
 
 struct AssetAccounts<'info> {

@@ -47,15 +47,20 @@ pub mod coloyond_portfolio {
         expected_revision: u64,
         new_weights: Vec<u64>,
     ) -> Result<()> {
-        instructions::vault::update_allocation(ctx, owner_op_sequence, expected_revision, new_weights)
+        instructions::vault::update_allocation(
+            ctx,
+            owner_op_sequence,
+            expected_revision,
+            new_weights,
+        )
     }
 
     pub fn withdraw_in_kind<'info>(
         ctx: Context<'_, '_, 'info, 'info, WithdrawInKind<'info>>,
         owner_op_sequence: u64,
-        amounts: Vec<u64>,
+        basis_points: u64,
     ) -> Result<()> {
-        instructions::vault::withdraw_in_kind(ctx, owner_op_sequence, amounts)
+        instructions::vault::withdraw_in_kind(ctx, owner_op_sequence, basis_points)
     }
 
     pub fn close_vault<'info>(
@@ -81,12 +86,7 @@ pub mod coloyond_portfolio {
         amount_out: u64,
     ) -> Result<()> {
         instructions::vault::execute_scheduled_rebalance(
-            ctx,
-            generation,
-            asset_in,
-            asset_out,
-            amount_in,
-            amount_out,
+            ctx, generation, asset_in, asset_out, amount_in, amount_out,
         )
     }
 
