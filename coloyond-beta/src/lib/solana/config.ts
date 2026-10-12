@@ -28,7 +28,7 @@ export const MIN_TX_LAMPORTS = 5_000;
 /** Upper bound on trades executed within a single rebalance check. */
 export const MAX_TRADES_PER_CHECK = 6;
 
-/** Price observation freshness (the "configured limit" in the blocked state). */
+/** Coinbase/Binance display-book age limit; unrelated to on-chain Pyth checks. */
 export const PRICE_MAX_AGE_MS = 90_000;
 export const PRICE_POLL_MS = 20_000;
 

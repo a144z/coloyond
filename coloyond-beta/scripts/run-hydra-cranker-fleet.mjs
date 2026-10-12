@@ -5,82 +5,18 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const defaultConfigPath = path.join(projectDir, 'target', 'hydra-cranker-fleet.json');
-const configPath = resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG);
-const children = new Set();
-let stopping = false;
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    stopping = true;
-    log('service_stopping', { signal });
-    for (const child of children) child.kill('SIGTERM');
-  });
-}
-
-if (process.argv.includes('--self-check')) {
-  selfCheck();
-  process.exit(0);
-}
-
-if (process.argv.includes('--validate-config')) {
-  const config = await loadConfig();
-  await access(config.binaryPath, constants.X_OK);
-  for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
-  log('config_validated', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
-  process.exit(0);
-}
-
-const config = await loadConfig();
-await access(config.binaryPath, constants.X_OK);
-for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
-
-log('service_starting', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
-await Promise.all(config.rollups.map(runRollup));
-
-async function loadConfig() {
-  return parseConfig(await readFile(configPath, 'utf8'));
-}
-
-function resolveConfigPath(override) {
+export function resolveConfigPath(override) {
   if (override === undefined) return defaultConfigPath;
   if (!path.isAbsolute(override)) throw new Error('COLONYOND_HYDRA_CRANKER_CONFIG must be an absolute JSON config path.');
   return override;
 }
 
-async function runRollup(rollup) {
-  const args = crankerArgs(rollup);
-  let backoffMs = 1_000;
-  while (!stopping) {
-    log('cranker_starting', { rollup: rollup.name, rpcUrl: rollup.rpcUrl, ephemeral: true });
-    const child = spawn(config.binaryPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    children.add(child);
-    streamLines(child.stdout, rollup.name, 'stdout');
-    streamLines(child.stderr, rollup.name, 'stderr');
-    const code = await new Promise((resolve) => {
-      child.once('error', (error) => {
-        log('cranker_spawn_error', { rollup: rollup.name, error: error.message });
-        resolve(null);
-      });
-      child.once('exit', (exitCode, signal) => resolve({ exitCode, signal }));
-    });
-    children.delete(child);
-    if (stopping) break;
-    log('cranker_exited', { rollup: rollup.name, result: code, restartInMs: backoffMs });
-    await delay(backoffMs);
-    backoffMs = Math.min(backoffMs * 2, 30_000);
-  }
-}
-
-function streamLines(stream, rollup, source) {
-  const lines = createInterface({ input: stream });
-  lines.on('line', (line) => log('cranker_log', { rollup, source, line }));
-}
-
-function parseConfig(value) {
+export function parseConfig(value) {
   let parsed;
   try { parsed = JSON.parse(value); } catch { throw new Error('Hydra cranker config must be valid JSON.'); }
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Hydra cranker config must be a JSON object.');
@@ -110,14 +46,194 @@ function parseConfig(value) {
     }
     return { name, rpcUrl, baseRpcUrl, keypairPath, wsUrl, metricsPort };
   });
-  return { binaryPath: parsed.binaryPath, rollups };
+  const health = {
+    startupGraceMs: positiveInteger(parsed.startupGraceMs, 30_000, 'startupGraceMs', true),
+    intervalMs: positiveInteger(parsed.healthCheckIntervalMs, 10_000, 'healthCheckIntervalMs'),
+    timeoutMs: positiveInteger(parsed.healthCheckTimeoutMs, 3_000, 'healthCheckTimeoutMs'),
+    unhealthyThreshold: positiveInteger(parsed.unhealthyThreshold, 3, 'unhealthyThreshold'),
+    healthyResetMs: positiveInteger(parsed.healthyResetMs, 60_000, 'healthyResetMs'),
+    terminationGraceMs: positiveInteger(parsed.terminationGraceMs, 5_000, 'terminationGraceMs'),
+    restartMinMs: positiveInteger(parsed.restartMinMs, 1_000, 'restartMinMs'),
+    restartMaxMs: positiveInteger(parsed.restartMaxMs, 30_000, 'restartMaxMs'),
+  };
+  if (health.restartMaxMs < health.restartMinMs) throw new Error('restartMaxMs must be at least restartMinMs.');
+  return {
+    binaryPath: parsed.binaryPath,
+    rollups,
+    health,
+  };
 }
 
-function crankerArgs(rollup) {
+export function crankerArgs(rollup) {
   const args = ['--keypair', rollup.keypairPath, '--rpc-url', rollup.rpcUrl, '--base-rpc-url', rollup.baseRpcUrl, '--ephemeral'];
   if (rollup.wsUrl) args.push('--ws-url', rollup.wsUrl);
   if (rollup.metricsPort) args.push('--prometheus-port', String(rollup.metricsPort));
   return args;
+}
+
+/** Run one process per ER, restarting on exit or sustained /healthz failure. */
+export async function runFleet(config, {
+  signal,
+  spawnImpl = spawn,
+  fetchImpl = globalThis.fetch,
+  logFn = log,
+} = {}) {
+  await Promise.all(config.rollups.map((rollup) => runRollup(rollup, config, { signal, spawnImpl, fetchImpl, logFn })));
+}
+
+async function runRollup(rollup, config, deps) {
+  const { signal, spawnImpl, fetchImpl, logFn } = deps;
+  const args = crankerArgs(rollup);
+  const healthUrl = rollup.metricsPort ? `http://127.0.0.1:${rollup.metricsPort}/healthz` : undefined;
+  let backoffMs = config.health.restartMinMs;
+  while (!signal?.aborted) {
+    let child;
+    try {
+      logFn('cranker_starting', { rollup: rollup.name, rpcUrl: rollup.rpcUrl, ephemeral: true });
+      child = spawnImpl(config.binaryPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      logFn('cranker_spawn_error', { rollup: rollup.name, error: error.message });
+      if (await waitBeforeRestart(backoffMs, signal)) break;
+      backoffMs = Math.min(backoffMs * 2, config.health.restartMaxMs);
+      continue;
+    }
+
+    streamLines(child.stdout, rollup.name, 'stdout', logFn);
+    streamLines(child.stderr, rollup.name, 'stderr', logFn);
+    const exitPromise = waitForChildExit(child, logFn, rollup.name);
+    const healthAbort = new AbortController();
+    const onStop = () => healthAbort.abort();
+    signal?.addEventListener('abort', onStop, { once: true });
+    let outcome;
+    const healthPromise = healthUrl
+      ? monitorHealth(healthUrl, rollup.name, config.health, { signal: healthAbort.signal, fetchImpl, logFn,
+        onSustainedHealthy: () => { backoffMs = config.health.restartMinMs; },
+      }).then((reason) => ({ type: reason ? 'unhealthy' : 'stopped', reason }))
+      : new Promise(() => {});
+    let onFleetStop;
+    const stopPromise = signal?.aborted
+      ? Promise.resolve({ type: 'stopped' })
+      : signal
+      ? new Promise((resolve) => {
+        onFleetStop = () => resolve({ type: 'stopped' });
+        signal.addEventListener('abort', onFleetStop, { once: true });
+      })
+      : new Promise(() => {});
+    try {
+      outcome = await Promise.race([
+        exitPromise.then((exit) => ({ type: 'exit', exit })),
+        healthPromise,
+        stopPromise,
+      ]);
+    } finally {
+      healthAbort.abort();
+      signal?.removeEventListener('abort', onStop);
+      if (onFleetStop) signal?.removeEventListener('abort', onFleetStop);
+    }
+
+    if (outcome.type === 'unhealthy' || signal?.aborted) {
+      if (outcome.type === 'unhealthy') logFn('cranker_health_restart', { rollup: rollup.name, reason: outcome.reason });
+      await terminateChild(child, exitPromise, config.health.terminationGraceMs);
+    }
+    const exit = await exitPromise;
+    logFn('cranker_exited', { rollup: rollup.name, result: exit, restartInMs: signal?.aborted ? undefined : backoffMs });
+    if (signal?.aborted) break;
+    if (await waitBeforeRestart(backoffMs, signal)) break;
+    backoffMs = Math.min(backoffMs * 2, config.health.restartMaxMs);
+  }
+}
+
+async function monitorHealth(url, rollup, options, { signal, fetchImpl, logFn, onSustainedHealthy }) {
+  if (options.startupGraceMs && await abortableDelay(options.startupGraceMs, signal)) return undefined;
+  let consecutiveFailures = 0;
+  let healthySince;
+  let healthyReset = false;
+  while (!signal.aborted) {
+    const result = await getHealth(url, options.timeoutMs, fetchImpl);
+    if (signal.aborted) return undefined;
+    if (result.ok) {
+      consecutiveFailures = 0;
+      healthySince ??= Date.now();
+      if (!healthyReset && Date.now() - healthySince >= options.healthyResetMs) {
+        healthyReset = true;
+        onSustainedHealthy();
+        logFn('cranker_health_recovered', { rollup, healthyForMs: Date.now() - healthySince });
+      }
+      logFn('cranker_health', { rollup, status: 'healthy', statusCode: result.status });
+    } else {
+      healthySince = undefined;
+      healthyReset = false;
+      consecutiveFailures += 1;
+      logFn('cranker_health', { rollup, status: 'unhealthy', statusCode: result.status, error: result.error, consecutiveFailures });
+      if (consecutiveFailures >= options.unhealthyThreshold) {
+        return `healthz failed ${consecutiveFailures} consecutive checks${result.status ? ` (HTTP ${result.status})` : ` (${result.error})`}`;
+      }
+    }
+    if (await abortableDelay(options.intervalMs, signal)) break;
+  }
+  return undefined;
+}
+
+async function getHealth(url, timeoutMs, fetchImpl) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal, headers: { accept: 'application/json' } });
+    return { ok: response.status === 200, status: response.status };
+  } catch (error) {
+    return { ok: false, error: error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function waitForChildExit(child, logFn, rollup) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (result) => { if (!settled) { settled = true; resolve(result); } };
+    child.once('error', (error) => {
+      logFn('cranker_spawn_error', { rollup, error: error.message });
+      done({ exitCode: null, signal: null, error: error.message });
+    });
+    child.once('exit', (exitCode, signal) => done({ exitCode, signal }));
+  });
+}
+
+async function terminateChild(child, exitPromise, graceMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return exitPromise;
+  child.kill('SIGTERM');
+  const exited = await Promise.race([exitPromise.then(() => true), delay(graceMs).then(() => false)]);
+  if (!exited) child.kill('SIGKILL');
+  return exitPromise;
+}
+
+async function waitBeforeRestart(ms, signal) {
+  return abortableDelay(ms, signal);
+}
+
+async function abortableDelay(ms, signal) {
+  if (signal?.aborted) return true;
+  if (!signal) { await delay(ms); return false; }
+  let listener;
+  const aborted = new Promise((resolve) => {
+    listener = () => resolve(true);
+    signal.addEventListener('abort', listener, { once: true });
+  });
+  const result = await Promise.race([delay(ms).then(() => false), aborted]);
+  signal.removeEventListener('abort', listener);
+  return result;
+}
+
+function streamLines(stream, rollup, source, logFn) {
+  if (!stream) return;
+  const lines = createInterface({ input: stream });
+  lines.on('line', (line) => logFn('cranker_log', { rollup, source, line }));
+}
+
+function positiveInteger(value, fallback, label, allowZero = false) {
+  const result = value === undefined ? fallback : Number(value);
+  if (!Number.isInteger(result) || result < (allowZero ? 0 : 1)) throw new Error(`${label} must be a ${allowZero ? 'non-negative' : 'positive'} integer.`);
+  return result;
 }
 
 function requiredString(value, label) {
@@ -141,9 +257,7 @@ function requiredWsUrl(value, label) {
 function log(event, fields = {}) { console.log(JSON.stringify({ event, time: new Date().toISOString(), ...fields })); }
 
 function selfCheck() {
-  if (resolveConfigPath(undefined) !== path.join(projectDir, 'target', 'hydra-cranker-fleet.json')) {
-    throw new Error('Default config path self-check failed.');
-  }
+  if (resolveConfigPath(undefined) !== defaultConfigPath) throw new Error('Default config path self-check failed.');
   if (resolveConfigPath('/tmp/crankers.json') !== '/tmp/crankers.json') throw new Error('Config override self-check failed.');
   let relativeOverrideRejected = false;
   try { resolveConfigPath('crankers.json'); } catch { relativeOverrideRejected = true; }
@@ -157,6 +271,7 @@ function selfCheck() {
   for (const required of ['--keypair', '/keys/a.json', '--rpc-url', '--base-rpc-url', '--ephemeral', '--prometheus-port', '9101']) {
     if (!args.includes(required)) throw new Error(`Missing cranker argument in service self-check: ${required}`);
   }
+  if (config.health.unhealthyThreshold !== 3) throw new Error('Health defaults self-check failed.');
   let duplicateRejected = false;
   try {
     parseConfig(JSON.stringify({ binaryPath: '/bin/hydra-cranker', rollups: [
@@ -168,3 +283,31 @@ function selfCheck() {
   console.log('Official Hydra cranker fleet self-check passed.');
 }
 
+async function main() {
+  if (process.argv.includes('--self-check')) { selfCheck(); return; }
+  const config = parseConfig(await readFile(resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG), 'utf8'));
+  await access(config.binaryPath, constants.X_OK);
+  for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
+  log('service_starting', { rollups: config.rollups.map(({ name, rpcUrl, metricsPort }) => ({ name, rpcUrl, metricsPort })) });
+  const shutdown = new AbortController();
+  const handlers = new Map();
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const handler = () => {
+      log('service_stopping', { signal });
+      shutdown.abort();
+    };
+    handlers.set(signal, handler);
+    process.on(signal, handler);
+  }
+  try { await runFleet(config, { signal: shutdown.signal }); }
+  finally { for (const [signal, handler] of handlers) process.off(signal, handler); }
+}
+
+if (process.argv.includes('--validate-config')) {
+  const config = parseConfig(await readFile(resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG), 'utf8'));
+  await access(config.binaryPath, constants.X_OK);
+  for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
+  log('config_validated', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
+} else if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  await main();
+}

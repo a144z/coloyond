@@ -1,6 +1,6 @@
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault';
-import { bookStatus, pricesFromBook, priceOf } from '../lib/solana/price';
+import { assetsPriced, pricesFromBook } from '../lib/solana/price';
 import { PRICE_MAX_AGE_MS } from '../lib/solana/config';
 import { assetSpec } from '../lib/solana/assets';
 import { fmtTimeAgo } from '../lib/format';
@@ -83,10 +83,7 @@ function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number
   }
 
   const bal = vaultBalances ?? null;
-  const priced =
-    book !== null &&
-    bookStatus(book, PRICE_MAX_AGE_MS) === 'fresh' &&
-    vault.assets.every((id) => priceOf(book, id) !== null);
+  const priced = assetsPriced(book, vault.assets, PRICE_MAX_AGE_MS);
   const valued = bal && priced ? computeAssetRows(bal.tokens, pricesFromBook(book), vault.assets) : null;
   const drift = valued ? maxDriftPct(valued.rows, vault.targets) : null;
   const closed = vault.status === 'closed';
@@ -183,7 +180,7 @@ export function VaultStatusLine({ vault }: { vault: VaultConfig }) {
   }
   if (vault.blockedReason) {
     const labels = {
-      price: 'Blocked · price unavailable',
+      price: 'Display estimate unavailable',
       budget: 'Blocked · Executor funding',
       reserve: 'Blocked · market inventory',
     } as const;
@@ -206,8 +203,8 @@ export function VaultStatusLine({ vault }: { vault: VaultConfig }) {
 export function BlockedNotice({ reason }: { reason: Exclude<VaultConfig['blockedReason'], null> }) {
   const copy = {
     price: {
-      title: 'Price unavailable',
-      body: 'The required price is older than the configured limit. Automation cannot exchange tokens using that observation.',
+      title: 'Display valuation unavailable',
+      body: 'A usable or recent off-chain display quote is unavailable for one or more assets, so the app cannot show an estimate. This display-only state does not gate scheduled execution, which checks configured on-chain Pyth feeds independently.',
     },
     budget: {
       title: 'Executor funding is low',

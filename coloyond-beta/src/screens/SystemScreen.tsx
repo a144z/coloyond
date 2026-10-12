@@ -3,10 +3,7 @@ import { bookStatus, priceEntryOf, pricesFromBook } from '../lib/solana/price';
 import { reserveOwner } from '../lib/solana/reserve-read';
 import { reserveDepthUsd } from '../lib/solana/reserve-quote';
 import { assetList } from '../lib/solana/assets';
-import {
-  PRICE_MAX_AGE_MS,
-  RPC_URL,
-} from '../lib/solana/config';
+import { PRICE_MAX_AGE_MS, RPC_URL } from '../lib/solana/config';
 import { explorerAddress } from '../lib/solana/connection';
 import { fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
 import { useNow } from '../hooks/useNow';
@@ -80,7 +77,7 @@ export function SystemScreen() {
                   };
                 }),
                 { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
-                { k: 'Age limit', v: `${PRICE_MAX_AGE_MS / 1000} seconds` },
+                { k: 'Age limit', v: `${PRICE_MAX_AGE_MS / 1000} seconds · display estimates only` },
                 {
                   k: 'Status',
                   v: (

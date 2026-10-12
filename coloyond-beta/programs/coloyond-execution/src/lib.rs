@@ -16,7 +16,7 @@ use ephemeral_rollups_sdk::{
     ActionArgs, ShortAccountMeta,
 };
 use hydra_api::instruction::ephemeral as hydra_ephemeral;
-use pyth_solana_receiver_sdk::{error::GetPriceError, price_update::PriceUpdateV2};
+use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
 
 declare_id!("HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d");
 
@@ -1870,16 +1870,21 @@ fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>) -> Result<u6
     let data = account.try_borrow_data()?;
     let update = PriceUpdateV2::try_deserialize(&mut &data[..])
         .map_err(|_| error!(ErrorCode::InvalidOracle))?;
-    checked_nav_price(&update, &asset.feed_id, &Clock::get()?)
+    checked_nav_price(&update, &asset.feed_id)
 }
 
-fn checked_nav_price(update: &PriceUpdateV2, feed_id: &[u8; 32], clock: &Clock) -> Result<u64> {
+fn checked_nav_price(update: &PriceUpdateV2, feed_id: &[u8; 32]) -> Result<u64> {
+    // PriceUpdateV2 is the receiver's latest posted update for this account/feed. Its
+    // publish_time may be old when Pyth has not published a new point; that alone must
+    // not make the vault's current price unusable. Feed identity, full verification,
+    // and numeric validity remain mandatory.
+    require!(
+        update.verification_level == VerificationLevel::Full,
+        ErrorCode::InvalidOracle
+    );
     let price = update
-        .get_price_no_older_than(clock, ACTION_MAX_AGE_SEC as u64, feed_id)
-        .map_err(|error| match error {
-            GetPriceError::PriceTooOld => error!(ErrorCode::StalePrice),
-            _ => error!(ErrorCode::InvalidOracle),
-        })?;
+        .get_price_unchecked(feed_id)
+        .map_err(|_| error!(ErrorCode::InvalidOracle))?;
     normalize_price(price.price, price.exponent)
 }
 
@@ -2073,7 +2078,9 @@ pub enum ErrorCode {
     InvalidAccounts,
     #[msg("Pyth price account or feed id is invalid")]
     InvalidOracle,
-    #[msg("Pyth price update is older than the 90-second limit")]
+    // Retained in the error enum for on-chain error-code compatibility. Pyth NAV
+    // reads no longer reject an update based on publish_time.
+    #[msg("Legacy stale Pyth price error; no longer emitted")]
     StalePrice,
     #[msg("Share mint does not match the expected standard SPL mint policy")]
     InvalidShareMint,
@@ -2251,6 +2258,7 @@ mod nav_price_tests {
     fn update(
         feed_id: [u8; 32],
         publish_time: i64,
+        price: i64,
         verification_level: VerificationLevel,
     ) -> PriceUpdateV2 {
         PriceUpdateV2 {
@@ -2258,7 +2266,7 @@ mod nav_price_tests {
             verification_level,
             price_message: PriceFeedMessage {
                 feed_id,
-                price: 2_000,
+                price,
                 conf: 1,
                 exponent: -3,
                 ema_price: 2_000,
@@ -2271,44 +2279,54 @@ mod nav_price_tests {
     }
 
     #[test]
-    fn nav_price_requires_a_full_verified_matching_feed_no_older_than_90_seconds() {
+    fn nav_price_accepts_the_latest_full_verified_update_regardless_of_age() {
         let feed_id = [7; 32];
-        let clock = Clock {
-            unix_timestamp: 1_090,
-            ..Default::default()
-        };
+        let old_publish_time = update(feed_id, 1, 2_000, VerificationLevel::Full);
         assert_eq!(
-            checked_nav_price(
-                &update(feed_id, 1_000, VerificationLevel::Full),
-                &feed_id,
-                &clock
-            )
-            .unwrap(),
+            checked_nav_price(&old_publish_time, &feed_id).unwrap(),
             2_000_000
         );
-        assert!(checked_nav_price(
-            &update(feed_id, 999, VerificationLevel::Full),
-            &feed_id,
-            &clock
-        )
-        .is_err());
+
+        // The account's latest posted point is used as-is, including its updated value.
+        let latest = update(feed_id, 10_000_000, 2_500, VerificationLevel::Full);
+        assert_eq!(checked_nav_price(&latest, &feed_id).unwrap(), 2_500_000);
+    }
+
+    #[test]
+    fn nav_price_rejects_partial_verification_and_wrong_feed() {
+        let feed_id = [7; 32];
         assert!(checked_nav_price(
             &update(
                 feed_id,
-                1_000,
+                1,
+                2_000,
                 VerificationLevel::Partial {
                     num_signatures: 255
                 }
             ),
-            &feed_id,
-            &clock
+            &feed_id
         )
         .is_err());
         assert!(checked_nav_price(
-            &update(feed_id, 1_000, VerificationLevel::Full),
-            &[8; 32],
-            &clock
+            &update(feed_id, 1, 2_000, VerificationLevel::Full),
+            &[8; 32]
         )
         .is_err());
+    }
+
+    #[test]
+    fn nav_price_rejects_non_positive_and_unrepresentable_prices() {
+        let feed_id = [7; 32];
+        for invalid_price in [0, -1] {
+            assert!(checked_nav_price(
+                &update(feed_id, 1, invalid_price, VerificationLevel::Full),
+                &feed_id
+            )
+            .is_err());
+        }
+        // A positive price with a very large exponent must not overflow NAV units.
+        let mut unrepresentable = update(feed_id, 1, i64::MAX, VerificationLevel::Full);
+        unrepresentable.price_message.exponent = i32::MAX;
+        assert!(checked_nav_price(&unrepresentable, &feed_id).is_err());
     }
 }

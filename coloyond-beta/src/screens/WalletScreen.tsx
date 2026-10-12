@@ -199,8 +199,8 @@ function priceBookMeta(price: PriceBook | null): string {
   if (!price) return 'price loading';
   const wsol = priceOf(price, 'wsol');
   if (wsol === null) return 'price loading';
-  const fresh = assetList().filter((spec) => priceOf(price, spec.id) !== null).length;
-  return `SOL $${wsol.toFixed(2)} · ${fresh}/${assetList().length} mids`;
+  const priced = assetList().filter((spec) => priceOf(price, spec.id) !== null).length;
+  return `SOL $${wsol.toFixed(2)} · ${priced}/${assetList().length} mids`;
 }
 
 function WrapSheet({
