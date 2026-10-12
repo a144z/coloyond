@@ -18,6 +18,7 @@ const RPC_RETRY_ATTEMPTS = 7;
 const RPC_RETRY_BASE_DELAY_MS = 500;
 const RPC_RETRY_MAX_DELAY_MS = 5_000;
 const RPC_ATTEMPT_TIMEOUT_MS = 15_000;
+const SETTLEMENT_POLL_MS = 7_000;
 
 if (process.argv.includes('--self-check')) {
   await selfCheck();
@@ -34,6 +35,7 @@ if (!Number.isInteger(timeoutMs) || timeoutMs < 30_000 || timeoutMs > 900_000) {
   throw new Error('COLONYOND_SMOKE_TIMEOUT_MS must be 30000..900000.');
 }
 const cycleCount = parseCycleCount(process.env.COLONYOND_SMOKE_CYCLES ?? '1');
+const requireSettlement = parseRequireSettlement(process.env.COLONYOND_SMOKE_REQUIRE_SETTLEMENT, cycleCount);
 const base = new Connection(baseUrl, 'confirmed');
 const router = new ConnectionMagicRouter(routerUrl, 'confirmed');
 const derive = (seeds, program = PROGRAM_ID) => PublicKey.findProgramAddressSync(seeds, program)[0];
@@ -131,10 +133,10 @@ for (let cycle = 1; cycle <= cycleCount; cycle += 1) {
   allCycleResults.push({ cycle, triggerSignature, dueSlot: currentSlot, nextExecSlot: nextTask.nextExecSlot, ...observed.summary });
   console.log(JSON.stringify({ event: observed.settled ? 'cycle_settled' : 'cycle_skipped_or_unsettled', cycle, cycles: cycleCount, ...observed.summary }));
 }
-if (cycleSettlements === 0) {
+if (requireSettlement && cycleSettlements === 0) {
   throw new Error('No base-layer settlement with both nonce and SPL balance changes was observed in the requested cycles. Callbacks may safely skip when the minimum delay or Pyth movement guard is not met.');
 }
-console.log(JSON.stringify({ event: 'closed_loop_smoke_passed', requestedCycles: cycleCount, settledCycles: cycleSettlements, initialNonce: nonceBefore.toString(), cycles: allCycleResults }, null, 2));
+console.log(JSON.stringify({ event: 'closed_loop_smoke_passed', requestedCycles: cycleCount, settledCycles: cycleSettlements, settlementRequired: requireSettlement, initialNonce: nonceBefore.toString(), cycles: allCycleResults }, null, 2));
 
 function requiredPublicKey(name) {
   const value = process.env[name];
@@ -186,6 +188,12 @@ function parseCycleCount(value) {
   return count;
 }
 
+function parseRequireSettlement(value, cycleCount) {
+  if (value === undefined) return cycleCount === 1;
+  if (value !== 'true' && value !== 'false') throw new Error('COLONYOND_SMOKE_REQUIRE_SETTLEMENT must be true or false.');
+  return value === 'true';
+}
+
 async function waitUntilDue(host, dueSlot, timeoutMs) {
   let currentSlot = await host.getSlot('confirmed');
   const deadline = Date.now() + timeoutMs;
@@ -227,27 +235,65 @@ async function observeCycleSettlement({ base, stateAddress, vaultAccounts, autho
   let latestState;
   let latestBalances = before;
   let settlement;
-  while (Date.now() < deadline) {
-    await sleep(2_000);
-    const [stateInfo, signatures, balances] = await Promise.all([
+  let observationIncomplete = false;
+  while (true) {
+    const pauseMs = settlementPollDelay(deadline, Date.now());
+    if (pauseMs <= 0) { observationIncomplete = true; break; }
+    await sleep(pauseMs);
+    // Do not launch RPC reads when the sleep consumed the remaining deadline.
+    if (settlementPollDelay(deadline, Date.now()) <= 0) { observationIncomplete = true; break; }
+
+    const [stateResult, balancesResult] = await Promise.allSettled([
       withRpcRetry(() => base.getAccountInfo(stateAddress, 'confirmed'), 'observe Vault State', { deadline }),
-      withRpcRetry(() => base.getSignaturesForAddress(stateAddress, { limit: 20 }, 'confirmed'), 'read settlement signatures', { deadline }),
       readTokenBalances(base, vaultAccounts, authority, deadline),
     ]);
-    if (!stateInfo?.owner.equals(PROGRAM_ID) || stateInfo.data.length < 94) throw new Error('Vault State disappeared or became malformed while observing cycle.');
-    if (balances.some((balance) => balance === null)) throw new Error('A vault SPL token account disappeared while observing cycle.');
-    latestState = stateInfo;
-    latestBalances = balances;
-    const nonce = stateInfo.data.readBigUInt64LE(86);
-    if (nonce > nonceBefore) {
-      for (const candidate of signatures) {
-        if (candidate.err) continue;
-        const tx = await withRpcRetry(() => base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }), `read settlement transaction ${candidate.signature}`, { deadline });
-        const line = tx?.meta?.logMessages?.find((message) => message.includes(`Base-layer SPL rebalance settled atomically: nonce ${nonce}`));
-        if (line) { settlement = { signature: candidate.signature, line }; break; }
+    for (const result of [stateResult, balancesResult]) {
+      if (result.status === 'rejected') {
+        if (!isTransientRpcError(result.reason)) throw result.reason;
+        observationIncomplete = true;
       }
-      if (settlement || Date.now() > deadline - 2_000) break;
     }
+    if (stateResult.status === 'fulfilled') {
+      const stateInfo = stateResult.value;
+      if (!stateInfo?.owner.equals(PROGRAM_ID) || stateInfo.data.length < 94) throw new Error('Vault State disappeared or became malformed while observing cycle.');
+      latestState = stateInfo;
+    }
+    if (balancesResult.status === 'fulfilled') {
+      if (balancesResult.value.some((balance) => balance === null)) throw new Error('A vault SPL token account disappeared while observing cycle.');
+      latestBalances = balancesResult.value;
+    }
+    if (stateResult.status === 'rejected' || balancesResult.status === 'rejected') {
+      if (Date.now() >= deadline) break;
+      continue;
+    }
+
+    const nonce = latestState.data.readBigUInt64LE(86);
+    if (nonce <= nonceBefore || settlement) continue;
+    let signatures;
+    try {
+      signatures = await withRpcRetry(() => base.getSignaturesForAddress(stateAddress, { limit: 20 }, 'confirmed'), 'read settlement signatures', { deadline });
+    } catch (error) {
+      if (!isTransientRpcError(error)) throw error;
+      observationIncomplete = true;
+      if (Date.now() >= deadline) break;
+      continue;
+    }
+    for (const candidate of signatures) {
+      if (candidate.err) continue;
+      let tx;
+      try {
+        tx = await withRpcRetry(() => base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }), `read settlement transaction ${candidate.signature}`, { deadline });
+      } catch (error) {
+        if (!isTransientRpcError(error)) throw error;
+        observationIncomplete = true;
+        if (Date.now() >= deadline) break;
+        continue;
+      }
+      const line = tx?.meta?.logMessages?.find((message) => message.includes(`Base-layer SPL rebalance settled atomically: nonce ${nonce}`));
+      if (line) { settlement = { signature: candidate.signature, line }; break; }
+    }
+    if (settlement) break;
+    if (Date.now() >= deadline) { observationIncomplete = true; break; }
   }
   const nonceAfter = latestState?.data.readBigUInt64LE(86) ?? nonceBefore;
   const balanceChanged = latestBalances.some((balance, index) => balance !== before[index]);
@@ -257,11 +303,14 @@ async function observeCycleSettlement({ base, stateAddress, vaultAccounts, autho
     settled: Boolean(settlement && nonceAfter > nonceBefore && balanceChanged),
     summary: {
       nonceBefore: nonceBefore.toString(), nonceAfter: nonceAfter.toString(),
+      observationIncomplete,
       balances: vaultAccounts.map((account, index) => ({ address: account.toBase58(), before: before[index].toString(), after: latestBalances[index].toString() })),
       ...(settlement ? { settlementSignature: settlement.signature, settlementExplorer: `https://explorer.solana.com/tx/${settlement.signature}?cluster=devnet`, settlementLog: settlement.line } : {}),
     },
   };
 }
+
+function settlementPollDelay(deadline, now) { return Math.min(SETTLEMENT_POLL_MS, Math.max(0, deadline - now)); }
 
 function decodeInstruction(region) {
   let offset = 0;
@@ -381,6 +430,10 @@ async function selfCheck() {
   assertRejects(() => parseCycleCount('6'), 'more than five cycles accepted');
   assertRejects(() => parseCycleCount('2.5'), 'fractional cycles accepted');
   if (parseCycleCount('1') !== 1 || parseCycleCount('5') !== 5) throw new Error('Cycle count bounds self-check failed.');
+  if (parseRequireSettlement(undefined, 1) !== true || parseRequireSettlement(undefined, 2) !== false || parseRequireSettlement('true', 2) !== true || parseRequireSettlement('false', 1) !== false) throw new Error('Settlement requirement default self-check failed.');
+  const expiredDeadline = 1_000;
+  if (settlementPollDelay(expiredDeadline, expiredDeadline) !== 0 || settlementPollDelay(expiredDeadline, expiredDeadline + 1) !== 0) throw new Error('Expired settlement deadline must start no pending reads.');
+  if (settlementPollDelay(15_000, 5_000) !== SETTLEMENT_POLL_MS) throw new Error('Settlement polling interval self-check failed.');
   let attempts = 0;
   const recovered = await withRpcRetry(async () => {
     attempts += 1;
@@ -400,7 +453,7 @@ async function selfCheck() {
     throw Object.assign(new Error('Invalid request'), { status: 400 });
   }, 'self-check terminal error', { deadline: Date.now() + 5_000, baseDelayMs: 0 }), 'permanent RPC error was retried or accepted');
   if (terminalAttempts !== 1) throw new Error(`Permanent RPC error was retried ${terminalAttempts} times.`);
-  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected', 'exact-schedule-advance', 'missing-task-rejected', 'duplicate-task-rejected', 'stale-task-rejected', 'cycle-count-bounds', 'transient-rpc-retry-recovers', 'rpc-retry-attempt-cap', 'permanent-rpc-error-terminal'] }));
+  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected', 'exact-schedule-advance', 'missing-task-rejected', 'duplicate-task-rejected', 'stale-task-rejected', 'cycle-count-bounds', 'settlement-requirement-mode', 'expired-deadline-no-read', 'lower-volume-settlement-poll', 'transient-rpc-retry-recovers', 'rpc-retry-attempt-cap', 'permanent-rpc-error-terminal'] }));
 }
 
 function assertRejects(action, message) {
