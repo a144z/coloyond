@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault';
-import { bookStatus, pricesFromBook, priceOf } from '../lib/solana/price';
-import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
+import { assetsPriced, pricesFromBook } from '../lib/solana/price';
+import { CADENCE_OPTIONS_SEC } from '../lib/solana/config';
 import { assetSpec, type AssetId } from '../lib/solana/assets';
 import { explorerAddress } from '../lib/solana/connection';
 import { fmtCountdown, fmtSol, fmtToken, fmtTimeAgo, fmtUsd, rawFromToken, shortKey, parseAmountOrZero } from '../lib/format';
@@ -45,7 +45,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   }
   if (vault.legacy || vault.status === 'legacy') return <LegacyVault vault={vault} />;
 
-  const priceOk = price !== null && bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && vault.assets.every((id) => priceOf(price, id) !== null);
+  const priceOk = assetsPriced(price, vault.assets);
   const valued = bal && priceOk && price ? computeAssetRows(bal.tokens, pricesFromBook(price), vault.assets) : null;
   const drift = valued ? maxDriftPct(valued.rows, vault.targets) : null;
   const paused = vault.status === 'paused';
@@ -69,7 +69,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
 
       <LedgerPanel stripe="Portfolio value" meta={valued ? fmtUsd(valued.totalUsd) : 'price unavailable'}>
         <KeyValue rows={[
-          { k: 'Vault NAV', v: valued ? fmtUsd(valued.totalUsd) : 'Waiting for fresh prices' },
+          { k: 'Vault NAV', v: valued ? fmtUsd(valued.totalUsd) : 'Waiting for usable display quotes' },
           { k: 'Your wallet SOL', v: walletBalances ? `${fmtSol(walletBalances.solLamports, 6)} SOL` : 'Reading wallet…' },
           { k: 'Your transferable shares', v: bal ? userShares.toFixed(4) : 'Reading shares…' },
         ]} />
@@ -120,7 +120,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
           </div>
           <div>
             {valued ? <MixBar segments={segmentsOf(actualEntries)} ticks={targetTicks} ariaLabel={`Actual allocation: ${actualEntries.map((item) => `${assetSpec(item.assetId).symbol} ${item.pct.toFixed(1)}%`).join(', ')}`} /> : <Skeleton className="h-[10px] w-full border border-ink" />}
-            <p className="mt-1.5 text-[11px] text-iron">{valued ? `Actual · ${actualEntries.map((item) => `${item.pct.toFixed(1)} ${assetSpec(item.assetId).symbol}`).join(' / ') || 'no holdings'}` : 'Actual · waiting for balances and fresh prices'}{drift !== null ? ` · ${drift.toFixed(1)}% deviation` : ''}</p>
+            <p className="mt-1.5 text-[11px] text-iron">{valued ? `Actual · ${actualEntries.map((item) => `${item.pct.toFixed(1)} ${assetSpec(item.assetId).symbol}`).join(' / ') || 'no holdings'}` : 'Actual · waiting for balances and usable display quotes'}{drift !== null ? ` · ${drift.toFixed(1)}% deviation` : ''}</p>
           </div>
         </div>
 

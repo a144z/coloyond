@@ -9,6 +9,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:price": "node --test scripts/price-availability.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "gen:keys": "node scripts/generate-demo-keys.mjs",
     "bootstrap:reserve": "node scripts/bootstrap-reserve.mjs",

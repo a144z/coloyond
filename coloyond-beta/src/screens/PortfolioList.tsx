@@ -1,7 +1,6 @@
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault';
-import { bookStatus, pricesFromBook, priceOf } from '../lib/solana/price';
-import { PRICE_MAX_AGE_MS } from '../lib/solana/config';
+import { assetsPriced, pricesFromBook } from '../lib/solana/price';
 import { assetSpec } from '../lib/solana/assets';
 import { fmtTimeAgo } from '../lib/format';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
@@ -83,10 +82,7 @@ function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number
   }
 
   const bal = vaultBalances ?? null;
-  const priced =
-    book !== null &&
-    bookStatus(book, PRICE_MAX_AGE_MS) === 'fresh' &&
-    vault.assets.every((id) => priceOf(book, id) !== null);
+  const priced = assetsPriced(book, vault.assets);
   const valued = bal && priced ? computeAssetRows(bal.tokens, pricesFromBook(book), vault.assets) : null;
   const drift = valued ? maxDriftPct(valued.rows, vault.targets) : null;
   const closed = vault.status === 'closed';
@@ -207,7 +203,7 @@ export function BlockedNotice({ reason }: { reason: Exclude<VaultConfig['blocked
   const copy = {
     price: {
       title: 'Price unavailable',
-      body: 'The required price is older than the configured limit. Automation cannot exchange tokens using that observation.',
+      body: 'A usable display quote is unavailable for one or more required assets. Scheduled execution checks its configured on-chain Pyth feeds independently.',
     },
     budget: {
       title: 'Executor funding is low',

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
-import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
+import { CADENCE_OPTIONS_SEC } from '../lib/solana/config';
 import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets';
-import { bookStatus, priceOf } from '../lib/solana/price';
+import { priceOf } from '../lib/solana/price';
 import { fmtSol, fmtUsd, lamportsFromSol, parseAmountOrZero } from '../lib/format';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { Button } from '../components/ui/Button';
@@ -67,8 +67,7 @@ export function CreateVault() {
   const targetLabel = selected.map((s) => `${(targets[s.id] ?? 0).toFixed(0)} ${s.symbol}`).join(' · ');
 
   const investmentSolUnits = parseAmountOrZero(investmentSol);
-  const priceOk = bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && price !== null;
-  const solUsd = priceOk ? priceOf(price, 'wsol') : null;
+  const solUsd = priceOf(price, 'wsol');
   const estimatedTotalUsd = investmentSolUnits !== null && solUsd !== null ? investmentSolUnits * solUsd : null;
 
   const errors = useMemo(() => {
@@ -301,7 +300,7 @@ export function CreateVault() {
             { k: 'Wallet SOL balance', v: solAvail !== null ? `${fmtSol(solAvail)} SOL` : 'Loading' },
             {
               k: 'Estimated vault value',
-              v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a fresh SOL/USD price',
+              v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a usable SOL/USD quote',
             },
             { k: 'Executor funding', v: '0.05 SOL from setup · program controlled' },
             { k: 'Minimum delay', v: `${cadenceSec} seconds · about ${Math.ceil(cadenceSec * 5_700 / 60).toLocaleString()} ER slots` },
@@ -368,8 +367,8 @@ function InvestmentEstimate({
       </div>
       <p className="mt-3 border-t border-hairline pt-2 text-[10.5px] leading-relaxed text-iron">
         {totalUsd !== null
-          ? 'Estimated from your SOL amount and the fresh SOL/USD price. Target dollars are not guaranteed token quantities.'
-          : 'A fresh SOL/USD price is unavailable. The estimate will appear when the price book refreshes.'}
+          ? 'Estimated from your SOL amount and the available SOL/USD display quote. Target dollars are not guaranteed token quantities.'
+          : 'A usable SOL/USD display quote is unavailable. The estimate will appear when the quote is available.'}
       </p>
     </LedgerPanel>
   );

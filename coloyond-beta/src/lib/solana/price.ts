@@ -1,18 +1,15 @@
 import { assetList } from './assets';
 import { fetchCoinbaseStats } from './coinbase';
+import { hasUsableQuotesFor, isUsablePriceEntry, priceBookStatus } from './price-availability.js';
 
 /**
  * The price book: one live observation covering every tradable asset.
  *
- * The product design requires a real observation with an age limit:
- * "The required price is older than the configured limit. Automation cannot
- * exchange tokens using that observation."
- *
  * Per asset: Coinbase spot is primary (CORS-open, US reachable), Binance
  * spot ticker is the fallback. Synthetic Devnet USD is fixed at $1 for demo
- * accounting only and is not backed by redeemable dollars. If both
- * feeds fail for an asset, its entry is null and any trade involving it is
- * blocked by design.
+ * accounting only and is not backed by redeemable dollars. If both feeds
+ * fail for an asset, its entry is null and UI values requiring that asset's
+ * display quote are unavailable. On-chain execution uses Pyth.
  */
 
 export type PriceSource = 'coinbase' | 'binance' | 'fixed';
@@ -27,22 +24,22 @@ export interface PriceBook {
   entries: Record<string, PriceEntry | null>;
 }
 
-export type PriceStatus = 'fresh' | 'stale' | 'unavailable';
+export type PriceStatus = 'available' | 'unavailable';
 
 export function priceOf(book: PriceBook | null, assetId: string): number | null {
   if (!book) return null;
   const e = book.entries[assetId];
-  return e ? e.usd : null;
+  return isUsablePriceEntry(e) ? e.usd : null;
 }
 
 export function priceEntryOf(book: PriceBook | null, assetId: string): PriceEntry | null {
   if (!book) return null;
-  return book.entries[assetId] ?? null;
+  const entry = book.entries[assetId];
+  return isUsablePriceEntry(entry) ? entry : null;
 }
 
-export function bookStatus(book: PriceBook | null, maxAgeMs: number): PriceStatus {
-  if (!book) return 'unavailable';
-  return Date.now() - book.observedAt <= maxAgeMs ? 'fresh' : 'stale';
+export function bookStatus(book: PriceBook | null): PriceStatus {
+  return priceBookStatus(book);
 }
 
 /** Flattened lookup of only the priced assets (missing entries omitted). */
@@ -50,15 +47,14 @@ export function pricesFromBook(book: PriceBook | null): Record<string, number> {
   if (!book) return {};
   const out: Record<string, number> = {};
   for (const [id, e] of Object.entries(book.entries)) {
-    if (e) out[id] = e.usd;
+    if (isUsablePriceEntry(e)) out[id] = e.usd;
   }
   return out;
 }
 
-/** Fresh book AND every listed asset priced — the precondition for trading. */
-export function assetsPriced(book: PriceBook | null, assetIds: string[], maxAgeMs: number): boolean {
-  if (bookStatus(book, maxAgeMs) !== 'fresh') return false;
-  return assetIds.every((id) => priceOf(book, id) !== null);
+/** Every listed asset has a usable display quote. */
+export function assetsPriced(book: PriceBook | null, assetIds: string[]): boolean {
+  return hasUsableQuotesFor(book, assetIds);
 }
 
 export async function fetchPriceBook(): Promise<PriceBook> {
