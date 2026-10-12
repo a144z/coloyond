@@ -64,15 +64,16 @@ export function Onboarding() {
           <KeyValue
             rows={[
               { k: 'Cluster', v: 'Solana devnet' },
-              { k: 'Tokens', v: 'WSOL · tUSD · tBTC · tETH' },
+              { k: 'Tokens', v: 'WSOL · dUSD (synthetic) · tBTC · tETH' },
               { k: 'Price feed', v: 'Coinbase spot · Binance fallback' },
-              { k: 'Counterparty', v: 'Funded devnet reserve' },
-              { k: 'Scheduler', v: 'MagicBlock ER · 60-second schedule' },
+              { k: 'Counterparty', v: 'Program-owned devnet test market' },
+              { k: 'Scheduler', v: 'Hydra · 5,700 ER slots (~60s target)' },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            Every number this app shows comes from the live RPC and the price feed. The reserve is
-            devnet-only demo infrastructure; it holds no real value.
+            Balances come from Solana devnet. dUSD is capped synthetic test money with a fixed $1
+            display price; it has no real-dollar backing or redemption value. Scheduled execution
+            needs an active Hydra cranker, so slot cadence does not guarantee exact wall-clock timing.
           </p>
         </LedgerPanel>
       </div>
@@ -85,8 +86,9 @@ export function Onboarding() {
           Import a seed phrase
         </Button>
         <p className="px-1 pt-1 text-[11px] leading-relaxed text-iron">
-          Your keys never leave this device. Each portfolio gets a separate custody keypair — the
-          owner key provisions, the vault keys trade.
+          Your owner key signs setup and owner actions from this device. On-chain Vault Authority
+          PDAs control each portfolio's standard SPL token accounts; only the Executor PDA is
+          delegated to MagicBlock.
         </p>
       </div>
 

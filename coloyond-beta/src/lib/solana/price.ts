@@ -8,7 +8,8 @@ import { assetList } from './assets';
  * exchange tokens using that observation."
  *
  * Per asset: Coinbase spot is primary (CORS-open, US reachable), Binance
- * spot ticker is the fallback. tUSD is fixed $1 (synthetic dollar). If both
+ * spot ticker is the fallback. Synthetic Devnet USD is fixed at $1 for demo
+ * accounting only and is not backed by redeemable dollars. If both
  * feeds fail for an asset, its entry is null and any trade involving it is
  * blocked by design.
  */

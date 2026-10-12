@@ -4,10 +4,9 @@ import { NATIVE_MINT } from '@solana/spl-token';
 /**
  * The tradable asset universe.
  *
- * Every portfolio is a mix of these assets, quoted pairwise against the
- * funded devnet reserve. Real market assets (WSOL) come with a live price;
- * synthetic ones ("t"-prefixed) are devnet stand-ins whose *price* is real
- * (or fixed $1 for tUSD) while their *supply* is minted by the reserve.
+ * Devnet portfolios use ordinary SPL token accounts. Devnet USD is a
+ * program-issued synthetic test asset with a fixed $1 accounting price; it
+ * has no real-dollar backing or redemption value.
  *
  * Segment colors come from the lacquerboard palette:
  *   petrol #13343B · brass #C66E22 · ink #14171A · iron #384551
@@ -20,7 +19,7 @@ export interface AssetSpec {
   decimals: number;
   /** Mix-bar segment fill (lacquerboard palette). */
   color: string;
-  /** Synthetic devnet asset: the reserve holds its mint authority. */
+  /** Synthetic test asset issued for the Devnet demo. */
   synthetic: boolean;
   /** Coinbase spot pair for the live mid; null means fixed $1. */
   priceSymbol: string | null;
@@ -28,7 +27,7 @@ export interface AssetSpec {
   binanceSymbol: string | null;
 }
 
-export const ASSET_IDS = ['wsol', 'tusd', 'tbtc', 'teth'] as const;
+export const ASSET_IDS = ['wsol', 'dusd', 'tbtc', 'teth'] as const;
 
 export type AssetId = (typeof ASSET_IDS)[number];
 
@@ -43,10 +42,10 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
     priceSymbol: 'SOL-USD',
     binanceSymbol: 'SOLUSDT',
   },
-  tusd: {
-    id: 'tusd',
-    symbol: 'tUSD',
-    name: 'Test USD',
+  dusd: {
+    id: 'dusd',
+    symbol: 'dUSD',
+    name: 'Synthetic Devnet USD',
     decimals: 6,
     color: '#C66E22',
     synthetic: true,
@@ -94,7 +93,7 @@ export const SYNTHETIC_ASSET_IDS: AssetId[] = ASSET_IDS.filter((id) => ASSETS[id
 // Public devnet mint addresses only. Mint and reserve secret keys belong in
 // local bootstrap tooling and are never imported into the browser bundle.
 const SYNTHETIC_MINTS: Partial<Record<AssetId, string>> = {
-  tusd: '39Byty3S2nCgRHk6kshaDiX6UKi7RjGmLVP4Qpz2ZK1D',
+  dusd: 'DQZn9b9uNUZdE3AJoGoZ9hmC2NzaWxTZRo4gnNLzyuSv',
   tbtc: '2VnSReFZw6pXAsANhSNFqwjqiEd22ihSehLY6RVXXy8M',
   teth: '5zPzxpfy9bBvhXDQ4cwQGY2zX97RwrrUkadK186HXZSX',
 };

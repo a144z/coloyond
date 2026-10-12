@@ -13,8 +13,11 @@
     "bootstrap:reserve": "node scripts/bootstrap-reserve.mjs",
     "deploy:execution": "node scripts/deploy-execution-program.mjs",
     "bootstrap:execution-reserve": "node scripts/bootstrap-execution-reserve.mjs",
+    "bootstrap:devnet-test-usd": "node scripts/bootstrap-devnet-test-usd.mjs",
+    "bootstrap:standard-rebalance-vault": "node scripts/bootstrap-standard-rebalance-vault.mjs",
     "canary:standard-ata": "node scripts/canary-read-standard-ata.mjs",
     "schedule:standard-vault": "node scripts/schedule-standard-vault.mjs",
+    "crank:standard-vault": "node scripts/run-standard-vault-cranker.mjs",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android"
   },

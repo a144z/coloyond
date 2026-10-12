@@ -11,12 +11,14 @@ export function WeightSliders({
   shares,
   onChange,
   ariaLabel = 'Target mix weights',
+  assetIds,
 }: {
   shares: Record<AssetId, number>;
   onChange: (next: Record<AssetId, number>) => void;
   ariaLabel?: string;
+  assetIds?: readonly AssetId[];
 }) {
-  const specs = assetList();
+  const specs = assetList().filter((asset) => !assetIds || assetIds.includes(asset.id));
   const total = specs.reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
   const pctOf = (id: AssetId): number => (total > 0 ? ((shares[id] ?? 0) / total) * 100 : 0);
 
@@ -59,11 +61,12 @@ export function WeightSliders({
 }
 
 /** Normalize raw shares into target percentages that sum to 100 (empty input → empty record). */
-export function normalizeShares(shares: Record<AssetId, number>): Partial<Record<AssetId, number>> {
-  const total = assetList().reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
+export function normalizeShares(shares: Record<AssetId, number>, assetIds?: readonly AssetId[]): Partial<Record<AssetId, number>> {
+  const specs = assetList().filter((asset) => !assetIds || assetIds.includes(asset.id));
+  const total = specs.reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
   if (total <= 0) return {};
   const out: Partial<Record<AssetId, number>> = {};
-  for (const spec of assetList()) {
+  for (const spec of specs) {
     const share = shares[spec.id] ?? 0;
     if (share <= 0) continue;
     out[spec.id] = (share / total) * 100;
@@ -72,9 +75,9 @@ export function normalizeShares(shares: Record<AssetId, number>): Partial<Record
 }
 
 /** Read normalized shares back from target percentages (for editing existing targets). */
-export function sharesFromTargets(targets: Record<string, number>): Record<AssetId, number> {
+export function sharesFromTargets(targets: Record<string, number>, assetIds?: readonly AssetId[]): Record<AssetId, number> {
   const out = Object.fromEntries(assetList().map((s) => [s.id, 0])) as Record<AssetId, number>;
-  for (const spec of assetList()) {
+  for (const spec of assetList().filter((asset) => !assetIds || assetIds.includes(asset.id))) {
     out[spec.id] = Math.round(targets[spec.id] ?? 0);
   }
   return out;

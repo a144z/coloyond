@@ -5,11 +5,10 @@ import {
   createSyncNativeInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
-import { base58 } from '@scure/base';
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { SOLANA_DERIVATION_PATH, deriveEd25519Path } from './derivation';
-import { connection, ephemeralConnection } from './connection';
+import { connection } from './connection';
 import { FAUCET_LAMPORTS } from './config';
 import { emptyTokens, mintOf, mintToAssetMap, type AssetId } from './assets';
 
@@ -31,15 +30,6 @@ export function keypairFromMnemonic(phrase: string): Keypair {
   const seed = mnemonicToSeedSync(phrase);
   const derived = deriveEd25519Path(seed, SOLANA_DERIVATION_PATH);
   return Keypair.fromSeed(derived);
-}
-
-/** Vault custody keypairs: fresh ed25519 keys, exported as base58 for storage. */
-export function encodeSecret(keypair: Keypair): string {
-  return base58.encode(keypair.secretKey);
-}
-
-export function decodeSecret(secret: string): Keypair {
-  return Keypair.fromSecretKey(base58.decode(secret));
 }
 
 /**
@@ -69,11 +59,6 @@ export async function fetchBalances(
   }
 
   return { solLamports, tokens };
-}
-
-/** Vault and reserve token balances live on the ER after delegation; SOL budgets stay on base. */
-export function fetchEphemeralBalances(owner: PublicKey): Promise<Balances> {
-  return fetchBalances(owner, ephemeralConnection, connection);
 }
 
 /** Wrap SOL into the owner's own WSOL ATA within a given transaction. */

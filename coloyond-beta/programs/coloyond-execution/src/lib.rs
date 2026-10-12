@@ -14,7 +14,7 @@ use ephemeral_rollups_sdk::{
     pda::ephemeral_balance_pda_from_payer,
     ActionArgs, ShortAccountMeta,
 };
-use hydra_api::instruction::{ephemeral as hydra_ephemeral, CreateArgs, SchedMeta, ScheduledIx};
+use hydra_api::instruction::ephemeral as hydra_ephemeral;
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 declare_id!("HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d");
@@ -23,23 +23,22 @@ const VAULT_SEED: &[u8] = b"vault";
 const VAULT_AUTHORITY_SEED: &[u8] = b"vault-authority";
 const SHARE_MINT_SEED: &[u8] = b"share-mint";
 const EXECUTOR_SEED: &[u8] = b"executor";
+const SCHEDULER_CONFIG_SEED: &[u8] = b"scheduler-config";
 const MARKET_AUTHORITY_SEED: &[u8] = b"market-authority";
 const CRANK_SEED: &[u8] = b"crank";
+const MARKET_CONFIG_SEED: &[u8] = b"market-config";
 const TASK_SPONSOR_RESERVE_LAMPORTS: u64 = 50_000_000;
-const INTERVAL_SLOTS: u64 = 5_700; // Approximately 60 sec from two 70-sec Devnet triggers at 6,650 slots.
-                                   // ER slot cadence varies, so this is a wall-clock target, not a guarantee.
-                                   // Run a dedicated hydra-cranker for this zero-tip test task.
-const CRANK_PRIORITY_TIP: u64 = 0;
-const CRANK_COMPUTE_UNITS: u32 = 800_000;
 const PRICE_MAX_AGE_SEC: u64 = 90;
 const ACTION_MAX_AGE_SEC: i64 = 90;
 const USD_SCALE: u64 = 1_000_000;
+const MAX_DEVNET_USD_SUPPLY_RAW: u64 = 100_000_000_000; // 100,000 tokens at 6 decimals.
 const BPS: u128 = 10_000;
 const SWAP_FEE_BPS: u128 = 30;
 const RECEIVER_PROGRAM: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 const HYDRA_EPHEMERAL_PROGRAM: Pubkey = pubkey!("eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf");
 const WSOL_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 const TUSD_MINT: Pubkey = pubkey!("39Byty3S2nCgRHk6kshaDiX6UKi7RjGmLVP4Qpz2ZK1D");
+const DEVNET_USD_MINT: Pubkey = pubkey!("DQZn9b9uNUZdE3AJoGoZ9hmC2NzaWxTZRo4gnNLzyuSv");
 const TBTC_MINT: Pubkey = pubkey!("2VnSReFZw6pXAsANhSNFqwjqiEd22ihSehLY6RVXXy8M");
 const TETH_MINT: Pubkey = pubkey!("5zPzxpfy9bBvhXDQ4cwQGY2zX97RwrrUkadK186HXZSX");
 const SOL_FEED_ACCOUNT: Pubkey = pubkey!("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
@@ -76,6 +75,11 @@ pub struct InitializeVaultArgs {
 pub struct RebalanceRequest {
     pub nonce: u64,
     pub issued_at: i64,
+    pub legs: Vec<RebalanceLeg>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct RebalanceLeg {
     pub sell_index: u8,
     pub buy_index: u8,
     pub amount_in: u64,
@@ -111,6 +115,21 @@ pub struct VaultState {
 pub struct Executor {
     pub vault_state: Pubkey,
     pub next_action_nonce: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct SchedulerConfig {
+    pub vault_state: Pubkey,
+    pub owner: Pubkey,
+    pub sponsor: Pubkey,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct MarketConfig {
+    pub admin: Pubkey,
+    pub issued_raw: u64,
 }
 
 #[ephemeral]
@@ -199,6 +218,47 @@ pub mod coloyond_execution {
         Ok(())
     }
 
+    /// The first Devnet market operator initializes the cap counter for the valueless test USD mint.
+    pub fn initialize_market_config(ctx: Context<InitializeMarketConfig>) -> Result<()> {
+        ctx.accounts.market_config.admin = ctx.accounts.admin.key();
+        ctx.accounts.market_config.issued_raw = 0;
+        Ok(())
+    }
+
+    /// Issue test USD only to the program-controlled market ATA, with a lifetime supply cap.
+    pub fn issue_devnet_usd(ctx: Context<IssueDevnetUsd>, amount: u64) -> Result<()> {
+        require!(amount > 0, ErrorCode::InvalidAmount);
+        let next_issued = ctx
+            .accounts
+            .market_config
+            .issued_raw
+            .checked_add(amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(
+            next_issued <= MAX_DEVNET_USD_SUPPLY_RAW,
+            ErrorCode::MarketCapExceeded
+        );
+
+        let (_, bump) = Pubkey::find_program_address(&[MARKET_AUTHORITY_SEED], ctx.program_id);
+        let bump_seed = [bump];
+        let signer_seeds: &[&[u8]] = &[MARKET_AUTHORITY_SEED, &bump_seed];
+        token::mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                token::MintTo {
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.market_token.to_account_info(),
+                    authority: ctx.accounts.market_authority.to_account_info(),
+                },
+                &[signer_seeds],
+            ),
+            amount,
+        )?;
+        ctx.accounts.market_config.issued_raw = next_issued;
+        msg!("Issued {} raw Devnet test USD units", amount);
+        Ok(())
+    }
+
     /// Delegate only the non-token Executor PDA; portfolio SPL accounts remain on the base layer.
     pub fn delegate_executor(ctx: Context<DelegateExecutor>) -> Result<()> {
         let state = &ctx.accounts.vault_state;
@@ -221,94 +281,15 @@ pub mod coloyond_execution {
         Ok(())
     }
 
-    /// Register one recurring Hydra ER task for this portfolio. Call on the ER after Executor delegation.
-    pub fn schedule_rebalance(ctx: Context<ScheduleRebalance>) -> Result<()> {
-        let state = &ctx.accounts.vault_state;
-        require!(state.active, ErrorCode::InactiveVault);
-        require_keys_eq!(
-            state.owner,
-            ctx.accounts.owner.key(),
-            ErrorCode::InvalidAuthority
-        );
-        require_keys_eq!(
-            ctx.accounts.executor.vault_state,
-            state.key(),
-            ErrorCode::InvalidAuthority
-        );
-        validate_runtime_accounts(
-            state,
-            &ctx.remaining_accounts,
-            &ctx.accounts.vault_authority.key(),
-            &ctx.accounts.market_authority.key(),
-        )?;
-
-        let task_seed = task_seed(&state.key());
-        let (expected_crank, _) = Pubkey::find_program_address(
-            &[
-                CRANK_SEED,
-                ctx.accounts.executor.key().as_ref(),
-                task_seed.as_ref(),
-            ],
-            &HYDRA_EPHEMERAL_PROGRAM,
-        );
-        require_keys_eq!(
-            ctx.accounts.crank.key(),
-            expected_crank,
-            ErrorCode::InvalidTask
-        );
-
-        let mut metas = vec![
-            SchedMeta::readonly(instructions_sysvar::ID.to_bytes()),
-            SchedMeta::readonly(state.key().to_bytes()),
-            SchedMeta::writable(ctx.accounts.executor.key().to_bytes()),
-            SchedMeta::readonly(ctx.accounts.vault_authority.key().to_bytes()),
-            SchedMeta::readonly(ctx.accounts.market_authority.key().to_bytes()),
-            SchedMeta::readonly(ctx.accounts.token_program.key().to_bytes()),
-            SchedMeta::writable(ctx.accounts.magic_context.key().to_bytes()),
-            SchedMeta::writable(ctx.accounts.magic_fee_vault.key().to_bytes()),
-            SchedMeta::readonly(ctx.accounts.magic_program.key().to_bytes()),
-        ];
-        metas.extend(
-            ctx.remaining_accounts
-                .iter()
-                .map(|account| SchedMeta::readonly(account.key().to_bytes())),
-        );
-
-        let instruction_data = crate::instruction::RebalanceEphemeral {}.data();
-        let scheduled = [ScheduledIx {
-            program_id: crate::ID.to_bytes(),
-            metas: &metas,
-            data: &instruction_data,
-        }];
-        let args = CreateArgs {
-            seed: task_seed,
-            authority: ctx.accounts.executor.key().to_bytes(),
-            start_slot: Clock::get()?
-                .slot
-                .checked_add(INTERVAL_SLOTS)
-                .ok_or(ErrorCode::MathOverflow)?,
-            interval_slots: INTERVAL_SLOTS,
-            remaining: 0,
-            priority_tip: CRANK_PRIORITY_TIP,
-            cu_limit: CRANK_COMPUTE_UNITS,
-            scheduled: &scheduled,
-        };
-        let create_ix =
-            hydra_ephemeral::create(ctx.accounts.executor.key(), ctx.accounts.crank.key(), &args);
-        let state_key = state.key();
-        let bump = [ctx.bumps.executor];
-        let signer_seeds: &[&[&[u8]]] = &[&[EXECUTOR_SEED, state_key.as_ref(), &bump]];
-        invoke_signed(
-            &create_ix,
-            &[
-                ctx.accounts.executor.to_account_info(),
-                ctx.accounts.crank.to_account_info(),
-                ctx.accounts.ephemeral_vault.to_account_info(),
-                ctx.accounts.magic_program.to_account_info(),
-            ],
-            signer_seeds,
-        )?;
-        msg!("Hydra ER task created at 5,700-slot (~60 second target) cadence");
+    /// Owner authorizes the delegated off-chain Hydra sponsor for this portfolio.
+    /// Hydra task creation is top-level because Magic requires a writable delegated signer.
+    pub fn set_scheduler_sponsor(ctx: Context<SetSchedulerSponsor>, sponsor: Pubkey) -> Result<()> {
+        require!(ctx.accounts.vault_state.active, ErrorCode::InactiveVault);
+        require!(sponsor != Pubkey::default(), ErrorCode::InvalidAuthority);
+        let config = &mut ctx.accounts.scheduler_config;
+        config.vault_state = ctx.accounts.vault_state.key();
+        config.owner = ctx.accounts.owner.key();
+        config.sponsor = sponsor;
         Ok(())
     }
 
@@ -321,10 +302,15 @@ pub mod coloyond_execution {
             ErrorCode::InvalidAuthority
         );
         let task_seed = task_seed(&state.key());
+        require_keys_eq!(
+            ctx.accounts.scheduler_config.vault_state,
+            state.key(),
+            ErrorCode::InvalidAuthority
+        );
         let (expected_crank, _) = Pubkey::find_program_address(
             &[
                 CRANK_SEED,
-                ctx.accounts.executor.key().as_ref(),
+                ctx.accounts.scheduler_config.sponsor.as_ref(),
                 task_seed.as_ref(),
             ],
             &HYDRA_EPHEMERAL_PROGRAM,
@@ -359,13 +345,23 @@ pub mod coloyond_execution {
     pub fn rebalance_ephemeral(ctx: Context<RebalanceEphemeral>) -> Result<()> {
         let state = &ctx.accounts.vault_state;
         require!(state.active, ErrorCode::InactiveVault);
+        require_keys_eq!(
+            ctx.accounts.scheduler_config.vault_state,
+            state.key(),
+            ErrorCode::InvalidAuthority
+        );
+        require_keys_eq!(
+            ctx.accounts.scheduler_config.owner,
+            state.owner,
+            ErrorCode::InvalidAuthority
+        );
         verify_hydra_trigger(
             &ctx.accounts.instructions_sysvar,
-            &ctx.accounts.executor,
             &state.key(),
+            &ctx.accounts.scheduler_config.sponsor,
         )?;
 
-        let (prices, vault_amounts, reserve_amounts) = read_runtime_portfolio(
+        let (prices, mut vault_amounts, mut reserve_amounts) = read_runtime_portfolio(
             state,
             &ctx.remaining_accounts,
             &ctx.accounts.vault_authority.key(),
@@ -389,62 +385,107 @@ pub mod coloyond_execution {
             return Ok(());
         }
 
-        let mut sell: Option<(usize, u128)> = None;
-        let mut buy: Option<(usize, u128)> = None;
+        let mut deltas = Vec::with_capacity(state.assets.len());
         let mut largest_drift = 0u128;
-        for (index, (asset, (amount, price))) in state
+        for (asset, (amount, price)) in state
             .assets
             .iter()
             .zip(vault_amounts.iter().zip(prices.iter()))
-            .enumerate()
         {
-            let value = (*amount as u128) * (*price as u128) / pow10(asset.decimals)?;
+            let value = (*amount as u128)
+                .checked_mul(*price as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pow10(asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?;
             let target = total_value * asset.target_bps as u128 / BPS;
             if value > target {
                 let surplus = value - target;
-                if sell.map(|(_, current)| surplus > current).unwrap_or(true) {
-                    sell = Some((index, surplus));
-                }
                 largest_drift = largest_drift.max(surplus * BPS / total_value);
+                deltas.push(i128::try_from(surplus).map_err(|_| error!(ErrorCode::MathOverflow))?);
             } else if target > value {
                 let deficit = target - value;
-                if buy.map(|(_, current)| deficit > current).unwrap_or(true) {
-                    buy = Some((index, deficit));
-                }
                 largest_drift = largest_drift.max(deficit * BPS / total_value);
+                deltas.push(-i128::try_from(deficit).map_err(|_| error!(ErrorCode::MathOverflow))?);
+            } else {
+                deltas.push(0);
             }
         }
         if largest_drift <= state.threshold_bps as u128 {
             return Ok(());
         }
-        let (Some((sell_index, surplus)), Some((buy_index, deficit))) = (sell, buy) else {
-            return Ok(());
-        };
-        let trade_value = surplus.min(deficit);
-        let sell_asset = &state.assets[sell_index];
-        let buy_asset = &state.assets[buy_index];
-        let amount_in = trade_value
-            .checked_mul(pow10(sell_asset.decimals)?)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(prices[sell_index] as u128)
-            .ok_or(ErrorCode::MathOverflow)?
-            .min(vault_amounts[sell_index] as u128) as u64;
-        let quoted_amount_out = trade_value
-            .checked_mul(BPS - SWAP_FEE_BPS)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(BPS)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_mul(pow10(buy_asset.decimals)?)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(prices[buy_index] as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
-        if amount_in == 0
-            || quoted_amount_out == 0
-            || quoted_amount_out > reserve_amounts[buy_index]
-        {
-            msg!(
-                "No rebalance submitted: amount rounds to zero or market liquidity is insufficient"
-            );
+        // Match every over-weight asset to every under-weight asset in one action.
+        // At most n-1 legs are needed for n configured assets.
+        let mut legs = Vec::with_capacity(state.assets.len().saturating_sub(1));
+        while legs.len() < state.assets.len().saturating_sub(1) {
+            let sell = deltas
+                .iter()
+                .enumerate()
+                .filter(|(_, delta)| **delta > 0)
+                .max_by_key(|(_, delta)| **delta)
+                .map(|(index, delta)| (index, *delta as u128));
+            let buy = deltas
+                .iter()
+                .enumerate()
+                .filter(|(_, delta)| **delta < 0)
+                .min_by_key(|(_, delta)| **delta)
+                .map(|(index, delta)| (index, delta.unsigned_abs()));
+            let (Some((sell_index, surplus)), Some((buy_index, deficit))) = (sell, buy) else {
+                break;
+            };
+            let trade_value = surplus.min(deficit);
+            let sell_asset = &state.assets[sell_index];
+            let buy_asset = &state.assets[buy_index];
+            let amount_in = trade_value
+                .checked_mul(pow10(sell_asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(prices[sell_index] as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .min(vault_amounts[sell_index] as u128) as u64;
+            if amount_in == 0 {
+                break;
+            }
+            let actual_in_value = (amount_in as u128)
+                .checked_mul(prices[sell_index] as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pow10(sell_asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?;
+            let quoted_amount_out = quote_output(
+                amount_in,
+                prices[sell_index],
+                prices[buy_index],
+                sell_asset.decimals,
+                buy_asset.decimals,
+            )?;
+            if quoted_amount_out == 0 || quoted_amount_out > reserve_amounts[buy_index] {
+                msg!("No rebalance submitted: market liquidity is insufficient");
+                return Ok(());
+            }
+            let actual_out_value = (quoted_amount_out as u128)
+                .checked_mul(prices[buy_index] as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pow10(buy_asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?;
+
+            legs.push(RebalanceLeg {
+                sell_index: sell_index as u8,
+                buy_index: buy_index as u8,
+                amount_in,
+                quoted_amount_out,
+            });
+            vault_amounts[sell_index] -= amount_in;
+            vault_amounts[buy_index] = vault_amounts[buy_index]
+                .checked_add(quoted_amount_out)
+                .ok_or(ErrorCode::MathOverflow)?;
+            reserve_amounts[sell_index] = reserve_amounts[sell_index]
+                .checked_add(amount_in)
+                .ok_or(ErrorCode::MathOverflow)?;
+            reserve_amounts[buy_index] -= quoted_amount_out;
+            deltas[sell_index] -=
+                i128::try_from(actual_in_value).map_err(|_| error!(ErrorCode::MathOverflow))?;
+            deltas[buy_index] +=
+                i128::try_from(actual_out_value).map_err(|_| error!(ErrorCode::MathOverflow))?;
+        }
+        if legs.is_empty() {
             return Ok(());
         }
 
@@ -456,17 +497,14 @@ pub mod coloyond_execution {
             .ok_or(ErrorCode::MathOverflow)?;
         ctx.accounts.executor.next_action_nonce = nonce;
         let clock = Clock::get()?;
+        require!(legs.len() <= 3, ErrorCode::InvalidRequest);
         let request = RebalanceRequest {
             nonce,
             issued_at: clock.unix_timestamp,
-            sell_index: sell_index as u8,
-            buy_index: buy_index as u8,
-            amount_in,
-            quoted_amount_out,
+            legs,
         };
 
-        let action_remaining =
-            settlement_accounts(state, sell_index, buy_index, &ctx.remaining_accounts)?;
+        let action_remaining = settlement_accounts(state, &ctx.remaining_accounts)?;
         let mut action_accounts = vec![
             ShortAccountMeta {
                 pubkey: state.key().to_bytes().into(),
@@ -485,6 +523,19 @@ pub mod coloyond_execution {
                 is_writable: false,
             },
         ];
+        // `#[action]` places these two escrow accounts in the destination instruction's
+        // declared account prefix, before its remaining SPL/oracle accounts.
+        let action_escrow = ephemeral_balance_pda_from_payer(&ctx.accounts.executor.key(), 255);
+        action_accounts.extend([
+            ShortAccountMeta {
+                pubkey: ctx.accounts.executor.key().to_bytes().into(),
+                is_writable: false,
+            },
+            ShortAccountMeta {
+                pubkey: action_escrow.to_bytes().into(),
+                is_writable: false,
+            },
+        ]);
         action_accounts.extend(action_remaining.iter().map(|(account, writable)| {
             ShortAccountMeta {
                 pubkey: account.key().to_bytes().into(),
@@ -494,7 +545,7 @@ pub mod coloyond_execution {
         let action_data = crate::instruction::SettleRebalance { request }.data();
         let action = CallHandler {
             args: ActionArgs::new(action_data),
-            compute_units: 300_000,
+            compute_units: 600_000,
             escrow_authority: ctx.accounts.executor.to_account_info(),
             destination_program: crate::ID,
             accounts: action_accounts,
@@ -538,16 +589,7 @@ pub mod coloyond_execution {
 
         require!(request.nonce > state.last_settled_nonce, ErrorCode::Replay);
         require!(
-            request.sell_index != request.buy_index,
-            ErrorCode::InvalidRequest
-        );
-        require!(
-            request.sell_index < state.assets.len() as u8
-                && request.buy_index < state.assets.len() as u8,
-            ErrorCode::InvalidRequest
-        );
-        require!(
-            request.amount_in > 0 && request.quoted_amount_out > 0,
+            !request.legs.is_empty() && request.legs.len() < state.assets.len(),
             ErrorCode::InvalidRequest
         );
         let now = Clock::get()?.unix_timestamp;
@@ -557,99 +599,96 @@ pub mod coloyond_execution {
             ErrorCode::ExpiredAction
         );
 
-        let sell_i = request.sell_index as usize;
-        let buy_i = request.buy_index as usize;
-        let (sell_vault, buy_vault, sell_market, buy_market, sell_feed, buy_feed) =
-            unpack_settlement_accounts(state, sell_i, buy_i, &ctx.remaining_accounts)?;
-        let prices = [
-            read_asset_price(&state.assets[sell_i], sell_feed, &Clock::get()?)?,
-            read_asset_price(&state.assets[buy_i], buy_feed, &Clock::get()?)?,
-        ];
-        let sell_asset = &state.assets[sell_i];
-        let buy_asset = &state.assets[buy_i];
-        validate_standard_token_account(
-            sell_vault,
-            &sell_asset.mint,
+        // Magic Actions append the destination program id, escrow authority, and
+        // escrow signer after the declared SPL/oracle accounts. Authenticate and
+        // exclude that fixed trailer before validating the configured asset list.
+        let asset_account_count = state.assets.len() * 2
+            + state
+                .assets
+                .iter()
+                .filter(|asset| asset.feed_account != Pubkey::default())
+                .count();
+        require!(
+            ctx.remaining_accounts.len() == asset_account_count + 3,
+            ErrorCode::InvalidAccounts
+        );
+        require_keys_eq!(
+            *ctx.remaining_accounts[asset_account_count].key,
+            crate::ID,
+            ErrorCode::InvalidAccounts
+        );
+        require_keys_eq!(
+            *ctx.remaining_accounts[asset_account_count + 1].key,
+            ctx.accounts.escrow_auth.key(),
+            ErrorCode::InvalidAccounts
+        );
+        require_keys_eq!(
+            *ctx.remaining_accounts[asset_account_count + 2].key,
+            ctx.accounts.escrow.key(),
+            ErrorCode::InvalidAccounts
+        );
+        let settlement_remaining = &ctx.remaining_accounts[..asset_account_count];
+        let (prices, mut vault_balances, mut market_balances) = read_runtime_portfolio(
+            state,
+            settlement_remaining,
             &ctx.accounts.vault_authority.key(),
-        )?;
-        validate_standard_token_account(
-            buy_vault,
-            &buy_asset.mint,
-            &ctx.accounts.vault_authority.key(),
-        )?;
-        validate_standard_token_account(
-            sell_market,
-            &sell_asset.mint,
             &ctx.accounts.market_authority.key(),
         )?;
-        validate_standard_token_account(
-            buy_market,
-            &buy_asset.mint,
-            &ctx.accounts.market_authority.key(),
-        )?;
-        require_keys_eq!(
-            *sell_vault.key,
-            associated_token_address(&ctx.accounts.vault_authority.key(), &sell_asset.mint),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *buy_vault.key,
-            associated_token_address(&ctx.accounts.vault_authority.key(), &buy_asset.mint),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *sell_market.key,
-            associated_token_address(&ctx.accounts.market_authority.key(), &sell_asset.mint),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *buy_market.key,
-            associated_token_address(&ctx.accounts.market_authority.key(), &buy_asset.mint),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *sell_vault.owner,
-            ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *buy_vault.owner,
-            ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *sell_market.owner,
-            ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            *buy_market.owner,
-            ctx.accounts.token_program.key(),
-            ErrorCode::InvalidTokenAccount
-        );
+        let (vault_accounts, market_accounts, _) =
+            unpack_settlement_accounts(state, settlement_remaining)?;
+        for account in vault_accounts.iter().chain(market_accounts.iter()) {
+            require!(account.is_writable, ErrorCode::InvalidAccounts);
+        }
 
-        let sell_balance = deserialize_token(sell_vault)?.amount;
-        let market_balance = deserialize_token(buy_market)?.amount;
-        require!(request.amount_in <= sell_balance, ErrorCode::InvalidAmount);
-        let expected_out = quote_output(
-            request.amount_in,
-            prices[0],
-            prices[1],
-            sell_asset.decimals,
-            buy_asset.decimals,
-        )?;
-        require!(
-            expected_out > 0 && expected_out <= market_balance,
-            ErrorCode::InsufficientLiquidity
-        );
-        let quote_delta = expected_out.abs_diff(request.quoted_amount_out) as u128;
-        require!(
-            quote_delta
-                .checked_mul(BPS)
-                .ok_or(ErrorCode::MathOverflow)?
-                <= (expected_out as u128) * state.max_slippage_bps as u128,
-            ErrorCode::SlippageExceeded
-        );
+        // Validate every leg and its aggregate balances before any CPI; Solana then
+        // commits all token movements together or rolls the whole Magic Action back.
+        let mut expected_outputs = Vec::with_capacity(request.legs.len());
+        for leg in &request.legs {
+            let sell_i = leg.sell_index as usize;
+            let buy_i = leg.buy_index as usize;
+            require!(
+                sell_i < state.assets.len()
+                    && buy_i < state.assets.len()
+                    && sell_i != buy_i
+                    && leg.amount_in > 0
+                    && leg.quoted_amount_out > 0,
+                ErrorCode::InvalidRequest
+            );
+            require!(
+                leg.amount_in <= vault_balances[sell_i],
+                ErrorCode::InvalidAmount
+            );
+            let sell_asset = &state.assets[sell_i];
+            let buy_asset = &state.assets[buy_i];
+            let expected_out = quote_output(
+                leg.amount_in,
+                prices[sell_i],
+                prices[buy_i],
+                sell_asset.decimals,
+                buy_asset.decimals,
+            )?;
+            require!(
+                expected_out > 0 && expected_out <= market_balances[buy_i],
+                ErrorCode::InsufficientLiquidity
+            );
+            let quote_delta = expected_out.abs_diff(leg.quoted_amount_out) as u128;
+            require!(
+                quote_delta
+                    .checked_mul(BPS)
+                    .ok_or(ErrorCode::MathOverflow)?
+                    <= (expected_out as u128) * state.max_slippage_bps as u128,
+                ErrorCode::SlippageExceeded
+            );
+            vault_balances[sell_i] -= leg.amount_in;
+            vault_balances[buy_i] = vault_balances[buy_i]
+                .checked_add(expected_out)
+                .ok_or(ErrorCode::MathOverflow)?;
+            market_balances[sell_i] = market_balances[sell_i]
+                .checked_add(leg.amount_in)
+                .ok_or(ErrorCode::MathOverflow)?;
+            market_balances[buy_i] -= expected_out;
+            expected_outputs.push(expected_out);
+        }
 
         let state_key = state.key();
         let (authority, authority_bump) = Pubkey::find_program_address(
@@ -672,36 +711,40 @@ pub mod coloyond_execution {
         let market_bump_seed = [market_bump];
         let market_seeds: &[&[u8]] = &[MARKET_AUTHORITY_SEED, &market_bump_seed];
 
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                Transfer {
-                    from: sell_vault.to_account_info(),
-                    to: sell_market.to_account_info(),
-                    authority: ctx.accounts.vault_authority.to_account_info(),
-                },
-                &[authority_seeds],
-            ),
-            request.amount_in,
-        )?;
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                Transfer {
-                    from: buy_market.to_account_info(),
-                    to: buy_vault.to_account_info(),
-                    authority: ctx.accounts.market_authority.to_account_info(),
-                },
-                &[market_seeds],
-            ),
-            expected_out,
-        )?;
+        for (leg, expected_out) in request.legs.iter().zip(expected_outputs) {
+            let sell_i = leg.sell_index as usize;
+            let buy_i = leg.buy_index as usize;
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: vault_accounts[sell_i].clone(),
+                        to: market_accounts[sell_i].clone(),
+                        authority: ctx.accounts.vault_authority.to_account_info(),
+                    },
+                    &[authority_seeds],
+                ),
+                leg.amount_in,
+            )?;
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: market_accounts[buy_i].clone(),
+                        to: vault_accounts[buy_i].clone(),
+                        authority: ctx.accounts.market_authority.to_account_info(),
+                    },
+                    &[market_seeds],
+                ),
+                expected_out,
+            )?;
+        }
 
         state.last_settled_nonce = request.nonce;
         msg!(
-            "Base-layer SPL rebalance settled: nonce {}, received {} units",
+            "Base-layer SPL rebalance settled atomically: nonce {}, {} legs",
             request.nonce,
-            expected_out
+            request.legs.len()
         );
         Ok(())
     }
@@ -727,16 +770,259 @@ pub mod coloyond_execution {
         Ok(())
     }
 
+    /// Deposit supported classic SPL assets and mint transferable shares at the current vault NAV.
+    pub fn deposit<'a>(
+        ctx: Context<'a, Deposit<'a>>,
+        amounts: Vec<u64>,
+        min_shares_out: u64,
+    ) -> Result<()> {
+        let state = &ctx.accounts.vault_state;
+        require!(state.active, ErrorCode::InactiveVault);
+        validate_vault_address(state, &state.key())?;
+        let n = state.assets.len();
+        require!(amounts.len() == n, ErrorCode::InvalidAccounts);
+        let feed_count = state
+            .assets
+            .iter()
+            .filter(|asset| asset.feed_account != Pubkey::default())
+            .count();
+        require!(
+            ctx.remaining_accounts.len() == 2 * n + feed_count,
+            ErrorCode::InvalidAccounts
+        );
+
+        let sources = &ctx.remaining_accounts[..n];
+        let vault_accounts = &ctx.remaining_accounts[n..2 * n];
+        let feeds = &ctx.remaining_accounts[2 * n..];
+        let clock = Clock::get()?;
+        let mut feed_index = 0;
+        let mut nav = 0u128;
+        let mut deposit_value = 0u128;
+        for (index, asset) in state.assets.iter().enumerate() {
+            let source = &sources[index];
+            let vault_token = &vault_accounts[index];
+            validate_standard_token_account(source, &asset.mint, &ctx.accounts.owner.key())?;
+            require_keys_eq!(
+                associated_token_address(&ctx.accounts.owner.key(), &asset.mint),
+                *source.key,
+                ErrorCode::InvalidTokenAccount
+            );
+            validate_standard_token_account(
+                vault_token,
+                &asset.mint,
+                &ctx.accounts.vault_authority.key(),
+            )?;
+            require_keys_eq!(
+                associated_token_address(&ctx.accounts.vault_authority.key(), &asset.mint),
+                *vault_token.key,
+                ErrorCode::InvalidTokenAccount
+            );
+            let feed = if asset.feed_account == Pubkey::default() {
+                None
+            } else {
+                let feed = &feeds[feed_index];
+                feed_index += 1;
+                Some(feed)
+            };
+            let price = read_asset_price(asset, feed, &clock)? as u128;
+            let vault_amount = deserialize_token(vault_token)?.amount as u128;
+            let value = vault_amount
+                .checked_mul(price)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pow10(asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?;
+            nav = nav.checked_add(value).ok_or(ErrorCode::MathOverflow)?;
+            let deposit_component = (amounts[index] as u128)
+                .checked_mul(price)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(pow10(asset.decimals)?)
+                .ok_or(ErrorCode::MathOverflow)?;
+            deposit_value = deposit_value
+                .checked_add(deposit_component)
+                .ok_or(ErrorCode::MathOverflow)?;
+        }
+        require!(deposit_value > 0, ErrorCode::InvalidAmount);
+        let supply = ctx.accounts.share_mint.supply as u128;
+        let shares_out = if supply == 0 {
+            deposit_value
+                .checked_mul(1_000)
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            require!(nav > 0, ErrorCode::InvalidAmount);
+            deposit_value
+                .checked_mul(supply)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(nav)
+                .ok_or(ErrorCode::MathOverflow)?
+        };
+        let shares_out = u64::try_from(shares_out).map_err(|_| error!(ErrorCode::MathOverflow))?;
+        require!(
+            shares_out > 0 && shares_out >= min_shares_out,
+            ErrorCode::SlippageExceeded
+        );
+
+        for (index, amount) in amounts.iter().enumerate() {
+            if *amount == 0 {
+                continue;
+            }
+            token::transfer(
+                CpiContext::new(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: sources[index].to_account_info(),
+                        to: vault_accounts[index].to_account_info(),
+                        authority: ctx.accounts.owner.to_account_info(),
+                    },
+                ),
+                *amount,
+            )?;
+        }
+        let state_key = state.key();
+        let bump = [state.authority_bump];
+        let signer_seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, state_key.as_ref(), &bump];
+        token::mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                token::MintTo {
+                    mint: ctx.accounts.share_mint.to_account_info(),
+                    to: ctx.accounts.share_account.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[signer_seeds],
+            ),
+            shares_out,
+        )?;
+        msg!(
+            "Deposit accepted; minted {} portfolio share units",
+            shares_out
+        );
+        Ok(())
+    }
+
+    /// Burn transferable shares and redeem the same pro-rata fraction of every standard SPL asset.
+    pub fn redeem<'a>(
+        ctx: Context<'a, Redeem<'a>>,
+        shares: u64,
+        min_amounts_out: Vec<u64>,
+    ) -> Result<()> {
+        let state = &ctx.accounts.vault_state;
+        validate_vault_address(state, &state.key())?;
+        let n = state.assets.len();
+        require!(
+            shares > 0 && min_amounts_out.len() == n,
+            ErrorCode::InvalidAmount
+        );
+        require!(
+            shares <= ctx.accounts.share_account.amount,
+            ErrorCode::InsufficientShares
+        );
+        let supply = ctx.accounts.share_mint.supply;
+        require!(supply > 0, ErrorCode::InsufficientShares);
+        require!(
+            ctx.remaining_accounts.len() == 2 * n,
+            ErrorCode::InvalidAccounts
+        );
+        let vault_accounts = &ctx.remaining_accounts[..n];
+        let destinations = &ctx.remaining_accounts[n..];
+        let mut amounts_out = Vec::with_capacity(n);
+        for (index, asset) in state.assets.iter().enumerate() {
+            validate_standard_token_account(
+                &vault_accounts[index],
+                &asset.mint,
+                &ctx.accounts.vault_authority.key(),
+            )?;
+            require_keys_eq!(
+                associated_token_address(&ctx.accounts.vault_authority.key(), &asset.mint),
+                *vault_accounts[index].key,
+                ErrorCode::InvalidTokenAccount
+            );
+            validate_standard_token_account(
+                &destinations[index],
+                &asset.mint,
+                &ctx.accounts.owner.key(),
+            )?;
+            require_keys_eq!(
+                associated_token_address(&ctx.accounts.owner.key(), &asset.mint),
+                *destinations[index].key,
+                ErrorCode::InvalidTokenAccount
+            );
+            let amount = (deserialize_token(&vault_accounts[index])?.amount as u128)
+                .checked_mul(shares as u128)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(supply as u128)
+                .ok_or(ErrorCode::MathOverflow)? as u64;
+            require!(
+                amount >= min_amounts_out[index],
+                ErrorCode::SlippageExceeded
+            );
+            amounts_out.push(amount);
+        }
+
+        token::burn(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                token::Burn {
+                    mint: ctx.accounts.share_mint.to_account_info(),
+                    from: ctx.accounts.share_account.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            shares,
+        )?;
+        let state_key = state.key();
+        let bump = [state.authority_bump];
+        let signer_seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, state_key.as_ref(), &bump];
+        for (index, amount) in amounts_out.iter().enumerate() {
+            if *amount == 0 {
+                continue;
+            }
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: vault_accounts[index].to_account_info(),
+                        to: destinations[index].to_account_info(),
+                        authority: ctx.accounts.vault_authority.to_account_info(),
+                    },
+                    &[signer_seeds],
+                ),
+                *amount,
+            )?;
+        }
+        msg!(
+            "Redeemed {} share units pro rata across {} assets",
+            shares,
+            n
+        );
+        Ok(())
+    }
+
     /// Proves an ER program can read a standard SPL ATA without delegating it.
     pub fn canary_read_standard_ata(
         ctx: Context<CanaryReadStandardAta>,
         expected_authority: Pubkey,
     ) -> Result<()> {
-        let token_account = deserialize_token(&ctx.accounts.token_account.to_account_info())?;
+        let account_info = ctx.accounts.token_account.to_account_info();
+        require_keys_eq!(
+            *account_info.owner,
+            anchor_spl::token::ID,
+            ErrorCode::InvalidTokenAccount
+        );
+        require_keys_eq!(
+            ctx.accounts.token_program.key(),
+            anchor_spl::token::ID,
+            ErrorCode::InvalidTokenAccount
+        );
+        let token_account = deserialize_token(&account_info)?;
         require_keys_eq!(
             token_account.owner,
             expected_authority,
             ErrorCode::InvalidAuthority
+        );
+        require_keys_eq!(
+            *account_info.key,
+            associated_token_address(&expected_authority, &token_account.mint),
+            ErrorCode::InvalidTokenAccount
         );
         require!(
             token_account.delegate == COption::None,
@@ -847,6 +1133,36 @@ pub struct FundMarket<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct InitializeMarketConfig<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + MarketConfig::INIT_SPACE,
+        seeds = [MARKET_CONFIG_SEED],
+        bump
+    )]
+    pub market_config: Account<'info, MarketConfig>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct IssueDevnetUsd<'info> {
+    #[account(mut, seeds = [MARKET_CONFIG_SEED], bump, has_one = admin)]
+    pub market_config: Account<'info, MarketConfig>,
+    pub admin: Signer<'info>,
+    /// CHECK: canonical program-controlled mint authority PDA.
+    #[account(seeds = [MARKET_AUTHORITY_SEED], bump)]
+    pub market_authority: UncheckedAccount<'info>,
+    #[account(mut, address = DEVNET_USD_MINT)]
+    pub mint: Account<'info, Mint>,
+    #[account(mut, associated_token::mint = mint, associated_token::authority = market_authority)]
+    pub market_token: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateExecutor<'info> {
@@ -859,41 +1175,20 @@ pub struct DelegateExecutor<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ScheduleRebalance<'info> {
+pub struct SetSchedulerSponsor<'info> {
     #[account(has_one = owner)]
     pub vault_state: Account<'info, VaultState>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + SchedulerConfig::INIT_SPACE,
+        seeds = [SCHEDULER_CONFIG_SEED, vault_state.key().as_ref()],
+        bump
+    )]
+    pub scheduler_config: Account<'info, SchedulerConfig>,
+    #[account(mut)]
     pub owner: Signer<'info>,
-    /// CHECK: validated against the vault state.
-    #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
-    pub vault_authority: UncheckedAccount<'info>,
-    /// CHECK: PDA contains only lamports/state used for task sponsorship and Magic Actions.
-    #[account(mut, seeds = [EXECUTOR_SEED, vault_state.key().as_ref()], bump)]
-    pub executor: Account<'info, Executor>,
-    /// CHECK: global devnet synthetic-market authority.
-    #[account(seeds = [MARKET_AUTHORITY_SEED], bump)]
-    pub market_authority: UncheckedAccount<'info>,
-    /// CHECK: expected Hydra task PDA.
-    #[account(mut)]
-    pub crank: UncheckedAccount<'info>,
-    /// CHECK: Solana instructions sysvar.
-    #[account(address = instructions_sysvar::ID)]
-    pub instructions_sysvar: UncheckedAccount<'info>,
-    /// CHECK: MagicBlock context PDA.
-    #[account(mut, address = MAGIC_CONTEXT_ID)]
-    pub magic_context: UncheckedAccount<'info>,
-    /// CHECK: validator fee vault; MagicBlock validates the supplied account when scheduling the action.
-    #[account(mut)]
-    pub magic_fee_vault: UncheckedAccount<'info>,
-    /// CHECK: fixed MagicBlock program ID.
-    #[account(address = MAGIC_PROGRAM_ID)]
-    pub magic_program: UncheckedAccount<'info>,
-    /// CHECK: MagicBlock ephemeral rent vault used by Hydra Create.
-    #[account(mut, address = EPHEMERAL_VAULT_ID)]
-    pub ephemeral_vault: UncheckedAccount<'info>,
-    /// CHECK: Hydra ephemeral task program.
-    #[account(address = HYDRA_EPHEMERAL_PROGRAM)]
-    pub hydra_program: UncheckedAccount<'info>,
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -903,6 +1198,8 @@ pub struct CancelRebalance<'info> {
     pub owner: Signer<'info>,
     #[account(mut, seeds = [EXECUTOR_SEED, vault_state.key().as_ref()], bump)]
     pub executor: Account<'info, Executor>,
+    #[account(seeds = [SCHEDULER_CONFIG_SEED, vault_state.key().as_ref()], bump, has_one = owner)]
+    pub scheduler_config: Account<'info, SchedulerConfig>,
     /// CHECK: expected Hydra task PDA; checked in the handler.
     #[account(mut)]
     pub crank: UncheckedAccount<'info>,
@@ -926,6 +1223,8 @@ pub struct RebalanceEphemeral<'info> {
     pub vault_state: Account<'info, VaultState>,
     #[account(mut, seeds = [EXECUTOR_SEED, vault_state.key().as_ref()], bump)]
     pub executor: Account<'info, Executor>,
+    #[account(seeds = [SCHEDULER_CONFIG_SEED, vault_state.key().as_ref()], bump)]
+    pub scheduler_config: Account<'info, SchedulerConfig>,
     /// CHECK: deterministic PDA used as the vault SPL token authority.
     #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
@@ -965,6 +1264,34 @@ pub struct UpdateVault<'info> {
     #[account(mut, has_one = owner)]
     pub vault_state: Account<'info, VaultState>,
     pub owner: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    pub vault_state: Account<'info, VaultState>,
+    /// CHECK: PDA is constrained by the Vault State seed and bump.
+    #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, address = vault_state.share_mint, mint::authority = vault_authority)]
+    pub share_mint: Account<'info, Mint>,
+    #[account(mut, token::mint = share_mint, token::authority = owner)]
+    pub share_account: Account<'info, TokenAccount>,
+    pub owner: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct Redeem<'info> {
+    pub vault_state: Account<'info, VaultState>,
+    /// CHECK: PDA is constrained by the Vault State seed and bump.
+    #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, address = vault_state.share_mint, mint::authority = vault_authority)]
+    pub share_mint: Account<'info, Mint>,
+    #[account(mut, token::mint = share_mint, token::authority = owner)]
+    pub share_account: Account<'info, TokenAccount>,
+    pub owner: Signer<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -1021,6 +1348,12 @@ fn asset_meta(mint: &Pubkey) -> Result<AssetMeta> {
             feed_id: SOL_FEED_ID,
         })
     } else if *mint == TUSD_MINT {
+        Ok(AssetMeta {
+            decimals: 6,
+            feed_account: Pubkey::default(),
+            feed_id: [0; 32],
+        })
+    } else if *mint == DEVNET_USD_MINT {
         Ok(AssetMeta {
             decimals: 6,
             feed_account: Pubkey::default(),
@@ -1131,48 +1464,25 @@ fn read_runtime_portfolio(
     Ok((prices, vault_amounts, market_amounts))
 }
 
-fn unpack_settlement_accounts<'info>(
+fn unpack_settlement_accounts<'a, 'info>(
     state: &VaultState,
-    sell_index: usize,
-    buy_index: usize,
-    accounts: &'info [AccountInfo<'info>],
+    accounts: &'a [AccountInfo<'info>],
 ) -> Result<(
-    &'info AccountInfo<'info>,
-    &'info AccountInfo<'info>,
-    &'info AccountInfo<'info>,
-    &'info AccountInfo<'info>,
-    Option<&'info AccountInfo<'info>>,
-    Option<&'info AccountInfo<'info>>,
+    &'a [AccountInfo<'info>],
+    &'a [AccountInfo<'info>],
+    &'a [AccountInfo<'info>],
 )> {
-    let sell = &state.assets[sell_index];
-    let buy = &state.assets[buy_index];
-    let feed_count = (sell.feed_account != Pubkey::default()) as usize
-        + (buy.feed_account != Pubkey::default()) as usize;
-    require!(accounts.len() == 4 + feed_count, ErrorCode::InvalidAccounts);
-    let mut cursor = 4;
-    let sell_feed = if sell.feed_account != Pubkey::default() {
-        let feed = &accounts[cursor];
-        cursor += 1;
-        require_keys_eq!(*feed.key, sell.feed_account, ErrorCode::InvalidOracle);
-        Some(feed)
-    } else {
-        None
-    };
-    let buy_feed = if buy.feed_account != Pubkey::default() {
-        let feed = &accounts[cursor];
-        require_keys_eq!(*feed.key, buy.feed_account, ErrorCode::InvalidOracle);
-        Some(feed)
-    } else {
-        None
-    };
-    Ok((
-        &accounts[0],
-        &accounts[1],
-        &accounts[2],
-        &accounts[3],
-        sell_feed,
-        buy_feed,
-    ))
+    let n = state.assets.len();
+    let feed_count = state
+        .assets
+        .iter()
+        .filter(|asset| asset.feed_account != Pubkey::default())
+        .count();
+    require!(
+        accounts.len() == 2 * n + feed_count,
+        ErrorCode::InvalidAccounts
+    );
+    Ok((&accounts[..n], &accounts[n..2 * n], &accounts[2 * n..]))
 }
 
 fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>, clock: &Clock) -> Result<u64> {
@@ -1277,8 +1587,6 @@ fn associated_token_address(authority: &Pubkey, mint: &Pubkey) -> Pubkey {
 
 fn settlement_accounts<'a, 'info>(
     state: &VaultState,
-    sell_index: usize,
-    buy_index: usize,
     accounts: &'a [AccountInfo<'info>],
 ) -> Result<Vec<(&'a AccountInfo<'info>, bool)>> {
     let n = state.assets.len();
@@ -1289,42 +1597,21 @@ fn settlement_accounts<'a, 'info>(
             .filter(|asset| asset.feed_account != Pubkey::default())
             .count();
     require!(accounts.len() == expected_len, ErrorCode::InvalidAccounts);
-    let mut selected = vec![
-        (&accounts[sell_index], true),
-        (&accounts[buy_index], true),
-        (&accounts[n + sell_index], true),
-        (&accounts[n + buy_index], true),
-    ];
-    let feeds = &accounts[2 * n..];
-    let mut feed_index = 0;
-    let mut sell_feed: Option<&AccountInfo<'info>> = None;
-    let mut buy_feed: Option<&AccountInfo<'info>> = None;
-    for (index, asset) in state.assets.iter().enumerate() {
-        if asset.feed_account == Pubkey::default() {
-            continue;
-        }
-        if index == sell_index {
-            sell_feed = Some(&feeds[feed_index]);
-        }
-        if index == buy_index {
-            buy_feed = Some(&feeds[feed_index]);
-        }
-        feed_index += 1;
-    }
-    for feed in [sell_feed, buy_feed].into_iter().flatten() {
-        selected.push((feed, false));
-    }
-    Ok(selected)
+    Ok(accounts
+        .iter()
+        .enumerate()
+        .map(|(index, account)| (account, index < 2 * n))
+        .collect())
 }
 
 fn verify_hydra_trigger(
     instructions: &AccountInfo,
-    executor: &Account<Executor>,
     vault_state: &Pubkey,
+    sponsor: &Pubkey,
 ) -> Result<()> {
     let task_seed = task_seed(vault_state);
     let (expected_crank, _) = Pubkey::find_program_address(
-        &[CRANK_SEED, executor.key().as_ref(), task_seed.as_ref()],
+        &[CRANK_SEED, sponsor.as_ref(), task_seed.as_ref()],
         &HYDRA_EPHEMERAL_PROGRAM,
     );
     let current = instructions_sysvar::load_current_index_checked(instructions)? as usize;
@@ -1377,6 +1664,10 @@ pub enum ErrorCode {
     ExpiredAction,
     #[msg("This vault is paused")]
     InactiveVault,
+    #[msg("The capped Devnet test USD supply would be exceeded")]
+    MarketCapExceeded,
+    #[msg("The holder does not have enough share tokens to redeem")]
+    InsufficientShares,
     #[msg("The instruction is not an authorized Hydra scheduled invocation")]
     InvalidTask,
 }

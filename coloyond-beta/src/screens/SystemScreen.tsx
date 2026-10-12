@@ -4,14 +4,11 @@ import { reserveOwner } from '../lib/solana/reserve-read';
 import { reserveDepthUsd } from '../lib/solana/reserve-quote';
 import { assetList } from '../lib/solana/assets';
 import {
-  CURVE_BASE_PCT,
-  CURVE_CAP_PCT,
   PRICE_MAX_AGE_MS,
-  RESERVE_SPREAD_PCT,
   RPC_URL,
 } from '../lib/solana/config';
 import { explorerAddress } from '../lib/solana/connection';
-import { fmtSol, fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
+import { fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
 import { useNow } from '../hooks/useNow';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { LedgerPanel } from '../components/ui/LedgerPanel';
@@ -34,6 +31,7 @@ export function SystemScreen() {
   const active = vaults.filter((v) => v.status === 'active').length;
   const paused = vaults.filter((v) => v.status === 'paused').length;
   const closed = vaults.filter((v) => v.status === 'closed').length;
+  const legacy = vaults.filter((v) => v.legacy || v.status === 'legacy').length;
 
   return (
     <Screen>
@@ -99,14 +97,14 @@ export function SystemScreen() {
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
             This display book shows SOL, BTC and ETH mids from Coinbase (Binance fallback), with
-            tUSD fixed at $1. Execution reads MagicBlock Pyth feeds on the ER and enforces its own
+            synthetic dUSD fixed at $1. Execution reads MagicBlock Pyth feeds and enforces its own
             60-second freshness limit.
           </p>
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
-        <LedgerPanel stripe="Demo reserve" meta={reserve ? 'funded' : 'reading'}>
+        <LedgerPanel stripe="Program-owned test market" meta={reserve ? 'funded' : 'reading'}>
           {reserveAddress ? (
             <>
               <KeyValue
@@ -132,23 +130,18 @@ export function SystemScreen() {
                     ),
                     v: reserve ? fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2) : '…',
                   })),
-                  { k: 'Depth at live mids', v: reserveDepth !== null ? fmtUsd(reserveDepth) : '…' },
-                  { k: 'SOL for fees', v: reserve ? `${fmtSol(reserve.solLamports, 4)} SOL` : '…' },
-                  { k: 'Spread', v: `${RESERVE_SPREAD_PCT.toFixed(2)}% flat` },
-                  {
-                    k: 'Curve fee',
-                    v: `${CURVE_BASE_PCT.toFixed(2)}% · capped ${CURVE_CAP_PCT.toFixed(2)}%`,
-                  },
+                  { k: 'Inventory at display prices', v: reserveDepth !== null ? fmtUsd(reserveDepth) : '…' },
                 ]}
               />
               <p className="mt-3 text-[11px] leading-relaxed text-iron">
-                Shared devnet inventory is authorized to the execution program. Scheduled swaps run
-                on MagicBlock; the browser does not hold the reserve signing key.
+                The execution program controls these devnet market accounts. This is synthetic
+                inventory with no real value; portfolio custody remains in each vault's own SPL
+                accounts.
               </p>
             </>
           ) : (
-            <Notice tone="brass" title="Reserve unavailable">
-              The shared devnet token accounts are not initialized yet.
+            <Notice tone="brass" title="Test market unavailable">
+              Program-owned devnet market token accounts are not initialized yet.
             </Notice>
           )}
         </LedgerPanel>
@@ -158,15 +151,17 @@ export function SystemScreen() {
         <LedgerPanel stripe="Scheduler" meta="MagicBlock Ephemeral Rollups">
           <KeyValue
             rows={[
-              { k: 'Execution', v: 'on-chain scheduled crank' },
-              { k: 'Interval', v: '60 seconds' },
+              { k: 'Execution', v: 'ER calculation → Magic Action → Solana vault program' },
+              { k: 'Interval', v: '5,700 ER slots · about 60 seconds' },
               { k: 'Dashboard sync', v: 'every 10 seconds while open' },
-              { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed` },
+              { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed · ${legacy} legacy` },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            Each portfolio is delegated and registered with MagicBlock's scheduler. The app reads
-            the delegated state and trade counter; it does not decide or submit scheduled swaps.
+            One Hydra task is registered per active portfolio. Only its Executor PDA is delegated;
+            Vault State and SPL token accounts stay on Solana. Wall-clock timing depends on an
+            active Hydra cranker. The ER task requests the Magic Action; the vault program validates
+            it before moving assets.
           </p>
         </LedgerPanel>
       </div>
@@ -182,19 +177,18 @@ export function SystemScreen() {
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="petrol" />
-              <span>Vault custody keypairs: separate per portfolio, signing authority for trades.</span>
+              <span>Vault Authority PDAs control portfolio SPL accounts; transferable shares use one SPL mint per vault.</span>
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="brass" />
               <span>
-                Demo reserve + synthetic mint authorities (tUSD, tBTC, tETH): devnet-only
-                infrastructure, shipped with this build. Replace with a backend service outside
-                devnet.
+                Synthetic dUSD is capped at its program-issued devnet supply and displays at $1;
+                it is not redeemable for real dollars. Test BTC and ETH are also devnet assets.
               </span>
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="ink" />
-              <span>No pooled capital, no LP shares, no transferable vault tokens.</span>
+              <span>Each vault has its own fungible, transferable SPL share-token mint.</span>
             </li>
           </ul>
         </LedgerPanel>

@@ -3,7 +3,7 @@ import { useStore } from '../lib/store';
 import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
 import { assetList, type AssetId, type AssetSpec } from '../lib/solana/assets';
 import { bookStatus, priceOf } from '../lib/solana/price';
-import { fmtSol, fmtUsd, lamportsFromSol, parseAmount, parseAmountOrZero } from '../lib/format';
+import { fmtSol, fmtUsd, lamportsFromSol, parseAmountOrZero } from '../lib/format';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { Button } from '../components/ui/Button';
 import { LedgerPanel } from '../components/ui/LedgerPanel';
@@ -13,14 +13,15 @@ import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
 
 const cadenceLabels: Record<number, string> = {
-  60: 'Every 60 seconds · devnet cadence',
+  60: 'About every 60 seconds · 5,700 ER slots',
 };
 
-/** Owner SOL held back for the setup transaction's own fees. */
+/** SOL deposited into the separate Executor PDA for scheduling and Magic Actions. */
+const TASK_SPONSOR_SOL = 0.05;
 const SETUP_FEE_SOL = 0.02;
 
-const defaultShares: Record<AssetId, number> = { wsol: 60, tusd: 40, tbtc: 0, teth: 0 };
-/** 02 / Create a portfolio — assets, weights, SOL investment, cadence, budget, review. */
+const defaultShares: Record<AssetId, number> = { wsol: 60, dusd: 40, tbtc: 0, teth: 0 };
+/** 02 / Create a portfolio — assets, weights, SOL investment, cadence and review. */
 export function CreateVault() {
   const walletBalances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
@@ -31,7 +32,6 @@ export function CreateVault() {
   const [name, setName] = useState('Everyday mix');
   const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
   const [investmentSol, setInvestmentSol] = useState('0.20');
-  const [budget, setBudget] = useState('0.05');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -44,7 +44,6 @@ export function CreateVault() {
   const targetLabel = selected.map((s) => `${(targets[s.id] ?? 0).toFixed(0)} ${s.symbol}`).join(' · ');
 
   const investmentSolUnits = parseAmountOrZero(investmentSol);
-  const budgetSol = parseAmount(budget);
   const priceOk = bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && price !== null;
   const solUsd = priceOk ? priceOf(price, 'wsol') : null;
   const estimatedTotalUsd = investmentSolUnits !== null && solUsd !== null ? investmentSolUnits * solUsd : null;
@@ -55,22 +54,21 @@ export function CreateVault() {
     if (selected.length < 2) errs.push('Pick at least two assets for the mix.');
     if (investmentSolUnits === null) errs.push('Enter a valid SOL investment amount.');
     else if (lamportsFromSol(investmentSolUnits) <= 0) errs.push('Invest at least 0.000000001 SOL.');
-    if (budgetSol === null) errs.push('Automation budget is not a valid amount.');
     if (solAvail === null) errs.push('Waiting for your wallet SOL balance.');
-    if (solAvail !== null && budgetSol !== null && investmentSolUnits !== null) {
-      const need = budgetSol + investmentSolUnits + SETUP_FEE_SOL;
+    if (solAvail !== null && investmentSolUnits !== null) {
+      const need = TASK_SPONSOR_SOL + investmentSolUnits + SETUP_FEE_SOL;
       if (lamportsFromSol(need) > solAvail) {
         errs.push(
-          `Wallet needs about ${need.toFixed(2)} SOL (investment + budget + setup fees). Available: ${fmtSol(solAvail)} SOL.`,
+          `Wallet needs about ${need.toFixed(2)} SOL (investment + task sponsor + setup fees). Available: ${fmtSol(solAvail)} SOL.`,
         );
       }
     }
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, shares, investmentSol, budget, solAvail]);
+  }, [name, shares, investmentSol, solAvail]);
 
   async function onConfirm() {
-    if (submitting || errors.length > 0 || budgetSol === null) return;
+    if (submitting || errors.length > 0) return;
     setSubmitting(true);
     try {
       const solDepositLamports = lamportsFromSol(investmentSolUnits ?? 0);
@@ -84,7 +82,6 @@ export function CreateVault() {
         targets: assetTargets,
         thresholdPct: threshold,
         cadenceSec,
-        budgetLamports: lamportsFromSol(budgetSol),
         deposits: { wsol: solDepositLamports },
       });
       if (id) {
@@ -124,9 +121,9 @@ export function CreateVault() {
 
       <div className="mt-4">
         <Notice tone="brass">
-          Test USD, Test BTC and Test ETH are synthetic devnet assets. Their prices are live market
-          mids (or fixed $1 for tUSD); their supply is minted by the demo reserve. They are not
-          redeemable for real dollars, BTC or ETH.
+          dUSD is synthetic, program-issued Devnet USD. It uses a fixed $1 demo accounting price,
+          has capped test supply and is not redeemable for real dollars. Test BTC and Test ETH are
+          also devnet assets.
         </Notice>
       </div>
 
@@ -155,12 +152,12 @@ export function CreateVault() {
           <InvestmentEstimate assets={selected} targets={targets} totalUsd={estimatedTotalUsd} />
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-iron">
-          SOL is wrapped as WSOL in the vault first. If WSOL is not in your target mix, it is tracked at 0% until the scheduled rebalance moves toward your targets.
+          SOL is wrapped into WSOL first. If WSOL is not in your target mix, it starts at 0% and a scheduled trade may move it toward your selected assets when the MagicBlock task runs.
         </p>
       </div>
 
       <div className="mt-4">
-        <Field label="Rebalance cadence" hint="How often an active portfolio is checked for drift.">
+        <Field label="Rebalance target" hint="Hydra uses ER slots, so wall-clock timing varies.">
           <select
             value={cadenceSec}
             onChange={(e) => setCadenceSec(Number(e.target.value))}
@@ -194,21 +191,6 @@ export function CreateVault() {
         </LedgerPanel>
       </div>
 
-      <div className="mt-4">
-        <Field
-          label="Automation budget · separate from investment"
-          hint={`Pays devnet fees for automated trades. 0.05 SOL ≈ 60+ swaps. You hold ${fmtSol(solAvail ?? 0)} SOL.`}
-        >
-          <input
-            inputMode="decimal"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-            className={inputClass}
-            aria-label="Automation budget in SOL"
-          />
-        </Field>
-      </div>
-
       <div className="mt-5">
         <Button
           variant="primary"
@@ -234,9 +216,9 @@ export function CreateVault() {
           </ul>
         ) : null}
         <p className="mt-3 text-[11px] leading-relaxed text-iron">
-          Setup uses several devnet transactions. A funded vault stays recoverable in kind even if
-          scheduled execution requires the deployed program and reserve authorization. Weight-only edits later keep the schedule and budget, with a
-          120-second cooldown.
+          Setup creates on-chain vault accounts and a share mint, then registers one Hydra task.
+          Scheduling targets 5,700 ER slots (about 60 seconds) and needs an active Hydra cranker.
+          Weight-only edits are on Solana; a 120-second cooldown applies.
         </p>
       </div>
 
@@ -261,19 +243,19 @@ export function CreateVault() {
               k: 'Estimated vault value',
               v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a fresh SOL/USD price',
             },
-            { k: 'Automation budget', v: `${(budgetSol ?? 0).toFixed(4)} SOL (separate)` },
-            { k: 'Cadence', v: cadenceLabels[cadenceSec] ?? `every ${cadenceSec}s` },
+            { k: 'Executor funding', v: '0.05 SOL from setup · program controlled' },
+            { k: 'Schedule', v: '5,700 ER slots · about 60 seconds' },
             { k: 'Deviation threshold', v: `± ${threshold.toFixed(1)}%` },
           ]}
         />
         <div className="mt-4">
           <MicroLabel>What setup does</MicroLabel>
           <ul className="mt-2 space-y-1.5 text-[11.5px] leading-relaxed text-iron">
-            <li>· Generates a separate vault custody keypair on this device.</li>
-            <li>· Creates the vault's token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus WSOL as the SOL funding asset'}.</li>
-            <li>· Wraps your SOL as WSOL, then moves it and the separate fee budget to the vault.</li>
-            <li>· Counterparty for future swaps: the program-authorized devnet reserve (spread 0.30% + curve fee, capped at 3.00%).</li>
-            <li>· Execution: delegated to MagicBlock Ephemeral Rollups on a 60-second schedule.</li>
+            <li>· Creates a Vault State PDA, Vault Authority PDA and transferable share-token mint.</li>
+            <li>· Creates standard SPL token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus zero-target WSOL for SOL funding'}.</li>
+            <li>· Wraps your SOL in your wallet's WSOL account, deposits it, then mints shares using on-chain NAV.</li>
+            <li>· Delegates only the Executor PDA. Vault State and asset token accounts stay on Solana.</li>
+            <li>· Requests one Hydra task at 5,700 ER slots; execution depends on an active cranker and fresh prices.</li>
           </ul>
         </div>
         <div className="mt-4">
@@ -281,7 +263,7 @@ export function CreateVault() {
         </div>
         <div className="mt-4">
           <Notice tone="petrol" title="How the investment is executed">
-            This is an allocation estimate, not an instant swap quote. After funding, the MagicBlock Ephemeral Rollups program checks the vault on its 60-second schedule and trades toward {targetLabel} when drift passes {threshold.toFixed(1)}%. Actual fills can differ because of fees and slippage. Scheduled trades wait for fresh required asset prices.
+            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}%. The registered interval is 5,700 ER slots (about 60 seconds); actual wall-clock timing depends on an active Hydra cranker. The vault program checks price freshness, slippage and replay protection before moving SPL assets.
           </Notice>
         </div>
       </Sheet>
