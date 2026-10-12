@@ -115,9 +115,9 @@ export function decodeEtfPoolAccount(account: AccountInfo<Buffer>, expectedProgr
   if (length < 1 || length > 1_155) throw new Error("pool_config_length_invalid");
   const configBytes = Buffer.from(take(data, 46, length));
   const end = 46 + length;
-  if (!allZero(data.subarray(end, 46 + 1_155))) throw new Error("pool_config_unused_tail_not_zero");
-  const shareMint = keyAt(data, 46 + 1_155);
-  const initializer = keyAt(data, 46 + 1_155 + 32);
+  const shareMint = keyAt(data, end);
+  const initializer = keyAt(data, end + 32);
+  if (!allZero(data.subarray(end + 64))) throw new Error("pool_config_unused_tail_not_zero");
   const [canonicalPool, canonicalPoolBump] = PublicKey.findProgramAddressSync([Buffer.from("etf_pool_v1"), Buffer.from(configHash, "hex")], expectedProgram);
   if (!expectedPool.equals(canonicalPool) || bump !== canonicalPoolBump) {
     throw new Error("pool_identity_mismatch");

@@ -16,4 +16,6 @@ pub enum PortfolioError {
     WrongLifecycle,
     #[msg("Vault has units still in it and cannot be closed")]
     VaultNotEmpty,
+    #[msg("No token-moving, oracle-validated swap execution is implemented") ]
+    ExecutionNotImplemented,
 }

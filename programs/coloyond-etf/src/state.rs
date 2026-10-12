@@ -195,7 +195,7 @@ impl EtfWeightsV1 {
     }
 
     pub fn rebalance_eligible(&self, now: i64) -> bool {
-        if now < 0 {
+        if now < 0 || self.rebalance_interval_seconds < 5 || self.rebalance_interval_seconds > i64::MAX as u64 {
             return false;
         }
         let now_u64 = now as u64;
@@ -258,6 +258,19 @@ mod tests {
         assert_eq!(POOL_SPACE, 8 + 1 + 1 + 32 + 4 + MAX_CONFIG_BYTES + 32 + 32);
         assert_eq!(POOL_STATE_SPACE, 300);
         assert_eq!(ASSET_STATE_SPACE, 59);
+    }
+
+    #[test]
+    fn unsafe_cooldown_intervals_are_never_eligible() {
+        for interval in [0, 4, i64::MAX as u64 + 1, u64::MAX] {
+            let weights = EtfWeightsV1::new(Pubkey::default(), 0, vec![5000, 5000], interval);
+            assert!(!weights.rebalance_eligible(100));
+        }
+        let mut weights = EtfWeightsV1::new(Pubkey::default(), 0, vec![5000, 5000], 5);
+        assert!(!weights.rebalance_eligible(-1));
+        weights.mark_rebalanced(100);
+        assert!(!weights.rebalance_eligible(104));
+        assert!(weights.rebalance_eligible(105));
     }
 
     #[test]

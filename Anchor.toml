@@ -8,7 +8,7 @@ skip-lint = false
 
 [programs.localnet]
 coloyond_vault = "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"
-coloyond_etf = "H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9"
+coloyond_etf = "DVvBu6GDonibiR5aPqW27tt5RLcA5c4foVKojicxNm6q"
 
 [programs.devnet]
 coloyond_vault = "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"

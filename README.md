@@ -1,5 +1,18 @@
 # coloyond
 
+**Web vault work (12 October):** the current task targets the browser app,
+Anchor custody, and permissionless keepers; Android work is excluded. The
+security repair branch is documented in
+[the web-vault status and remaining implementation gates](docs/rebalancing/web-vault-status-20261012.md).
+The legacy ETF rebalance and portfolio-v2 scheduled execution reject instead of
+claiming trades without SPL movements. The Python bot is a live read-only
+custody/Pyth observer and explicitly refuses `--send`. This is not a completed
+or deployed automatic ETF.
+
+The MagicBlock smoke experiment is preserved on `feature/magicblocks-backup`
+and removed from the web implementation branch. Historical mobile/hackathon
+plans below remain historical and do not override this web task.
+
 **Direction (12 October):** the hackathon release is the allocation card with the manual Glider handoff, as described below. The issue #38 MagicBlock execution layer is stopped; see the [MagicBlock smoke test](docs/rebalancing/evidence/magicblock-smoke-20261012.md). Automated execution through Glider's API (#23) is the next roadmap item after the hackathon.
 
 **Issue #38 mobile prototype:** [spec](docs/superpowers/specs/2026-10-11-issue-38-mobile-portfolio-spec.md) · [design and code cuts](docs/design/issue-38-mobile-portfolio-design.md) · [overnight delivery plan](docs/superpowers/plans/2026-10-11-issue-38-mobile-portfolio-plan.md) · [mobile design preview](docs/design/issue-38-mobile-portfolio.html) · [Claude Opus 5.5 review](docs/reviews/2026-10-11-issue-38-claude-opus-5-5-review.md). These propose a native Android personal-vault/MagicBlock direction for the Solana mobile hackathon. The design is not implementation or deployment evidence; the card/Glider description below records the earlier release scope.

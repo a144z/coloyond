@@ -197,48 +197,16 @@ pub fn tick<'info>(
     Ok(())
 }
 
+/// This scaffold has no swap router or oracle validation. Never mutate units
+/// or scheduling state as if a token trade had executed.
 pub fn execute_scheduled_rebalance<'info>(
-    ctx: Context<'_, '_, 'info, 'info, ExecuteScheduledRebalance<'info>>,
-    generation: u64,
-    asset_in: u8,
-    asset_out: u8,
-    amount_in: u64,
+    _ctx: Context<'_, '_, 'info, 'info, ExecuteScheduledRebalance<'info>>,
+    _generation: u64,
+    _asset_in: u8,
+    _asset_out: u8,
+    _amount_in: u64,
 ) -> Result<()> {
-    let mut vault = load(&ctx.accounts.vault.to_account_info())?;
-    let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
-    require!(
-        controller.generation == generation,
-        PortfolioError::RegistryNonceMismatch
-    );
-    require_keys_eq!(
-        controller.vault,
-        *ctx.accounts.vault.to_account_info().key,
-        PortfolioError::VaultPdaMismatch
-    );
-    let now = Clock::get()?.unix_timestamp;
-    require!(now >= 0, PortfolioError::WrongLifecycle);
-    let elapsed = (now.saturating_sub(vault.last_run_unix_timestamp)) as u64;
-    require!(
-        elapsed >= controller.interval_seconds,
-        PortfolioError::WrongLifecycle
-    );
-    let index_in = usize::try_from(asset_in).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
-    let index_out = usize::try_from(asset_out).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
-    require!(
-        index_in < vault.mints.len() && index_out < vault.mints.len() && index_in != index_out,
-        PortfolioError::WeightLengthMismatch
-    );
-    require!(amount_in > 0, PortfolioError::WeightsSumMismatch);
-    require!(vault.units[index_in] <= u64::MAX - amount_in, PortfolioError::WeightsSumMismatch);
-    vault.units[index_in] = vault.units[index_in].saturating_add(amount_in);
-    vault.units[index_out] = vault.units[index_out].saturating_sub(amount_in);
-    vault.last_run_unix_timestamp = now;
-    save(&ctx.accounts.vault.to_account_info(), &vault)?;
-    controller.run_nonce = controller
-        .run_nonce
-        .checked_add(1)
-        .ok_or(PortfolioError::RegistryNonceMismatch)?;
-    save_controller(&ctx.accounts.controller.to_account_info(), &controller)
+    err!(PortfolioError::ExecutionNotImplemented)
 }
 
 fn load(account: &AccountInfo) -> Result<PortfolioVaultV2> {

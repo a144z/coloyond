@@ -14,7 +14,7 @@
  *    source of truth.
  */
 
-import { createHash } from "node:crypto";
+import { sha256 } from "@noble/hashes/sha256";
 import { PublicKey } from "@solana/web3.js";
 
 export const WEIGHTS_ACCOUNT_DISCRIMINATOR: Readonly<Uint8Array> = Uint8Array.from([
@@ -37,7 +37,7 @@ const IX_DISCRIMINATORS = {
 } as const;
 
 function discriminatorFor(ixName: string): Uint8Array {
-  return createHash("sha256").update(`global:${ixName}`).digest().subarray(0, 8);
+  return sha256(new TextEncoder().encode(`global:${ixName}`)).subarray(0, 8);
 }
 
 /** Derives the `EtfWeightsV1` PDA for a pool (seed = `etf_weights_v1` + pool key). */
@@ -54,6 +54,8 @@ export function encodeInitWeightsArgs(
   initialWeights: readonly bigint[],
   rebalanceIntervalSeconds: bigint,
 ): Buffer {
+  validateWeights(initialWeights);
+  if (rebalanceIntervalSeconds < 5n || rebalanceIntervalSeconds > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("invalid_rebalance_interval");
   return encodeArgs(IX_DISCRIMINATORS.initWeights, (buf, offset) => {
     const next = writeWeightsVec(buf, initialWeights, offset);
     buf.writeBigUInt64LE(rebalanceIntervalSeconds, next);
@@ -63,11 +65,13 @@ export function encodeInitWeightsArgs(
 
 /** Encodes the borsh payload for `set_target_weights(new_weights)` (also reused for `propose_target_weights`). */
 export function encodeSetWeightsArgs(newWeights: readonly bigint[]): Buffer {
+  validateWeights(newWeights);
   return encodeArgs(IX_DISCRIMINATORS.setTargetWeights, (buf, offset) => writeWeightsVec(buf, newWeights, offset), 4 + 8 * newWeights.length);
 }
 
 /** Encodes the borsh payload for `propose_target_weights(new_weights)`. */
 export function encodeProposeWeightsArgs(newWeights: readonly bigint[]): Buffer {
+  validateWeights(newWeights);
   return encodeArgs(IX_DISCRIMINATORS.proposeTargetWeights, (buf, offset) => writeWeightsVec(buf, newWeights, offset), 4 + 8 * newWeights.length);
 }
 
@@ -86,6 +90,7 @@ export function encodeRebalanceArgs(
   amountIn: bigint,
   minAmountOut: bigint,
 ): Buffer {
+  if (!Number.isInteger(assetIn) || !Number.isInteger(assetOut) || assetIn < 0 || assetOut < 0 || assetIn > 3 || assetOut > 3 || assetIn === assetOut || amountIn <= 0n || minAmountOut <= 0n) throw new Error("invalid_rebalance_args");
   return encodeArgs(
     IX_DISCRIMINATORS.rebalance,
     (buf, offset) => {
@@ -100,6 +105,7 @@ export function encodeRebalanceArgs(
 }
 
 export type EtfWeightsV1Decoded = Readonly<{
+  pool: PublicKey;
   bump: number;
   targetWeights: readonly bigint[];
   proposedWeights: readonly bigint[] | null;
@@ -114,37 +120,48 @@ export type EtfWeightsV1Decoded = Readonly<{
  * 8-byte account discriminator + the borsh payload). Throws if the shape
  * isn't recognised (wrong discriminator, out-of-range Vec length, etc.).
  */
-export function decodeEtfWeightsAccount(data: Uint8Array): EtfWeightsV1Decoded {
+export function decodeEtfWeightsAccount(data: Uint8Array, expectedPool?: PublicKey): EtfWeightsV1Decoded {
   if (data.length < 8 || !equalBytes(data.subarray(0, 8), WEIGHTS_ACCOUNT_DISCRIMINATOR)) {
     throw new Error("weights_account_discriminator_mismatch");
   }
   const mut = Buffer.from(data.subarray(8));
-  let offset = 0;
+  if (mut.length < 33) throw new Error("weights_account_truncated");
+  const pool = new PublicKey(mut.subarray(0, 32));
+  if (expectedPool !== undefined && !pool.equals(expectedPool)) throw new Error("weights_pool_mismatch");
+  let offset = 32;
   const bump = mut.readUInt8(offset); offset += 1;
   const targetRead = readWeightsVec(mut, offset); offset = targetRead.next;
   const targetWeights = targetRead.values;
+  validateWeights(targetWeights);
   const proposedTag = mut.readUInt8(offset); offset += 1;
   let proposedWeights: readonly bigint[] | null = null;
+  if (proposedTag > 1) throw new Error("weights_invalid_option_tag");
   if (proposedTag === 1) {
     const read = readWeightsVec(mut, offset);
     proposedWeights = read.values;
+    validateWeights(proposedWeights);
+    if (proposedWeights.length !== targetWeights.length) throw new Error("weights_proposal_length_mismatch");
     offset = read.next;
   }
   const proposedByTag = mut.readUInt8(offset); offset += 1;
   let proposedBy: PublicKey | null = null;
+  if (proposedByTag > 1) throw new Error("weights_invalid_option_tag");
   if (proposedByTag === 1) {
     proposedBy = new PublicKey(mut.subarray(offset, offset + 32));
     offset += 32;
   }
   const proposedAtTag = mut.readUInt8(offset); offset += 1;
   let proposedAtUnixTimestamp: bigint | null = null;
+  if (proposedAtTag > 1) throw new Error("weights_invalid_option_tag");
   if (proposedAtTag === 1) {
     proposedAtUnixTimestamp = mut.readBigInt64LE(offset);
     offset += 8;
   }
   const rebalanceIntervalSeconds = mut.readBigUInt64LE(offset); offset += 8;
   const lastRebalanceUnixTimestamp = mut.readBigInt64LE(offset);
+  if (rebalanceIntervalSeconds < 5n || rebalanceIntervalSeconds > (1n << 63n) - 1n || lastRebalanceUnixTimestamp < 0n) throw new Error("weights_invalid_cooldown");
   return Object.freeze({
+    pool,
     bump,
     targetWeights,
     proposedWeights,
@@ -179,7 +196,7 @@ function writeWeightsVec(buf: Buffer, weights: readonly bigint[], offset: number
 
 function readWeightsVec(mut: Buffer, offset: number): { values: readonly bigint[]; next: number } {
   const length = mut.readUInt32LE(offset);
-  if (length > 32) throw new Error("weights_vec_too_long");
+  if (length < 2 || length > 4) throw new Error("weights_vec_too_long");
   const values: bigint[] = [];
   let cursor = offset + 4;
   for (let i = 0; i < length; i++) {
@@ -193,4 +210,8 @@ function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+function validateWeights(weights: readonly bigint[]): void {
+  if (weights.length < 2 || weights.length > 4 || weights.some(w => w < 0n || w > 10_000n) || weights.reduce((a, b) => a + b, 0n) !== 10_000n) throw new Error("invalid_target_weights");
 }

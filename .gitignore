@@ -17,3 +17,7 @@ etf-program-keypair.json
 etf-program-keypair-array.json
 /scratch/
 programs/coloyond-etf/target/
+
+# Retired experiment retained on feature/magicblocks-backup.
+/spikes/magicblock-smoke/
+/programs/coloyond-portfolio/target/

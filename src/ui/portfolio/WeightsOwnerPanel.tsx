@@ -3,14 +3,13 @@
 // gated rebalance button, all driven from the pure helpers in
 // `weightsOwnerPanel.ts` so the enabling logic is testable without React.
 import type * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   encodeAcceptWeightsArgs,
   encodeDeclineWeightsArgs,
   encodeInitWeightsArgs,
   encodeProposeWeightsArgs,
   encodeSetWeightsArgs,
-  type EtfWeightsV1Decoded,
 } from "../../../packages/etf-client/src/index.js";
 import { enabledOwnerActions, validateWeightsCandidate, type OwnerAction } from "./weightsOwnerPanel.js";
 
@@ -24,6 +23,7 @@ export function WeightsOwnerPanel({ snapshot, onSubmit }: OwnerPanelProps): Reac
   const can = (action: OwnerAction) => actions.includes(action);
   const draftLength = snapshot.weights.targetWeights.length;
   const [draft, setDraft] = useState<readonly bigint[]>(snapshot.weights.targetWeights);
+  useEffect(() => setDraft(snapshot.weights.targetWeights), [snapshot.weights.pool.toBase58(), snapshot.weights.targetWeights.join(",")]);
   const draftError = validateWeightsCandidate(draft, draftLength);
   return (
     <section className="etf-weights-owner-panel">
@@ -38,16 +38,19 @@ export function WeightsOwnerPanel({ snapshot, onSubmit }: OwnerPanelProps): Reac
         {can("decline") ? <button onClick={() => void onSubmit("decline", encodeDeclineWeightsArgs())}>Decline</button> : null}
         {can("rebalance") ? <button onClick={() => void onSubmit("rebalance")}>Rebalance</button> : null}
       </div>
-      <input
-        type="number"
-        aria-label="candidate weight for asset zero"
-        value={Number(draft[0] ?? 0n)}
-        onChange={(event) => {
-          const parsed = BigInt.asIntNBit(16n, BigInt(event.target.value));
-          const next = draft.map((w, i) => (i === 0 ? parsed : w));
-          setDraft(next);
-        }}
-      />
+      {draft.map((weight, index) => (
+        <label key={index}>Asset {index + 1} (basis points)
+          <input type="number" min="0" max="10000" step="1"
+            aria-label={`candidate weight for asset ${index}`}
+            value={Number(weight)} onChange={(event) => {
+              const value = event.target.value;
+              if (!/^\d{1,5}$/.test(value)) return;
+              const parsed = BigInt(value);
+              if (parsed > 10_000n) return;
+              setDraft(current => current.map((w, i) => i === index ? parsed : w));
+            }} />
+        </label>
+      ))}
       {draftError ? <p className="etf-weights-owner-panel__error">{draftError}</p> : null}
       <input
         type="hidden"
