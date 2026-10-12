@@ -18,6 +18,7 @@ import { Field, inputClass } from '../components/ui/Field.js';
 import { LedgerPanel } from '../components/ui/LedgerPanel.js';
 import { Sheet } from '../components/ui/Sheet.js';
 import { KeyValue, MicroLabel, Notice, Skeleton, StatusSwatch } from '../components/ui/primitives.js';
+import { ShareMetadataManager } from './ShareMetadataEditor.js';
 
 export function ExploreScreen() {
   const vaults = useStore((state) => state.exploreVaults);
@@ -150,6 +151,8 @@ function ExploreCard({ vault, price, onInvest }: { vault: ExploreVault; price: R
         )}
         {vault.metadata && vault.metadataIssue ? <p className="mt-2 text-[11px] text-iron">{vault.metadataIssue} · On-chain metadata name, symbol and URI are still shown.</p> : null}
       </div>
+
+      <ShareMetadataManager stateAddress={vault.address} />
 
       <div className="mt-4"><Button variant="primary" full onClick={onInvest}>Invest in this portfolio</Button></div>
     </LedgerPanel>

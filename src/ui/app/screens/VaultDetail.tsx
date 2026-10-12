@@ -16,6 +16,7 @@ import { Field, inputClass, selectClass } from '../components/ui/Field.js';
 import { AssetSwatch, Divider, KeyValue, MicroLabel, Notice, SignatureLink, Skeleton, StatusSwatch } from '../components/ui/primitives.js';
 import { WeightSliders, normalizeShares, sharesFromTargets, type WeightLocks } from '../components/ui/WeightSliders.js';
 import { BlockedNotice, VaultStatusLine } from './PortfolioList.js';
+import { ShareMetadataManager } from './ShareMetadataEditor.js';
 
 /** Portfolio details are read from the Vault State PDA and standard SPL accounts. */
 export function VaultDetail({ vaultId }: { vaultId: string }) {
@@ -156,6 +157,8 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
           </p>
         </LedgerPanel>
       </div>
+
+      <ShareMetadataManager stateAddress={vault.publicKey} />
 
       {!closed ? <div className="mt-5 space-y-2.5">
         <Button variant="primary" full onClick={() => setFundOpen(true)}>Deposit assets</Button>

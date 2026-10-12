@@ -16,6 +16,7 @@ import {
   depositToVault,
   fetchRecentVaultSettlements,
   initializeVault,
+  createShareTokenMetadata,
   readVaultState,
   redeemFromVault,
   scheduleVault,
@@ -105,6 +106,11 @@ export interface FlowState {
 
 export interface CreateVaultInput {
   name: string;
+  /** URI and presentation fields are saved with the resumable setup draft. */
+  shareTokenDescription: string;
+  shareTokenImage: string;
+  shareTokenUri: string;
+  shareTokenSequence: string;
   assets: AssetId[];
   targets: Record<string, number>;
   thresholdPct: number;
@@ -121,7 +127,7 @@ export interface VaultSetupDraft {
   chainId: string;
   stateAddress: string;
   createdAt: number;
-  completed: Partial<Record<'initialize' | 'accounts' | 'deposit' | 'schedule', TxResult>>;
+  completed: Partial<Record<'initialize' | 'metadata' | 'accounts' | 'deposit' | 'schedule', TxResult>>;
 }
 
 export interface FundVaultInput {
@@ -530,6 +536,19 @@ export const useStore = create<ColoyondState>()(
             completed: {},
           };
           set((st) => ({ vaultSetupDrafts: { ...st.vaultSetupDrafts, [ownerKey]: draft! } }));
+        } else {
+          const nextInput = draft.completed.initialize
+            ? {
+                ...draft.input,
+                name: input.name,
+                shareTokenDescription: input.shareTokenDescription,
+                shareTokenImage: input.shareTokenImage,
+                shareTokenUri: input.shareTokenUri,
+                shareTokenSequence: input.shareTokenSequence,
+              }
+            : input;
+          draft = { ...draft, input: nextInput };
+          set((st) => ({ vaultSetupDrafts: { ...st.vaultSetupDrafts, [ownerKey]: draft! } }));
         }
         const id = draft.id;
         const chainId = BigInt(draft.chainId);
@@ -538,11 +557,13 @@ export const useStore = create<ColoyondState>()(
         const captured: {
           addresses: ReturnType<typeof vaultAddressesForState> | null;
           init: TxResult | null;
+          metadata: TxResult | null;
           deposit: TxResult | null;
           schedule: TxResult | null;
         } = {
           addresses: vaultAddressesForState(stateAddress),
           init: draft.completed.initialize ?? null,
+          metadata: draft.completed.metadata ?? null,
           deposit: draft.completed.deposit ?? null,
           schedule: draft.completed.schedule ?? null,
         };
@@ -554,7 +575,8 @@ export const useStore = create<ColoyondState>()(
         const assets = setupInput.assets;
         const targets = setupInput.targets;
         const setupStepLabels = [
-          ['initialize', 'Create Vault State, Authority and share mint'],
+          ['initialize', 'Create Vault State, Authority, share mint and metadata'],
+          ['metadata', 'Attach or backfill Metaplex share metadata'],
           ['accounts', 'Create standard SPL token accounts'],
           ['deposit', 'Wrap SOL and deposit into the vault'],
           ['schedule', `Register the ${setupInput.cadenceSec}-second MagicBlock task`],
@@ -577,13 +599,39 @@ export const useStore = create<ColoyondState>()(
 
         const ok = await get().runFlow('Create portfolio', 'SETUP · DEVNET', [
           {
-            label: 'Create Vault State, Authority and share mint',
+            label: 'Create Vault State, Authority, share mint and metadata',
             run: async () => {
-              const result = await initializeVault(wallet, chainId, assets, targets, setupInput.thresholdPct);
+              const metadataForm = {
+                name: setupInput.name,
+                description: setupInput.shareTokenDescription ?? '',
+                image: setupInput.shareTokenImage ?? '',
+                uri: setupInput.shareTokenUri ?? '',
+                expectedSequence: BigInt(setupInput.shareTokenSequence || '0'),
+              };
+              const result = await initializeVault(wallet, chainId, assets, targets, setupInput.thresholdPct, metadataForm);
               captured.addresses = result.addresses;
               captured.init = result.result;
               markComplete('initialize', result.result);
-              return { sig: result.result.sig, note: `Vault State ${result.addresses.state.toBase58().slice(0, 8)}…` };
+              captured.metadata = result.result;
+              markComplete('metadata', result.result);
+              return { sig: result.result.sig, note: `Vault State ${result.addresses.state.toBase58().slice(0, 8)}… · metadata attached atomically` };
+            },
+          },
+          {
+            label: 'Attach or backfill Metaplex share metadata',
+            run: async () => {
+              if (captured.metadata || draft?.completed.metadata) return { sig: captured.metadata?.sig || draft?.completed.metadata?.sig, note: 'Share metadata is already confirmed on Solana.' };
+              if (!captured.addresses) throw new Error('Vault State was not initialized.');
+              const result = await createShareTokenMetadata(wallet, captured.addresses.state, BigInt(setupInput.shareTokenSequence || '0'), {
+                name: setupInput.name,
+                description: setupInput.shareTokenDescription ?? '',
+                image: setupInput.shareTokenImage ?? '',
+                uri: setupInput.shareTokenUri ?? '',
+              });
+              const confirmed = result ?? { sig: '', slot: 0 };
+              captured.metadata = confirmed;
+              markComplete('metadata', confirmed);
+              return { sig: result?.sig, note: result ? `Confirmed in slot ${result.slot}` : 'Matching metadata already exists on Solana.' };
             },
           },
           {

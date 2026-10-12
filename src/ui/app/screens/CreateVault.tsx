@@ -3,6 +3,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore } from '../lib/store.js';
 import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config.js';
 import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets.js';
+import { readNextShareSymbolSequence, shareSymbolForSequence, validateShareMetadataForm } from '../lib/solana/execution.js';
 import { bookStatus, priceOf } from '../lib/solana/price.js';
 import { fmtSol, fmtUsd, lamportsFromSol, parseAmountOrZero } from '../lib/format.js';
 import { Screen, ScreenHeading } from '../components/ui/Screen.js';
@@ -15,6 +16,7 @@ import { WeightSliders, normalizeShares, type WeightLocks } from '../components/
 import { MixBar, segmentsOf } from '../components/ui/MixBar.js';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet.js';
 import { ReferenceArt } from '../../ReferenceArt.js';
+import { ShareMetadataEditor } from './ShareMetadataEditor.js';
 
 const cadenceLabels: Record<number, string> = {
   60: 'About every 60 seconds · 5,700 ER slots',
@@ -34,6 +36,7 @@ const defaultShares: Record<AssetId, number> = { wsol: 60, dusd: 40, tbtc: 0, te
 export function CreateVault() {
   const { setVisible } = useWalletModal();
   const hasWallet = useStore((s) => !!(s.wallet || s.connectedWallet));
+  const metadataWalletKey = useStore((s) => s.connectedWallet?.publicKey.toBase58() ?? s.wallet?.publicKey ?? null);
   const walletBalances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
   const createVault = useStore((s) => s.createVault);
@@ -50,6 +53,12 @@ export function CreateVault() {
   const [investmentSol, setInvestmentSol] = useState('0.20');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
+  const [shareDescription, setShareDescription] = useState('');
+  const [shareImage, setShareImage] = useState('');
+  const [shareMetadataUri, setShareMetadataUri] = useState('');
+  const [shareSymbolSequence, setShareSymbolSequence] = useState<bigint | null>(null);
+  const [sequenceLoading, setSequenceLoading] = useState(false);
+  const [shareMetadataVerified, setShareMetadataVerified] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -62,15 +71,44 @@ export function CreateVault() {
     setInvestmentSol((draft.deposits.wsol / 1e9).toFixed(9).replace(/0+$/, '').replace(/\.$/, '') || '0');
     setCadenceSec(draft.cadenceSec);
     setThreshold(draft.thresholdPct);
+    setShareDescription(draft.shareTokenDescription ?? '');
+    setShareImage(draft.shareTokenImage ?? '');
+    setShareMetadataUri(draft.shareTokenUri ?? '');
+    setShareSymbolSequence(typeof draft.shareTokenSequence === 'string' && /^\d+$/u.test(draft.shareTokenSequence) ? BigInt(draft.shareTokenSequence) : null);
+    setShareMetadataVerified(!!setupDraft.completed.metadata);
   }, [setupDraft]);
 
+  useEffect(() => {
+    let live = true;
+    setSequenceLoading(true);
+    void readNextShareSymbolSequence().then((sequence) => {
+      if (live) setShareSymbolSequence(sequence);
+    }).catch((error) => {
+      if (live) toast('error', 'Could not read share symbol registry', error instanceof Error ? error.message : 'Retry the registry read before creating metadata.');
+    }).finally(() => { if (live) setSequenceLoading(false); });
+    return () => { live = false; };
+  }, [toast, metadataWalletKey]);
+
+  async function refreshShareSymbol() {
+    setSequenceLoading(true);
+    try {
+      setShareSymbolSequence(await readNextShareSymbolSequence());
+      setShareMetadataVerified(false);
+    } catch (error) {
+      toast('error', 'Could not refresh share symbol', error instanceof Error ? error.message : 'Retry the registry read.');
+    } finally { setSequenceLoading(false); }
+  }
+
   const solAvail = walletBalances ? walletBalances.solLamports : null;
+  const metadataAlreadyAttached = !!setupDraft?.completed.metadata;
   const targets = normalizeShares(shares, undefined, locked);
   const selected = assetList().filter((s) => (targets[s.id] ?? 0) > 0);
   const selectedIds = selected.map((s) => s.id);
   const targetLabel = selected.map((s) => `${(targets[s.id] ?? 0).toFixed(0)} ${s.symbol}`).join(' · ');
 
   const investmentSolUnits = parseAmountOrZero(investmentSol);
+  let shareSymbol: string | null = null;
+  try { if (shareSymbolSequence !== null) shareSymbol = shareSymbolForSequence(shareSymbolSequence); } catch { /* require a registry refresh below */ }
   const priceOk = bookStatus(price, PRICE_MAX_AGE_MS) === 'fresh' && price !== null;
   const solUsd = priceOk ? priceOf(price, 'wsol') : null;
   const estimatedTotalUsd = investmentSolUnits !== null && solUsd !== null ? investmentSolUnits * solUsd : null;
@@ -78,6 +116,14 @@ export function CreateVault() {
   const errors = useMemo(() => {
     const errs: string[] = [];
     if (!name.trim()) errs.push('Portfolio name is required.');
+    if (new TextEncoder().encode(name).length > 32) errs.push('Share-token name must be at most 32 UTF-8 bytes.');
+    const symbol = shareSymbol;
+    if (!symbol) errs.push('Waiting for the on-chain share symbol sequence.');
+    else {
+      const metadataErrors = validateShareMetadataForm({ name, description: shareDescription, image: shareImage, uri: shareMetadataUri }, symbol);
+      if (metadataErrors.length) errs.push(...metadataErrors);
+      if (!shareMetadataVerified) errs.push('Verify the uploaded metadata JSON before creating this portfolio.');
+    }
     if (selected.length < 2) errs.push('Pick at least two assets for the mix.');
     const targetTotal = selected.reduce((sum, s) => sum + (targets[s.id] ?? 0), 0);
     if (Math.abs(targetTotal - 100) > 0.05) {
@@ -96,7 +142,7 @@ export function CreateVault() {
     }
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, shares, locked, investmentSol, solAvail, hasWallet]);
+  }, [name, shares, locked, investmentSol, solAvail, hasWallet, shareDescription, shareImage, shareMetadataUri, shareSymbol, shareMetadataVerified]);
 
   async function onConfirm() {
     if (submitting || errors.length > 0) return;
@@ -109,6 +155,10 @@ export function CreateVault() {
       const assetTargets = Object.fromEntries(assets.map((id) => [id, targets[id] ?? 0]));
       const id = await createVault({
         name: name.trim(),
+        shareTokenDescription: shareDescription,
+        shareTokenImage: shareImage,
+        shareTokenUri: shareMetadataUri,
+        shareTokenSequence: shareSymbolSequence?.toString() ?? '',
         assets,
         targets: assetTargets,
         thresholdPct: threshold,
@@ -153,15 +203,33 @@ export function CreateVault() {
         </div>
       ) : null}
 
+      {metadataAlreadyAttached ? <div className="mb-4"><Notice tone="petrol" title="Share metadata already confirmed">This saved setup already attached its share metadata on Solana. Continue with the confirmed fields below; use the vault’s metadata manager after setup to update name or URI.</Notice></div> : null}
+
       <Field label="Portfolio name" error={name.trim() === '' ? 'Portfolio name is required.' : undefined}>
         <input
           value={name}
-          maxLength={40}
+          maxLength={32}
+          disabled={metadataAlreadyAttached}
           onChange={(e) => setName(e.target.value)}
           className={inputClass}
           placeholder="Everyday mix"
         />
       </Field>
+
+      <div className="mt-4">
+        <LedgerPanel stripe="Share-token identity" meta="Metaplex · standard SPL">
+          <ShareMetadataEditor
+            value={{ name, description: shareDescription, image: shareImage, uri: shareMetadataUri }}
+            onChange={(value) => { setName(value.name); setShareDescription(value.description); setShareImage(value.image); setShareMetadataUri(value.uri); setShareMetadataVerified(false); }}
+            symbol={shareSymbol}
+            sequenceLoading={sequenceLoading}
+            onRefreshSequence={() => void refreshShareSymbol()}
+            verified={shareMetadataVerified}
+            onVerifiedChange={setShareMetadataVerified}
+            readOnly={metadataAlreadyAttached}
+          />
+        </LedgerPanel>
+      </div>
 
       <LedgerPanel
         stripe="Target mix"
