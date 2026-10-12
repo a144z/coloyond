@@ -1,5 +1,7 @@
 # coloyond
 
+**Direction (12 October):** the hackathon release is the allocation card with the manual Glider handoff, as described below. The issue #38 MagicBlock execution layer is stopped; see the [MagicBlock smoke test](docs/rebalancing/evidence/magicblock-smoke-20261012.md). Automated execution through Glider's API (#23) is the next roadmap item after the hackathon.
+
 **Issue #38 mobile prototype:** [spec](docs/superpowers/specs/2026-10-11-issue-38-mobile-portfolio-spec.md) · [design and code cuts](docs/design/issue-38-mobile-portfolio-design.md) · [overnight delivery plan](docs/superpowers/plans/2026-10-11-issue-38-mobile-portfolio-plan.md) · [mobile design preview](docs/design/issue-38-mobile-portfolio.html) · [Claude Opus 5.5 review](docs/reviews/2026-10-11-issue-38-claude-opus-5-5-review.md). These propose a native Android personal-vault/MagicBlock direction for the Solana mobile hackathon. The design is not implementation or deployment evidence; the card/Glider description below records the earlier release scope.
 
 **New to the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).** It lists what is done, what to build next for the hackathon, and in what order.
