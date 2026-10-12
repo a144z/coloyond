@@ -8,5 +8,5 @@ export interface PriceBookLike {
 }
 
 export function isUsablePriceEntry(entry: PriceEntryLike | null | undefined): entry is PriceEntryLike;
-export function priceBookStatus(book: PriceBookLike | null): 'available' | 'unavailable';
-export function hasUsableQuotesFor(book: PriceBookLike | null, assetIds: string[]): boolean;
+export function priceBookStatus(book: PriceBookLike | null, maxAgeMs: number, now?: number): 'fresh' | 'stale' | 'unavailable';
+export function hasUsableQuotesFor(book: PriceBookLike | null, assetIds: string[], maxAgeMs: number, now?: number): boolean;

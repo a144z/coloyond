@@ -3,7 +3,7 @@ import { bookStatus, priceEntryOf, pricesFromBook } from '../lib/solana/price';
 import { reserveOwner } from '../lib/solana/reserve-read';
 import { reserveDepthUsd } from '../lib/solana/reserve-quote';
 import { assetList } from '../lib/solana/assets';
-import { RPC_URL } from '../lib/solana/config';
+import { PRICE_MAX_AGE_MS, RPC_URL } from '../lib/solana/config';
 import { explorerAddress } from '../lib/solana/connection';
 import { fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
 import { useNow } from '../hooks/useNow';
@@ -24,7 +24,7 @@ export function SystemScreen() {
   const wallet = useStore((s) => s.wallet);
   const connectedWallet = useStore((s) => s.connectedWallet);
 
-  const status = bookStatus(price);
+  const status = bookStatus(price, PRICE_MAX_AGE_MS);
   const reserveAddress = reserveOwner.toBase58();
   const reserveDepth = reserve && price ? reserveDepthUsd(reserve, pricesFromBook(price)) : null;
   const active = vaults.filter((v) => v.status === 'active').length;
@@ -77,11 +77,12 @@ export function SystemScreen() {
                   };
                 }),
                 { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
+                { k: 'Age limit', v: `${PRICE_MAX_AGE_MS / 1000} seconds · display estimates only` },
                 {
                   k: 'Status',
                   v: (
                     <span className="inline-flex items-center gap-1.5">
-                      <StatusSwatch tone={status === 'available' ? 'petrol' : 'danger'} pulse={status === 'available'} />
+                      <StatusSwatch tone={status === 'fresh' ? 'petrol' : 'danger'} pulse={status === 'fresh'} />
                       {status}
                     </span>
                   ),

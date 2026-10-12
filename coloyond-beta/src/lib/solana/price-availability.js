@@ -6,13 +6,16 @@ export function isUsablePriceEntry(entry) {
   return Boolean(entry && Number.isFinite(entry.usd) && entry.usd > 0);
 }
 
-/** Display-book availability depends on usable quotes, never on quote age. */
-export function priceBookStatus(book) {
+/** The display book has its own age limit; this says nothing about Pyth execution. */
+export function priceBookStatus(book, maxAgeMs, now = Date.now()) {
   if (!book || !book.entries) return 'unavailable';
-  return Object.values(book.entries).some(isUsablePriceEntry) ? 'available' : 'unavailable';
+  if (!Object.values(book.entries).some(isUsablePriceEntry)) return 'unavailable';
+  if (!Number.isFinite(book.observedAt)) return 'unavailable';
+  return now - book.observedAt <= maxAgeMs ? 'fresh' : 'stale';
 }
 
-/** Every requested display quote is usable, regardless of observation age. */
-export function hasUsableQuotesFor(book, assetIds) {
-  return Boolean(book && book.entries && assetIds.every((id) => isUsablePriceEntry(book.entries[id])));
+/** Display valuation requires usable quotes from a recent display-book fetch. */
+export function hasUsableQuotesFor(book, assetIds, maxAgeMs, now = Date.now()) {
+  return priceBookStatus(book, maxAgeMs, now) === 'fresh' &&
+    assetIds.every((id) => isUsablePriceEntry(book.entries[id]));
 }

@@ -1,6 +1,7 @@
 import { assetList } from './assets';
 import { fetchCoinbaseStats } from './coinbase';
 import { hasUsableQuotesFor, isUsablePriceEntry, priceBookStatus } from './price-availability.js';
+import { PRICE_MAX_AGE_MS } from './config';
 
 /**
  * The price book: one live observation covering every tradable asset.
@@ -24,7 +25,7 @@ export interface PriceBook {
   entries: Record<string, PriceEntry | null>;
 }
 
-export type PriceStatus = 'available' | 'unavailable';
+export type PriceStatus = 'fresh' | 'stale' | 'unavailable';
 
 export function priceOf(book: PriceBook | null, assetId: string): number | null {
   if (!book) return null;
@@ -38,8 +39,8 @@ export function priceEntryOf(book: PriceBook | null, assetId: string): PriceEntr
   return isUsablePriceEntry(entry) ? entry : null;
 }
 
-export function bookStatus(book: PriceBook | null): PriceStatus {
-  return priceBookStatus(book);
+export function bookStatus(book: PriceBook | null, maxAgeMs = PRICE_MAX_AGE_MS): PriceStatus {
+  return priceBookStatus(book, maxAgeMs);
 }
 
 /** Flattened lookup of only the priced assets (missing entries omitted). */
@@ -53,8 +54,8 @@ export function pricesFromBook(book: PriceBook | null): Record<string, number> {
 }
 
 /** Every listed asset has a usable display quote. */
-export function assetsPriced(book: PriceBook | null, assetIds: string[]): boolean {
-  return hasUsableQuotesFor(book, assetIds);
+export function assetsPriced(book: PriceBook | null, assetIds: string[], maxAgeMs = PRICE_MAX_AGE_MS): boolean {
+  return hasUsableQuotesFor(book, assetIds, maxAgeMs);
 }
 
 export async function fetchPriceBook(): Promise<PriceBook> {
