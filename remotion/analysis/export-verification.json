@@ -1,0 +1,30 @@
+{
+  "format": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "30/1",
+        "side_data_list": [
+          {}
+        ]
+      },
+      {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 2,
+        "r_frame_rate": "0/0"
+      }
+    ],
+    "format": {
+      "duration": "62.058667"
+    }
+  },
+  "uploadedAudioMatchesAttachment": true,
+  "audioCorrelationAfterCodecDelayAlignment": 0.999204,
+  "codecAudioDelayMilliseconds": 42.3125,
+  "videoSha256": "68008ead47005ed45313d30c82109f15f7f0558c7d59cb9928d3cdb92705bf53",
+  "videoBytes": 18053642
+}

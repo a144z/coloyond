@@ -39,7 +39,7 @@ The interface turns allocation into something you can work with directly. Move a
   </a>
 </p>
 
-<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Animated navigation and detail zooms · Original stereo music and interface sound design</sub></p>
+<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Component close-ups and visible UI gestures · Uploaded stereo music with frequency-based timing</sub></p>
 
 The film uses the actual mobile UI. Portfolio balances in presentation scenes are clearly labeled **illustrative devnet data**.
 
@@ -127,7 +127,7 @@ npm run video:studio
 npm run video:render
 ```
 
-The checked-in soundtrack is original music. To regenerate it, run `python remotion/soundtrack.py` with NumPy installed. See the [Remotion guide](remotion/README.md) for motion, audio, and capture details.
+The film uses the uploaded stereo soundtrack, with spectral analysis driving its beat grid and subtle frequency response. It animates real component values, cursor gestures, sheets and navigation in a deterministic UI presentation. See the [Remotion guide](remotion/README.md) for the storyboard, research, audio analysis and reproduction steps.
 
 ## Built, checked, and explicit about scope
 
@@ -152,7 +152,7 @@ Read the [verification report](docs/mobile/verification.md), [mobile design](doc
 | `coloyond-beta/programs/coloyond-execution/` | Execution program matching the integrated mobile client configuration. |
 | `programs/` | Additional Solana/Anchor program implementations and research surfaces. |
 | `packages/` | Protocol clients and execution utilities. |
-| `remotion/` | Promotion source, UI captures, and original soundtrack. |
+| `remotion/` | Promotion source, UI demonstration, uploaded music and spectral analysis. |
 | `releases/` | Downloadable debug APK and promotional MP4. |
 | `docs/` | Design, build evidence, protocol investigation, and runbooks. |
 | `coloyond.jpg` | Canonical supplied project artwork. |
