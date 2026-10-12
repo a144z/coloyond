@@ -27,6 +27,8 @@ pub struct FundVault<'info> {
     /// CHECK: identity and PDA are validated in the handler.
     #[account(mut)]
     pub vault: UncheckedAccount<'info>,
+    /// CHECK: derived token authority PDA; has no required data account.
+    pub authority: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -48,6 +50,8 @@ pub struct WithdrawInKind<'info> {
     /// CHECK: identity and PDA are validated in the handler.
     #[account(mut)]
     pub vault: UncheckedAccount<'info>,
+    /// CHECK: derived token authority PDA; has no required data account.
+    pub authority: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 

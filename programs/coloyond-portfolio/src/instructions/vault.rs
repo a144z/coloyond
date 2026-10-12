@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, TransferChecked};
 
 use crate::errors::PortfolioError;
 use crate::pda;
@@ -43,10 +44,34 @@ pub fn fund_vault<'info>(
         amounts.len() == vault.mints.len(),
         PortfolioError::WeightLengthMismatch
     );
-    for (i, amount) in amounts.iter().enumerate() {
-        vault.units[i] = vault.units[i].checked_add(*amount).ok_or(PortfolioError::WeightsSumMismatch)?;
+    let assets = pair_assets(&vault.mints, ctx.remaining_accounts)?;
+    let token_program = ctx.accounts.token_program.to_account_info();
+    for (index, asset) in assets.iter().enumerate() {
+        let amount = amounts[index];
+        if amount == 0 {
+            continue;
+        }
+        token::transfer_checked(
+            CpiContext::new(
+                token_program.clone(),
+                TransferChecked {
+                    from: asset.user_ata.clone(),
+                    mint: asset.mint.clone(),
+                    to: asset.custody_ata.clone(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            amount,
+            asset.decimals_hint,
+        )?;
+        vault.units[index] = vault.units[index]
+            .checked_add(amount)
+            .ok_or(PortfolioError::WeightsSumMismatch)?;
     }
-    vault.owner_op_sequence = vault.owner_op_sequence.checked_add(1).ok_or(PortfolioError::RegistryNonceMismatch)?;
+    vault.owner_op_sequence = vault
+        .owner_op_sequence
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
     save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
@@ -64,7 +89,10 @@ pub fn update_allocation<'info>(
     );
     vault.assert_weights_match_basket(&new_weights)?;
     vault.target_weights = new_weights;
-    vault.owner_op_sequence = vault.owner_op_sequence.checked_add(1).ok_or(PortfolioError::RegistryNonceMismatch)?;
+    vault.owner_op_sequence = vault
+        .owner_op_sequence
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
     save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
@@ -83,11 +111,36 @@ pub fn withdraw_in_kind<'info>(
         amounts.len() == vault.mints.len(),
         PortfolioError::WeightLengthMismatch
     );
-    for (i, amount) in amounts.iter().enumerate() {
-        require!(*amount <= vault.units[i], PortfolioError::VaultNotEmpty);
-        vault.units[i] -= *amount;
+    let assets = pair_assets(&vault.mints, ctx.remaining_accounts)?;
+    let authority_bump = pda::authority(ctx.accounts.vault.to_account_info().key).1;
+    let authority_seeds: &[&[u8]] = &[crate::pda::AUTHORITY_SEED, ctx.accounts.vault.to_account_info().key.as_ref(), &[authority_bump]];
+    let token_program = ctx.accounts.token_program.to_account_info();
+    for (index, asset) in assets.iter().enumerate() {
+        let amount = amounts[index];
+        if amount == 0 {
+            continue;
+        }
+        require!(amount <= vault.units[index], PortfolioError::VaultNotEmpty);
+        token::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.clone(),
+                TransferChecked {
+                    from: asset.custody_ata.clone(),
+                    mint: asset.mint.clone(),
+                    to: asset.user_ata.clone(),
+                    authority: ctx.accounts.authority.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            amount,
+            asset.decimals_hint,
+        )?;
+        vault.units[index] -= amount;
     }
-    vault.owner_op_sequence = vault.owner_op_sequence.checked_add(1).ok_or(PortfolioError::RegistryNonceMismatch)?;
+    vault.owner_op_sequence = vault
+        .owner_op_sequence
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
     save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
@@ -128,4 +181,36 @@ fn save<T: AccountSerialize + AnchorDeserialize + Discriminator + Owner>(account
     data.fill(0);
     let mut output: &mut [u8] = &mut data;
     value.try_serialize(&mut output).map_err(Into::into)
+}
+
+struct AssetAccounts<'info> {
+    mint: AccountInfo<'info>,
+    user_ata: AccountInfo<'info>,
+    custody_ata: AccountInfo<'info>,
+    decimals_hint: u8,
+}
+
+fn pair_assets<'info>(
+    mints: &[Pubkey],
+    remaining: &'info [AccountInfo<'info>],
+) -> Result<Vec<AssetAccounts<'info>>> {
+    require!(
+        remaining.len() == mints.len() * 3,
+        PortfolioError::WeightLengthMismatch
+    );
+    let mut assets: Vec<AssetAccounts<'info>> = Vec::new();
+    for (index, mint_key) in mints.iter().enumerate() {
+        let offset = index * 3;
+        let mint_info = remaining[offset].clone();
+        let user_ata_info = remaining[offset + 1].clone();
+        let custody_ata_info = remaining[offset + 2].clone();
+        require_keys_eq!(*mint_info.key, *mint_key, PortfolioError::VaultPdaMismatch);
+        assets.push(AssetAccounts {
+            mint: mint_info,
+            user_ata: user_ata_info,
+            custody_ata: custody_ata_info,
+            decimals_hint: 9,
+        });
+    }
+    Ok(assets)
 }
