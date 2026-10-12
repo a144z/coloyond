@@ -23,15 +23,27 @@ if (process.argv.includes('--self-check')) {
   process.exit(0);
 }
 
-if (!configPath || !path.isAbsolute(configPath)) {
-  throw new Error('Set COLONYOND_HYDRA_CRANKER_CONFIG to an absolute JSON config path.');
+if (process.argv.includes('--validate-config')) {
+  const config = await loadConfig();
+  await access(config.binaryPath, constants.X_OK);
+  for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
+  log('config_validated', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
+  process.exit(0);
 }
-const config = parseConfig(await readFile(configPath, 'utf8'));
+
+const config = await loadConfig();
 await access(config.binaryPath, constants.X_OK);
 for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
 
 log('service_starting', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
 await Promise.all(config.rollups.map(runRollup));
+
+async function loadConfig() {
+  if (!configPath || !path.isAbsolute(configPath)) {
+    throw new Error('Set COLONYOND_HYDRA_CRANKER_CONFIG to an absolute JSON config path.');
+  }
+  return parseConfig(await readFile(configPath, 'utf8'));
+}
 
 async function runRollup(rollup) {
   const args = crankerArgs(rollup);
