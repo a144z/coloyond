@@ -15,7 +15,7 @@ use ephemeral_rollups_sdk::{
     ActionArgs, ShortAccountMeta,
 };
 use hydra_api::instruction::ephemeral as hydra_ephemeral;
-use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
+use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
 
 declare_id!("HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d");
 
@@ -29,7 +29,6 @@ const MARKET_AUTHORITY_SEED: &[u8] = b"market-authority";
 const CRANK_SEED: &[u8] = b"crank";
 const MARKET_CONFIG_SEED: &[u8] = b"market-config";
 const TASK_SPONSOR_RESERVE_LAMPORTS: u64 = 50_000_000;
-const PRICE_MAX_AGE_SEC: u64 = 90;
 const ACTION_MAX_AGE_SEC: i64 = 90;
 const USD_SCALE: u64 = 1_000_000;
 const MAX_DEVNET_USD_SUPPLY_RAW: u64 = 100_000_000_000; // 100,000 tokens at 6 decimals.
@@ -900,7 +899,6 @@ pub mod coloyond_execution {
         let sources = &ctx.remaining_accounts[..n];
         let vault_accounts = &ctx.remaining_accounts[n..2 * n];
         let feeds = &ctx.remaining_accounts[2 * n..];
-        let clock = Clock::get()?;
         let mut feed_index = 0;
         let mut nav = 0u128;
         let mut deposit_value = 0u128;
@@ -930,8 +928,14 @@ pub mod coloyond_execution {
                 feed_index += 1;
                 Some(feed)
             };
-            let price = read_asset_price(asset, feed, &clock)? as u128;
             let vault_amount = deserialize_token(vault_token)?.amount as u128;
+            // Empty assets contribute nothing to NAV or this deposit; requiring
+            // their Pyth feed would let an unrelated stale market block deposits.
+            let price = if amounts[index] == 0 && vault_amount == 0 {
+                USD_SCALE as u128
+            } else {
+                read_asset_price(asset, feed)? as u128
+            };
             let value = vault_amount
                 .checked_mul(price)
                 .ok_or(ErrorCode::MathOverflow)?
@@ -1571,7 +1575,6 @@ fn read_runtime_portfolio(
     let vault_accounts = &accounts[..n];
     let market_accounts = &accounts[n..2 * n];
     let feed_accounts = &accounts[2 * n..];
-    let clock = Clock::get()?;
     let mut prices = Vec::with_capacity(n);
     let mut vault_amounts = Vec::with_capacity(n);
     let mut market_amounts = Vec::with_capacity(n);
@@ -1584,7 +1587,7 @@ fn read_runtime_portfolio(
             feed_index += 1;
             Some(account)
         };
-        prices.push(read_asset_price(asset, feed, &clock)?);
+        prices.push(read_asset_price(asset, feed)?);
         vault_amounts.push(deserialize_token(&vault_accounts[index])?.amount);
         market_amounts.push(deserialize_token(&market_accounts[index])?.amount);
     }
@@ -1612,7 +1615,7 @@ fn unpack_settlement_accounts<'a, 'info>(
     Ok((&accounts[..n], &accounts[n..2 * n], &accounts[2 * n..]))
 }
 
-fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>, clock: &Clock) -> Result<u64> {
+fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>) -> Result<u64> {
     if asset.feed_account == Pubkey::default() {
         require!(feed.is_none(), ErrorCode::InvalidOracle);
         return Ok(USD_SCALE);
@@ -1623,9 +1626,13 @@ fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>, clock: &Cloc
     let data = account.try_borrow_data()?;
     let update = PriceUpdateV2::try_deserialize(&mut &data[..])
         .map_err(|_| error!(ErrorCode::InvalidOracle))?;
+    require!(
+        update.verification_level.gte(VerificationLevel::Full),
+        ErrorCode::InvalidOracle
+    );
     let price = update
-        .get_price_no_older_than(clock, PRICE_MAX_AGE_SEC, &asset.feed_id)
-        .map_err(|_| error!(ErrorCode::StalePrice))?;
+        .get_price_unchecked(&asset.feed_id)
+        .map_err(|_| error!(ErrorCode::InvalidOracle))?;
     normalize_price(price.price, price.exponent)
 }
 
@@ -1819,7 +1826,7 @@ pub enum ErrorCode {
     InvalidAccounts,
     #[msg("Pyth price account or feed id is invalid")]
     InvalidOracle,
-    #[msg("Pyth price is stale or insufficiently verified")]
+    #[msg("Legacy error code; Pyth publish time is not checked")]
     StalePrice,
     #[msg("Price conversion or trade calculation overflowed")]
     MathOverflow,

@@ -99,8 +99,8 @@ export function SystemScreen() {
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
             This display book shows SOL, BTC and ETH mids from Coinbase (Binance fallback), with
-            synthetic dUSD fixed at $1. Execution reads MagicBlock Pyth feeds and enforces its own
-            60-second freshness limit.
+            synthetic dUSD fixed at $1. Execution reads on-chain Pyth updates and checks feed identity
+            and full verification; it does not reject a price based on its publish time.
           </p>
         </LedgerPanel>
       </div>

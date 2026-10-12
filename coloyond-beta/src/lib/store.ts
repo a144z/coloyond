@@ -21,6 +21,7 @@ import {
   scheduleVault,
   setVaultActive,
   updateVaultTargets,
+  deriveVaultAddresses,
   vaultAddressesForState,
   buildRedeemMinimums,
 } from './solana/execution';
@@ -111,6 +112,17 @@ export interface CreateVaultInput {
   deposits: Record<string, number>;
 }
 
+/** Durable progress for a multi-transaction setup; keyed by wallet public key. */
+export interface VaultSetupDraft {
+  id: string;
+  owner: string;
+  input: CreateVaultInput;
+  chainId: string;
+  stateAddress: string;
+  createdAt: number;
+  completed: Partial<Record<'initialize' | 'accounts' | 'deposit' | 'schedule', TxResult>>;
+}
+
 export interface FundVaultInput {
   /** Raw deposit per asset id. */
   deposits: Record<string, number>;
@@ -159,6 +171,7 @@ interface ColoyondState {
   // persisted
   wallet: { mnemonic: string; publicKey: string; createdAt: number } | null;
   allVaults: Record<string, VaultConfig[]>;
+  vaultSetupDrafts: Record<string, VaultSetupDraft>;
   vaults: VaultConfig[];
   logs: LogEntry[];
 
@@ -205,6 +218,7 @@ interface ColoyondState {
     title: string,
     micro: string,
     steps: { label: string; run: () => Promise<{ note?: string; sig?: string }> }[],
+    initialSteps?: FlowStepRuntime[],
   ) => Promise<boolean>;
   dismissFlow: () => void;
 
@@ -226,6 +240,7 @@ export const useStore = create<ColoyondState>()(
     (set, get) => ({
       wallet: null,
       allVaults: {},
+      vaultSetupDrafts: {},
       vaults: [],
       logs: [],
 
@@ -387,17 +402,18 @@ export const useStore = create<ColoyondState>()(
         }
       },
 
-      runFlow: async (title, micro, steps) => {
+      runFlow: async (title, micro, steps, initialSteps) => {
         set({
           flow: {
             title,
             micro,
-            steps: steps.map((s) => ({ label: s.label, status: 'pending' as const })),
+            steps: steps.map((s, index) => initialSteps?.[index] ?? { label: s.label, status: 'pending' as const }),
             finishedAt: null,
             error: null,
           },
         });
         for (let i = 0; i < steps.length; i += 1) {
+          if (initialSteps?.[i]?.status === 'done') continue;
           set((st) => ({
             flow: st.flow
               ? { ...st.flow, steps: st.flow.steps.map((s, j) => (j === i ? { ...s, status: 'running' } : s)) }
@@ -484,22 +500,74 @@ export const useStore = create<ColoyondState>()(
       createVault: async (input) => {
         const wallet = activeWalletSigner();
         if (!wallet) return null;
-        const id = uid();
-        const chainId = BigInt(Date.now()) * 1_000n + BigInt(Math.floor(Math.random() * 1_000));
+        const ownerKey = wallet.publicKey.toBase58();
+        let draft = get().vaultSetupDrafts[ownerKey];
+        if (!draft) {
+          const chainId = BigInt(Date.now()) * 1_000n + BigInt(Math.floor(Math.random() * 1_000));
+          const addresses = deriveVaultAddresses(wallet.publicKey, chainId);
+          draft = {
+            id: uid(),
+            owner: ownerKey,
+            input,
+            chainId: chainId.toString(),
+            stateAddress: addresses.state.toBase58(),
+            createdAt: Date.now(),
+            completed: {},
+          };
+          set((st) => ({ vaultSetupDrafts: { ...st.vaultSetupDrafts, [ownerKey]: draft! } }));
+        }
+        const id = draft.id;
+        const chainId = BigInt(draft.chainId);
+        const setupInput = draft.input;
+        const stateAddress = new PublicKey(draft.stateAddress);
         const captured: {
           addresses: ReturnType<typeof vaultAddressesForState> | null;
           init: TxResult | null;
           deposit: TxResult | null;
           schedule: TxResult | null;
-        } = { addresses: null, init: null, deposit: null, schedule: null };
+        } = {
+          addresses: vaultAddressesForState(stateAddress),
+          init: draft.completed.initialize ?? null,
+          deposit: draft.completed.deposit ?? null,
+          schedule: draft.completed.schedule ?? null,
+        };
+        const markComplete = (step: keyof VaultSetupDraft['completed'], result: TxResult) => {
+          const next = { ...draft!, completed: { ...draft!.completed, [step]: result } };
+          draft = next;
+          set((st) => ({ vaultSetupDrafts: { ...st.vaultSetupDrafts, [ownerKey]: next } }));
+        };
+        const assets = setupInput.assets;
+        const targets = setupInput.targets;
+        const setupStepLabels = [
+          ['initialize', 'Create Vault State, Authority and share mint'],
+          ['accounts', 'Create standard SPL token accounts'],
+          ['deposit', 'Wrap SOL and deposit into the vault'],
+          ['schedule', `Register the ${setupInput.cadenceSec}-second MagicBlock task`],
+        ] as const;
+        const initialSteps: FlowStepRuntime[] = setupStepLabels.map(([key, label]) => {
+          const result = draft!.completed[key as keyof VaultSetupDraft['completed']];
+          return {
+            label,
+            status: result ? 'done' : 'pending',
+            sig: result?.sig || undefined,
+            note: result
+              ? key === 'initialize'
+                ? `Vault State ${stateAddress.toBase58().slice(0, 8)}…`
+                : result.sig
+                  ? 'Confirmed on Solana devnet'
+                  : 'Already confirmed on Solana devnet'
+              : undefined,
+          } as FlowStepRuntime;
+        });
 
         const ok = await get().runFlow('Create portfolio', 'SETUP · DEVNET', [
           {
             label: 'Create Vault State, Authority and share mint',
             run: async () => {
-              const result = await initializeVault(wallet, chainId, input.assets, input.targets, input.thresholdPct);
+              const result = await initializeVault(wallet, chainId, assets, targets, setupInput.thresholdPct);
               captured.addresses = result.addresses;
               captured.init = result.result;
+              markComplete('initialize', result.result);
               return { sig: result.result.sig, note: `Vault State ${result.addresses.state.toBase58().slice(0, 8)}…` };
             },
           },
@@ -507,29 +575,32 @@ export const useStore = create<ColoyondState>()(
             label: 'Create standard SPL token accounts',
             run: async () => {
               if (!captured.addresses) throw new Error('Vault State was not initialized.');
-              const result = await createVaultTokenAccounts(wallet, captured.addresses.state, input.assets);
-              return { sig: result.sig, note: `${input.assets.length} SPL accounts controlled by the Vault Authority PDA` };
+              const result = await createVaultTokenAccounts(wallet, captured.addresses.state, assets);
+              markComplete('accounts', result);
+              return { sig: result.sig, note: `${assets.length} SPL accounts controlled by the Vault Authority PDA` };
             },
           },
           {
             label: 'Wrap SOL and deposit into the vault',
             run: async () => {
               if (!captured.addresses) throw new Error('Vault State was not initialized.');
-              const result = await depositToVault(wallet, captured.addresses.state, input.deposits, 1n);
+              const result = await depositToVault(wallet, captured.addresses.state, setupInput.deposits, 1n);
               captured.deposit = result;
+              markComplete('deposit', result);
               return { sig: result.sig, note: 'Deposit mints transferable shares at the on-chain NAV' };
             },
           },
           {
-            label: `Register the ${input.cadenceSec}-second MagicBlock task`,
+            label: `Register the ${setupInput.cadenceSec}-second MagicBlock task`,
             run: async () => {
               if (!captured.addresses) throw new Error('Vault State was not initialized.');
-              const result = await scheduleVault(wallet, captured.addresses.state, input.cadenceSec);
+              const result = await scheduleVault(wallet, captured.addresses.state, setupInput.cadenceSec);
               captured.schedule = result;
-              return { sig: result.sig, note: `${Math.ceil(input.cadenceSec * 5_700 / 60)}-slot interval verified; Hydra cranker required` };
+              markComplete('schedule', result);
+              return { sig: result.sig, note: `${Math.ceil(setupInput.cadenceSec * 5_700 / 60)}-slot interval verified; Hydra cranker required` };
             },
           },
-        ]);
+        ], initialSteps);
 
         if (!captured.addresses || !captured.init || !captured.deposit) return null;
         if (!ok) {
@@ -538,14 +609,14 @@ export const useStore = create<ColoyondState>()(
 
         const cfg: VaultConfig = {
           id,
-          name: input.name,
-          createdAt: Date.now(),
+          name: setupInput.name,
+          createdAt: draft.createdAt,
           publicKey: captured.addresses.state.toBase58(),
           shareMint: captured.addresses.shareMint.toBase58(),
-          assets: input.assets,
-          targets: input.targets,
-          thresholdPct: input.thresholdPct,
-          cadenceSec: input.cadenceSec,
+          assets: setupInput.assets,
+          targets: setupInput.targets,
+          thresholdPct: setupInput.thresholdPct,
+          cadenceSec: setupInput.cadenceSec,
           status: ok ? 'active' : 'paused',
           blockedReason: null,
           lastCheckAt: null,
@@ -554,15 +625,18 @@ export const useStore = create<ColoyondState>()(
           lastTradeSig: null,
           lastTradeSlot: null,
           lastWeightEditAt: null,
-          deposited: input.deposits,
+          deposited: setupInput.deposits,
           tradeCount: 0,
         };
 
         set((st) => {
-          const vaults = [cfg, ...st.vaults];
+          const vaults = [cfg, ...st.vaults.filter((vault) => vault.id !== id)];
           const walletId = activeWalletId(st);
           return {
             vaults,
+            vaultSetupDrafts: ok
+              ? Object.fromEntries(Object.entries(st.vaultSetupDrafts).filter(([key]) => key !== ownerKey))
+              : st.vaultSetupDrafts,
             ...(walletId ? { allVaults: { ...st.allVaults, [walletId]: vaults } } : {}),
           };
         });
@@ -577,10 +651,10 @@ export const useStore = create<ColoyondState>()(
         get().log({
           vaultId: id,
           kind: 'owner',
-          summary: `Vault created: ${input.name}`,
+          summary: `Vault created: ${setupInput.name}`,
           detail: `target ${vaultTargetList(cfg)
             .map((t) => `${t.pct.toFixed(0)} ${assetSpec(t.assetId).symbol}`)
-            .join(' · ')} · threshold ${input.thresholdPct.toFixed(1)}%`,
+            .join(' · ')} · threshold ${setupInput.thresholdPct.toFixed(1)}%`,
           sig: captured.deposit.sig,
           slot: captured.deposit.slot,
         });
@@ -708,6 +782,11 @@ export const useStore = create<ColoyondState>()(
           await setVaultActive(wallet, stateAddress, true);
           const result = await scheduleVault(wallet, stateAddress, cfg.cadenceSec);
           get().patchVault(vaultId, { status: 'active', nextCheckAt: null });
+          const ownerKey = wallet.publicKey.toBase58();
+          const draft = get().vaultSetupDrafts[ownerKey];
+          if (draft?.stateAddress === stateAddress.toBase58()) {
+            set((st) => ({ vaultSetupDrafts: Object.fromEntries(Object.entries(st.vaultSetupDrafts).filter(([key]) => key !== ownerKey)) }));
+          }
           get().log({ vaultId, kind: 'owner', summary: 'MagicBlock task registered again', detail: `${cfg.cadenceSec}-second minimum interval`, sig: result.sig, slot: result.slot });
         } catch (err) {
           try { await setVaultActive(wallet, new PublicKey(cfg.publicKey), false); } catch { /* leave paused locally */ }
@@ -779,7 +858,7 @@ export const useStore = create<ColoyondState>()(
       name: 'coloyond.v1',
       version: 5,
       storage: createJSONStorage(() => localStorage),
-      partialize: (st) => ({ wallet: st.wallet, allVaults: st.allVaults, vaults: st.vaults, logs: st.logs }),
+      partialize: (st) => ({ wallet: st.wallet, allVaults: st.allVaults, vaults: st.vaults, vaultSetupDrafts: st.vaultSetupDrafts, logs: st.logs }),
       migrate: (persisted, _version) => {
         const p = persisted as { wallet?: ColoyondState['wallet']; allVaults?: Record<string, VaultConfig[]>; vaults?: Record<string, unknown>[] } | undefined;
         if (p && Array.isArray(p.vaults)) {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
 import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets';
@@ -35,6 +35,10 @@ export function CreateVault() {
   const createVault = useStore((s) => s.createVault);
   const pushScreen = useStore((s) => s.pushScreen);
   const toast = useStore((s) => s.toast);
+  const setupDraft = useStore((s) => {
+    const owner = s.connectedWallet?.publicKey.toBase58() ?? s.wallet?.publicKey;
+    return owner ? s.vaultSetupDrafts[owner] ?? null : null;
+  });
 
   const [name, setName] = useState('Everyday mix');
   const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
@@ -44,6 +48,16 @@ export function CreateVault() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!setupDraft) return;
+    const draft = setupDraft.input;
+    setName(draft.name);
+    setShares({ ...defaultShares, ...draft.targets });
+    setInvestmentSol((draft.deposits.wsol / 1e9).toFixed(9).replace(/0+$/, '').replace(/\.$/, '') || '0');
+    setCadenceSec(draft.cadenceSec);
+    setThreshold(draft.thresholdPct);
+  }, [setupDraft]);
 
   const solAvail = walletBalances ? walletBalances.solLamports : null;
   const targets = normalizeShares(shares);
@@ -105,9 +119,19 @@ export function CreateVault() {
     <Screen>
       <ScreenHeading
         micro="02 / Create a portfolio"
-        title="Set the balance."
-        sub="Pick the assets and their weights, then invest from your SOL balance. The vault starts with wrapped SOL and rebalances toward your mix on schedule."
+        title={setupDraft ? 'Continue setup.' : 'Set the balance.'}
+        sub={setupDraft
+          ? `Resume ${setupDraft.input.name}: confirmed steps and the same Vault State are saved on this device.`
+          : 'Pick the assets and their weights, then invest from your SOL balance. The vault starts with wrapped SOL and rebalances toward your mix on schedule.'}
       />
+
+      {setupDraft ? (
+        <div className="mb-4">
+          <Notice tone="brass">
+            This wallet has a saved setup for <strong>{setupDraft.input.name}</strong>. Continuing will reuse its Vault State and skip the {Object.keys(setupDraft.completed).length} confirmed step{Object.keys(setupDraft.completed).length === 1 ? '' : 's'}.
+          </Notice>
+        </div>
+      ) : null}
 
       <Field label="Portfolio name" error={name.trim() === '' ? 'Portfolio name is required.' : undefined}>
         <input
@@ -252,10 +276,10 @@ export function CreateVault() {
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}
         micro="Setup review · devnet"
-        title="Review before signing"
+        title={setupDraft ? 'Resume saved setup' : 'Review before signing'}
         footer={
           <Button variant="primary" full loading={submitting} disabled={errors.length > 0} onClick={onConfirm}>
-            Create on devnet
+            {setupDraft ? 'Resume on devnet' : 'Create on devnet'}
           </Button>
         }
       >
@@ -281,7 +305,7 @@ export function CreateVault() {
             <li>· Creates standard SPL token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus zero-target WSOL for SOL funding'}.</li>
             <li>· Wraps your SOL in your wallet's WSOL account, deposits it, then mints shares using on-chain NAV.</li>
             <li>· Delegates only the Executor PDA. Vault State and asset token accounts stay on Solana.</li>
-            <li>· Requests one Hydra task at the selected delay; execution depends on an active cranker, fresh prices, and more than 0.1% movement in a Pyth-backed asset.</li>
+            <li>· Requests one Hydra task at the selected delay; execution depends on an active cranker, valid Pyth feeds, and more than 0.1% movement in a Pyth-backed asset.</li>
           </ul>
         </div>
         <div className="mt-4">
@@ -289,7 +313,7 @@ export function CreateVault() {
         </div>
         <div className="mt-4">
           <Notice tone="petrol" title="How the investment is executed">
-            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}% and an oracle-backed price moves more than 0.1%. The owner pays to configure the minimum delay; a running Hydra cranker pays trigger fees. The vault program checks time, price freshness, slippage and replay protection before moving SPL assets.
+            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}% and an oracle-backed price moves more than 0.1%. The owner pays to configure the minimum delay; a running Hydra cranker pays trigger fees. The vault program checks time, feed identity and verification, slippage and replay protection before moving SPL assets.
           </Notice>
         </div>
       </Sheet>
