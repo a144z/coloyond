@@ -9,6 +9,7 @@ import { fetchReserveState, executeReserveSwap, ensureMint, type ReserveState } 
 import { buildFundTx, buildProvisionTx, buildWithdrawTx, buildCloseTx, fetchVaultBalances } from './solana/vault';
 import { assetSpec, registerCoinbaseAssets, type AssetId } from './solana/assets';
 import { fetchCoinbaseUniverse, type UniverseAsset } from './solana/coinbase';
+import { initChainlinkFeeds } from './solana/chainlink';
 import { fmtToken } from './format';
 
 /* ---------------- types ---------------- */
@@ -252,14 +253,16 @@ export const useStore = create<ColoyondState>()(
         cachedMnemonic = mnemonic;
         cachedWalletKp = kp;
         const publicKey = kp.publicKey.toBase58();
+        // Load existing vaults for this wallet (if any) from allVaults
+        const existingVaults = useStore.getState().allVaults[publicKey] ?? [];
         // Batch wallet + tab in one set to avoid subscription race
         set({
           wallet: { mnemonic, publicKey, createdAt: Date.now() },
           activeTab: 'portfolios',
           stack: [{ id: 'portfolios' }],
-          vaults: [],
+          vaults: existingVaults,
         });
-        get().log({ vaultId: null, kind: 'owner', summary: 'Wallet created on this device' });
+        get().log({ vaultId: null, kind: 'owner', summary: 'Wallet imported on this device' });
       },
 
       resetApp: () => {
@@ -758,6 +761,14 @@ export const useStore = create<ColoyondState>()(
         logs: st.logs,
         universe: st.universe,
       }),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<ColoyondState> | undefined;
+        const walletId = p?.wallet?.publicKey;
+        const allVaults = p?.allVaults ?? current.allVaults;
+        // Reconstruct the active wallet's vaults from allVaults on every rehydration
+        const vaults = walletId ? (allVaults[walletId] ?? []) : current.vaults;
+        return { ...current, ...p, allVaults, vaults };
+      },
       migrate: (persisted, version) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const p: any = persisted ?? {};
@@ -789,13 +800,7 @@ export const useStore = create<ColoyondState>()(
           delete p.vaults;
         }
 
-        return {
-          wallet: p.wallet ?? null,
-          allVaults: p.allVaults ?? {},
-          vaults: p.wallet?.publicKey ? (p.allVaults?.[p.wallet.publicKey] ?? []) : [],
-          logs: p.logs ?? [],
-          universe: p.universe ?? [],
-        };
+        return p;
       },
     },
   ),
@@ -806,31 +811,29 @@ export const useStore = create<ColoyondState>()(
 const persistedUniverse = useStore.getState().universe;
 if (persistedUniverse && persistedUniverse.length > 0) registerCoinbaseAssets(persistedUniverse);
 
+/* Start Chainlink OCR2 feed subscriptions so the price-book cache has live
+ * on-chain data before the first refreshPrice tick. */
+initChainlinkFeeds();
+
 /* Per-wallet vault sync: when the wallet changes, load its vaults from allVaults.
- * When vaults are edited, save them back to allVaults[walletId]. */
+ * Vault edits are already synced to allVaults by patchVault, so no reverse sync is needed. */
 let prevWalletId = useStore.getState().wallet?.publicKey ?? null;
 
-useStore.subscribe((state, prevState) => {
+useStore.subscribe((state) => {
   const walletId = state.wallet?.publicKey ?? null;
-  const vaultsChanged = state.vaults !== prevState.vaults;
 
   // Wallet switched → load the new wallet's vaults
-  if (walletId && walletId !== prevWalletId) {
-    const walletVaults = state.allVaults[walletId] ?? [];
-    if (walletVaults !== state.vaults) {
-      useStore.setState({ vaults: walletVaults });
+  if (walletId !== prevWalletId) {
+    prevWalletId = walletId;
+    if (walletId) {
+      const walletVaults = state.allVaults[walletId] ?? [];
+      if (walletVaults !== state.vaults) {
+        useStore.setState({ vaults: walletVaults });
+      }
     }
+  } else {
+    prevWalletId = walletId;
   }
-  // Vaults edited → save back to allVaults under current wallet
-  else if (walletId && vaultsChanged) {
-    if (state.allVaults[walletId] !== state.vaults) {
-      useStore.setState({
-        allVaults: { ...state.allVaults, [walletId]: state.vaults },
-      });
-    }
-  }
-
-  prevWalletId = walletId;
 });
 
 /* ---------------- derived helpers ---------------- */

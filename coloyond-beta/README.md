@@ -143,8 +143,7 @@ and pays their fees from its own budget.
   ("a funded test reserve is the counterparty" is the product's own framing),
   meaningless for mainnet — in production the reserve is a backend service
   and the mint authority lives off-device.
-- **The price feed is Coinbase/Binance spot**, not an on-chain oracle. The
-  staleness gate (60s) is enforced before any automated trade.
+- **The price feed is Chainlink OCR2 on-chain oracle (devnet) for major assets (SOL, BTC, ETH, LINK), with Coinbase/Binance spot as fallback** for the rest of the universe. The staleness gate (60s) is enforced before any automated trade.
 - **tUSD is synthetic.** Six decimals, fixed address, mint authority = the
   demo reserve. Not backed by dollars, not redeemable as USDC.
 - **The asset universe is Coinbase's full list.** The core assets (WSOL,

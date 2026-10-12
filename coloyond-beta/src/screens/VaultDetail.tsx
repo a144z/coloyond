@@ -38,6 +38,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   const bal = useStore((s) => s.vaultBalances[vaultId] ?? null);
   const price = useStore((s) => s.price);
   const logs = useStore((s) => s.logs);
+  const walletBalances = useStore((s) => s.walletBalances);
   const pauseVault = useStore((s) => s.pauseVault);
   const resumeVault = useStore((s) => s.resumeVault);
 
@@ -188,6 +189,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
               <th scope="col" className="py-2 font-medium">Asset</th>
               <th scope="col" className="py-2 text-right font-medium">Target</th>
               <th scope="col" className="py-2 text-right font-medium">Actual</th>
+              <th scope="col" className="py-2 text-right font-medium">USD Value</th>
             </tr>
           </thead>
           <tbody>
@@ -203,10 +205,21 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
                   </td>
                   <td className="py-2.5 text-right font-bold">{(vault.targets[id] ?? 0).toFixed(2)}%</td>
                   <td className="py-2.5 text-right font-bold">{row ? `${row.pct.toFixed(2)}%` : '—'}</td>
+                  <td className="py-2.5 text-right font-bold">{row ? fmtUsd(row.usd) : '—'}</td>
                 </tr>
               );
             })}
           </tbody>
+          {valued ? (
+            <tfoot>
+              <tr className="border-t-2 border-ink">
+                <td colSpan={3} className="py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-iron">
+                  Total Vault Value
+                </td>
+                <td className="py-2.5 text-right text-[13px] font-bold">{fmtUsd(valued.totalUsd)}</td>
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
 
@@ -214,12 +227,14 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         <LedgerPanel
           stripe="Holdings"
           meta={
-            priceOk && price
-              ? vault.assets
-                  .map((id) => `${assetSpec(id).symbol} ${fmtUsd(priceOf(price, id) ?? 0)}`)
-                  .slice(0, 2)
-                  .join(' · ') + (vault.assets.length > 2 ? ' …' : '')
-              : 'price unavailable'
+            valued
+              ? `Total ${fmtUsd(valued.totalUsd)}`
+              : priceOk && price
+                ? vault.assets
+                    .map((id) => `${assetSpec(id).symbol} ${fmtUsd(priceOf(price, id) ?? 0)}`)
+                    .slice(0, 2)
+                    .join(' · ') + (vault.assets.length > 2 ? ' …' : '')
+                : 'price unavailable'
           }
         >
           {bal ? (
@@ -227,18 +242,28 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
               rows={[
                 ...assetList()
                   .filter((spec) => (bal.tokens[spec.id] ?? 0) > 0)
-                  .map((spec) => ({
-                    k: (
-                      <span className="flex items-center gap-2">
-                        <AssetSwatch color={spec.color} /> {spec.symbol}
-                      </span>
-                    ),
-                    v:
-                      vault.blockedReason === 'price'
-                        ? fmtTokenFull(bal.tokens[spec.id] ?? 0, spec.decimals)
-                        : fmtToken(bal.tokens[spec.id] ?? 0, spec.decimals, 6),
-                  })),
-                { k: 'Live USD value', v: valued ? fmtUsd(valued.totalUsd) : 'Unavailable' },
+                  .map((spec) => {
+                    const row = valued?.rows.find((r) => r.assetId === spec.id);
+                    return {
+                      k: (
+                        <span className="flex items-center gap-2">
+                          <AssetSwatch color={spec.color} /> {spec.symbol}
+                        </span>
+                      ),
+                      v: (
+                        <span className="flex flex-col items-end gap-0.5">
+                          <span>{vault.blockedReason === 'price'
+                            ? fmtTokenFull(bal.tokens[spec.id] ?? 0, spec.decimals)
+                            : fmtToken(bal.tokens[spec.id] ?? 0, spec.decimals, 6)}</span>
+                          {row ? (
+                            <span className="text-[10px] font-medium text-iron">
+                              {fmtUsd(row.usd)} · {row.pct.toFixed(1)}%
+                            </span>
+                          ) : null}
+                        </span>
+                      ),
+                    };
+                  }),
                 { k: 'Live weight deviation', v: drift !== null ? `${drift.toFixed(2)}%` : 'Unavailable' },
               ]}
             />
@@ -284,6 +309,33 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             minted on demand; WSOL inventory is finite. Below 0.002 SOL the vault halts trades
             instead of trapping assets.
           </p>
+        </LedgerPanel>
+      </div>
+
+      <div className="mt-4">
+        <LedgerPanel stripe="Your wallet" meta="Owner balance">
+          {walletBalances ? (
+            <KeyValue
+              rows={[
+                { k: 'SOL · unwrapped', v: `${fmtSol(walletBalances.solLamports, 6)}` },
+                ...assetList()
+                  .filter((spec) => spec.core || (walletBalances.tokens[spec.id] ?? 0) > 0)
+                  .map((spec) => ({
+                    k: (
+                      <span className="flex items-center gap-2">
+                        <AssetSwatch color={spec.color} /> {spec.symbol}
+                      </span>
+                    ),
+                    v: fmtToken(walletBalances.tokens[spec.id] ?? 0, spec.decimals, 6),
+                  })),
+              ]}
+            />
+          ) : (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          )}
         </LedgerPanel>
       </div>
 
@@ -624,6 +676,28 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
         target; a 120-second cooldown applies between edits.
       </p>
       <LedgerPanel stripe="New target" meta={nextLabel} bodyClassName="pt-3">
+        {(() => {
+          const entries = assetList()
+            .filter((s) => (shares[s.id] ?? 0) > 0)
+            .map((s) => ({ assetId: s.id, pct: nextTargets[s.id] ?? 0 }));
+          return (
+            <div className="mb-4">
+              <MixBar
+                segments={segmentsOf(entries)}
+                height={24}
+                interactive
+                onChange={(nextSegs) => {
+                  const newShares = { ...shares };
+                  for (const seg of nextSegs) {
+                    newShares[seg.key] = Math.round(seg.pct);
+                  }
+                  setShares(newShares);
+                }}
+                ariaLabel="Drag handles to adjust target weights"
+              />
+            </div>
+          );
+        })()}
         <WeightSliders shares={shares} onChange={setShares} ariaLabel="New target weights" />
       </LedgerPanel>
       <p className="mt-3 text-[11px] leading-relaxed text-iron">

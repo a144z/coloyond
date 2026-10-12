@@ -30,6 +30,16 @@ let lastUniverseFetch = 0;
 let lastBalanceFetch = 0;
 let lastReserveFetch = 0;
 let lastRpcFetch = 0;
+
+/** Stagger initial polls so the first tick doesn't blast every RPC at once. */
+function staggerPolls(): void {
+  const now = Date.now();
+  lastPriceFetch = now;                                // price: immediate (UX-critical)
+  lastBalanceFetch = now - BALANCE_POLL_MS + 2_000;    // balances: +2 s
+  lastRpcFetch = now - RPC_POLL_MS + 5_000;            // rpc health: +5 s
+  lastReserveFetch = now - RESERVE_POLL_MS + 8_000;    // reserve: +8 s
+  lastUniverseFetch = now - UNIVERSE_POLL_MS + 12_000; // universe: +12 s
+}
 let infraEnsured = false;
 
 /** Minimum in-app bootstrap targets (raw) when the app is first to run. */
@@ -42,6 +52,7 @@ const MINIMUM_RESERVE_TARGETS: Partial<Record<AssetId, number>> = {
 
 export function ensureScheduler(): void {
   if (timer) return;
+  staggerPolls();
   timer = setInterval(() => void tick(), 3000);
   void tick();
 }

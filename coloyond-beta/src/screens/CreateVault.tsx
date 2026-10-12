@@ -12,6 +12,7 @@ import { Sheet } from '../components/ui/Sheet';
 import { Field, inputClass, selectClass } from '../components/ui/Field';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
+import { MixBar, segmentsOf } from '../components/ui/MixBar';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
 
 const cadenceLabels: Record<number, string> = {
@@ -141,6 +142,23 @@ export function CreateVault() {
         meta={selected.length >= 2 ? selected.map((s) => (targets[s.id] ?? 0).toFixed(0)).join(' / ') : '—'}
         bodyClassName="pt-3"
       >
+        {selected.length >= 2 && (
+          <div className="mb-4">
+            <MixBar
+              segments={segmentsOf(selected.map((s) => ({ assetId: s.id, pct: targets[s.id] ?? 0 })))}
+              height={24}
+              interactive
+              onChange={(nextSegs) => {
+                const newShares = { ...shares };
+                for (const seg of nextSegs) {
+                  newShares[seg.key] = Math.round(seg.pct);
+                }
+                setShares(newShares);
+              }}
+              ariaLabel="Drag handles to adjust target weights"
+            />
+          </div>
+        )}
         <WeightSliders shares={shares} onChange={setShares} />
       </LedgerPanel>
 

@@ -83,7 +83,7 @@ export function SystemScreen() {
                       ),
                       v: entry
                         ? `${fmtUsd(entry.usd)} · ${
-                            entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
+                            entry.source === 'chainlink' ? 'Chainlink oracle' : entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
                           }`
                         : 'unavailable',
                     };
