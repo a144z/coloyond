@@ -18,6 +18,8 @@
     "canary:standard-ata": "node scripts/canary-read-standard-ata.mjs",
     "schedule:standard-vault": "node scripts/schedule-standard-vault.mjs",
     "crank:standard-vault": "node scripts/run-standard-vault-cranker.mjs",
+    "crank:vaults": "node scripts/run-vault-cranker.mjs",
+    "crank:vaults:self-check": "node scripts/run-vault-cranker.mjs --self-check",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android"
   },
