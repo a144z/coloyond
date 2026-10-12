@@ -10,7 +10,7 @@ import { LedgerPanel } from '../components/ui/LedgerPanel';
 import { Sheet } from '../components/ui/Sheet';
 import { Field, inputClass, selectClass } from '../components/ui/Field';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
-import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
+import { WeightSliders, normalizeShares, type WeightLocks } from '../components/ui/WeightSliders';
 import { MixBar, segmentsOf } from '../components/ui/MixBar';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
 
@@ -38,6 +38,7 @@ export function CreateVault() {
 
   const [name, setName] = useState('Everyday mix');
   const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
+  const [locked, setLocked] = useState<WeightLocks>({});
   const [investmentSol, setInvestmentSol] = useState('0.20');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
@@ -46,8 +47,8 @@ export function CreateVault() {
   const [submitting, setSubmitting] = useState(false);
 
   const solAvail = walletBalances ? walletBalances.solLamports : null;
-  const targets = normalizeShares(shares);
-  const selected = assetList().filter((s) => (shares[s.id] ?? 0) > 0);
+  const targets = normalizeShares(shares, undefined, locked);
+  const selected = assetList().filter((s) => (targets[s.id] ?? 0) > 0);
   const selectedIds = selected.map((s) => s.id);
   const targetLabel = selected.map((s) => `${(targets[s.id] ?? 0).toFixed(0)} ${s.symbol}`).join(' · ');
 
@@ -60,6 +61,10 @@ export function CreateVault() {
     const errs: string[] = [];
     if (!name.trim()) errs.push('Portfolio name is required.');
     if (selected.length < 2) errs.push('Pick at least two assets for the mix.');
+    const targetTotal = selected.reduce((sum, s) => sum + (targets[s.id] ?? 0), 0);
+    if (Math.abs(targetTotal - 100) > 0.05) {
+      errs.push(`Unlocked weights must cover the remaining ${(100 - targetTotal).toFixed(0)}% of the mix.`);
+    }
     if (investmentSolUnits === null) errs.push('Enter a valid SOL investment amount.');
     else if (lamportsFromSol(investmentSolUnits) <= 0) errs.push('Invest at least 0.000000001 SOL.');
     if (solAvail === null) errs.push('Waiting for your wallet SOL balance.');
@@ -73,7 +78,7 @@ export function CreateVault() {
     }
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, shares, investmentSol, solAvail]);
+  }, [name, shares, locked, investmentSol, solAvail]);
 
   async function onConfirm() {
     if (submitting || errors.length > 0) return;
@@ -130,15 +135,20 @@ export function CreateVault() {
             segments={segmentsOf(selected.map((s) => ({ assetId: s.id, pct: targets[s.id] ?? 0 })))}
             height={20}
             interactive
+            lockedKeys={Object.keys(locked)}
             onChange={(segments) => setShares((previous) => {
               const next = { ...previous };
-              for (const segment of segments) next[segment.key as AssetId] = Math.round(segment.pct);
+              for (const segment of segments) {
+                const id = segment.key as AssetId;
+                if (locked[id] !== undefined) continue; // pinned weights are not draggable
+                next[id] = Math.round(segment.pct);
+              }
               return next;
             })}
             ariaLabel="Drag allocation handles to change target percentages"
           />
         ) : null}
-        <WeightSliders shares={shares} onChange={setShares} />
+        <WeightSliders shares={shares} onChange={setShares} locked={locked} onLockedChange={setLocked} />
       </LedgerPanel>
 
       <div className="mt-3">
