@@ -1,3 +1,4 @@
+import { LandingPage } from "./LandingPage.js";
 import { ColoyondApp } from "./ColoyondApp.js";
 import { AuctionWorkbench } from "./rebalancing/AuctionWorkbench.js";
 import { SymmetryDevnetPage } from "./portfolio/SymmetryDesk.js";
@@ -6,6 +7,9 @@ import { EtfTransactionsPage } from "./etf/EtfTransactionsPage.js";
 
 export function App() {
   const path = window.location.pathname.replace(/\/$/, "");
+  if (path === "/app") {
+    return <ColoyondApp />;
+  }
   if (path === "/etf-devnet") {
     return <DevnetReadPage />;
   }
@@ -18,5 +22,5 @@ export function App() {
   if (path === "/symmetry-devnet") {
     return <SymmetryDevnetPage />;
   }
-  return <ColoyondApp />;
+  return <LandingPage />;
 }
