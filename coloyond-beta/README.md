@@ -59,3 +59,5 @@ Useful commands:
 | `npm run schedule:standard-vault` | Register or replace one vault’s Hydra task |
 | `npm run crank:vaults` | Run the multi-vault Hydra task cranker |
 | `npm run crank:vaults:self-check` | Run offline cranker validation checks |
+| `npm run crank:vaults:install-agent` | Install a macOS LaunchAgent for the multi-vault cranker (does not start it) |
+| `npm run crank:vaults:agent:self-check` | Validate LaunchAgent generation offline |

@@ -20,6 +20,8 @@
     "crank:standard-vault": "node scripts/run-standard-vault-cranker.mjs",
     "crank:vaults": "node scripts/run-vault-cranker.mjs",
     "crank:vaults:self-check": "node scripts/run-vault-cranker.mjs --self-check",
+    "crank:vaults:install-agent": "node scripts/install-cranker-launch-agent.mjs",
+    "crank:vaults:agent:self-check": "node scripts/install-cranker-launch-agent.mjs --self-check",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android"
   },

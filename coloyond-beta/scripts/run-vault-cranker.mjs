@@ -20,8 +20,10 @@ if (process.argv.includes('--self-check')) {
   process.exit(0);
 }
 
-const states = parseStates(process.env.COLONYOND_VAULT_STATES ?? '');
-const signerPaths = parseSignerPaths(process.env.COLONYOND_CRANKER_SIGNERS ?? '');
+const configPath = process.env.COLONYOND_CRANKER_CONFIG;
+const fileConfig = configPath ? parseConfig(await readFile(configPath, 'utf8')) : {};
+const states = parseStates(process.env.COLONYOND_VAULT_STATES ?? fileConfig.vaultStates ?? '');
+const signerPaths = parseSignerPaths(process.env.COLONYOND_CRANKER_SIGNERS ?? JSON.stringify(fileConfig.signers ?? {}));
 if (!states.length) throw new Error('Set COLONYOND_VAULT_STATES to comma-separated active Vault State PDA addresses.');
 for (const state of states) {
   if (!signerPaths[state]) throw new Error(`No signer path configured for vault ${state}.`);
@@ -158,7 +160,7 @@ function decodeInstruction(region) {
 }
 
 function parseStates(value) {
-  const entries = value.split(',').map((item) => item.trim()).filter(Boolean);
+  const entries = (Array.isArray(value) ? value : value.split(',')).map((item) => String(item).trim()).filter(Boolean);
   const states = entries.map((item) => new PublicKey(item).toBase58());
   if (new Set(states).size !== states.length) throw new Error('COLONYOND_VAULT_STATES contains duplicate addresses.');
   return states;
@@ -169,6 +171,15 @@ function parseSignerPaths(value) {
   try { mapping = JSON.parse(value); } catch { throw new Error('COLONYOND_CRANKER_SIGNERS must be a JSON object mapping vault state addresses to signer file paths.'); }
   if (!mapping || Array.isArray(mapping) || typeof mapping !== 'object') throw new Error('COLONYOND_CRANKER_SIGNERS must be a JSON object.');
   return mapping;
+}
+
+function parseConfig(value) {
+  let config;
+  try { config = JSON.parse(value); } catch { throw new Error('Cranker config must be valid JSON.'); }
+  if (!config || Array.isArray(config) || typeof config !== 'object') throw new Error('Cranker config must be a JSON object.');
+  if (config.vaultStates !== undefined && !Array.isArray(config.vaultStates)) throw new Error('Cranker config vaultStates must be an array.');
+  if (config.signers !== undefined && (!config.signers || Array.isArray(config.signers) || typeof config.signers !== 'object')) throw new Error('Cranker config signers must be an object.');
+  return config;
 }
 
 function safeNumber(value, label) {
@@ -187,6 +198,7 @@ function selfCheck() {
   const states = parseStates(`${state}, ${second}`);
   if (states.length !== 2 || states[0] !== state.toBase58()) throw new Error('State-list parsing self-check failed.');
   if (parseSignerPaths(`{"${state}":"/tmp/signer.json"}`)[state.toBase58()] !== '/tmp/signer.json') throw new Error('Signer-map parsing self-check failed.');
+  if (parseConfig(`{"vaultStates":["${state}"],"signers":{"${state}":"/tmp/signer.json"}}`).vaultStates[0] !== state.toBase58()) throw new Error('Config parsing self-check failed.');
   const statePk = new PublicKey(states[0]);
   const executor = PublicKey.findProgramAddressSync([PROGRAM_SEED, statePk.toBuffer()], PROGRAM_ID)[0];
   const config = PublicKey.findProgramAddressSync([CONFIG_SEED, statePk.toBuffer()], PROGRAM_ID)[0];
@@ -203,7 +215,7 @@ function selfCheck() {
   let rejected = false;
   try { readTask(taskData, wrongVault); } catch { rejected = true; }
   if (!rejected) throw new Error('Foreign task filter self-check failed.');
-  log('self_check_passed', { checks: ['vault-list-parsing', 'signer-map-parsing', 'valid-task', 'foreign-task-rejected'] });
+  log('self_check_passed', { checks: ['vault-list-parsing', 'signer-map-parsing', 'config-parsing', 'valid-task', 'foreign-task-rejected'] });
 }
 
 function encodeTaskData(callback) {

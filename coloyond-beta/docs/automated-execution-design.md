@@ -37,7 +37,25 @@ COLONYOND_CRANKER_SIGNERS='{"VaultStatePda1":"target/sponsor-1.json","VaultState
 npm run crank:vaults
 ```
 
-Each sponsor file must be the signer already recorded in that vault's Scheduler Config and delegated to the same ER as its Executor. The runner checks vault state, config ownership/sponsor, ER delegation, Hydra task owner, 5,700-slot interval, and callback PDA accounts before triggering. It never prints signer contents. Run `npm run crank:vaults:self-check` for offline parsing and task-filter checks. This remains a process that an operator must keep running and monitor; it is not a hosted or supervised service.
+Each sponsor file must be the signer already recorded in that vault's Scheduler Config and delegated to the same ER as its Executor. The runner checks vault state, config ownership/sponsor, ER delegation, Hydra task owner, 5,700-slot interval, and callback PDA accounts before triggering. It never prints signer contents. Run `npm run crank:vaults:self-check` for offline parsing and task-filter checks.
+
+On macOS, the repo includes a per-user LaunchAgent installer so the process can start at login and restart if it exits. Prepare an absolute-path JSON config, for example:
+
+```json
+{
+  "vaultStates": ["<vault-state-pda>"],
+  "signers": { "<vault-state-pda>": "/absolute/path/to/hydra-sponsor.json" }
+}
+```
+
+Then install the agent (installation writes a plist under `~/Library/LaunchAgents` but does not start it):
+
+```sh
+COLONYOND_CRANKER_CONFIG="$PWD/cranker.json" npm run crank:vaults:install-agent
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"
+```
+
+Use `launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"` to stop it. Logs go to `~/Library/Logs/Coloyond/`. This is a local operator-managed service, not a hosted executor: the Mac must stay awake and connected, and MagicBlock must keep the configured ER/task available.
 
 ## Local Devnet keypair
 
