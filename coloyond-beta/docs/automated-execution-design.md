@@ -59,12 +59,12 @@ Create a private operator keypair file for each ER, fund it on Devnet, and set i
 }
 ```
 
-The ER URL is the `fqdn` returned by MagicBlock for a delegated vault Executor. If vaults are delegated to different ERs, add one entry and a distinct operator keypair for each. Run the supervised fleet in a terminal with `COLONYOND_HYDRA_CRANKER_CONFIG=/absolute/path/to/crankers.json npm run crank:service`; `npm run crank:service:self-check` validates the config and generated arguments offline. The optional Prometheus port should only be enabled when firewall rules restrict access to trusted monitoring clients.
+The ER URL is the `fqdn` returned by MagicBlock for a delegated vault Executor. If vaults are delegated to different ERs, add one entry and a distinct operator keypair for each. Save the device-specific config as `target/hydra-cranker-fleet.json` (the ignored `target/` directory keeps it out of Git), then run `npm run crank:service` from the repository. The service resolves this default relative to its own script, so it works from any current directory. Set `COLONYOND_HYDRA_CRANKER_CONFIG=/absolute/path/to/crankers.json` only to override it. `npm run crank:service:validate-config` checks the configured binary and keys; `npm run crank:service:self-check` validates argument generation offline. The optional Prometheus port should only be enabled when firewall rules restrict access to trusted monitoring clients.
 
 On macOS, install a per-user LaunchAgent to start at login and restart the fleet if it exits. The installer writes a plist but does not start it:
 
 ```sh
-COLONYOND_HYDRA_CRANKER_CONFIG="$PWD/crankers.json" npm run crank:service:install-agent
+npm run crank:service:install-agent
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"
 ```
 

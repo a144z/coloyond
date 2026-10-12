@@ -60,3 +60,9 @@ Useful commands:
 | `npm run crank:service:self-check` | Validate service configuration and command generation offline |
 | `npm run crank:service:install-agent` | Install a macOS LaunchAgent for the official cranker service (does not start it) |
 | `npm run crank:service:agent:self-check` | Validate LaunchAgent generation offline |
+
+The service reads `target/hydra-cranker-fleet.json` by default, so run
+`npm run crank:service` from the repository without an environment prefix. Keep
+that ignored config local to each device because binary and operator-key paths
+are machine-specific. Set `COLONYOND_HYDRA_CRANKER_CONFIG=/absolute/path/to/config.json`
+only when you need to override the default.

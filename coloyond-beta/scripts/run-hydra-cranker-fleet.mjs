@@ -5,8 +5,11 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 
-const configPath = process.env.COLONYOND_HYDRA_CRANKER_CONFIG;
+const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const defaultConfigPath = path.join(projectDir, 'target', 'hydra-cranker-fleet.json');
+const configPath = resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG);
 const children = new Set();
 let stopping = false;
 
@@ -39,10 +42,13 @@ log('service_starting', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ n
 await Promise.all(config.rollups.map(runRollup));
 
 async function loadConfig() {
-  if (!configPath || !path.isAbsolute(configPath)) {
-    throw new Error('Set COLONYOND_HYDRA_CRANKER_CONFIG to an absolute JSON config path.');
-  }
   return parseConfig(await readFile(configPath, 'utf8'));
+}
+
+function resolveConfigPath(override) {
+  if (override === undefined) return defaultConfigPath;
+  if (!path.isAbsolute(override)) throw new Error('COLONYOND_HYDRA_CRANKER_CONFIG must be an absolute JSON config path.');
+  return override;
 }
 
 async function runRollup(rollup) {
@@ -135,6 +141,14 @@ function requiredWsUrl(value, label) {
 function log(event, fields = {}) { console.log(JSON.stringify({ event, time: new Date().toISOString(), ...fields })); }
 
 function selfCheck() {
+  if (resolveConfigPath(undefined) !== path.join(projectDir, 'target', 'hydra-cranker-fleet.json')) {
+    throw new Error('Default config path self-check failed.');
+  }
+  if (resolveConfigPath('/tmp/crankers.json') !== '/tmp/crankers.json') throw new Error('Config override self-check failed.');
+  let relativeOverrideRejected = false;
+  try { resolveConfigPath('crankers.json'); } catch { relativeOverrideRejected = true; }
+  if (!relativeOverrideRejected) throw new Error('Relative config override self-check failed.');
+
   const config = parseConfig(JSON.stringify({
     binaryPath: '/opt/homebrew/bin/hydra-cranker',
     rollups: [{ name: 'devnet-er-a', rpcUrl: 'https://er.example/', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/a.json', metricsPort: 9101 }],

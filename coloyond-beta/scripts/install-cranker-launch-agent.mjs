@@ -7,13 +7,15 @@ import { fileURLToPath } from 'node:url';
 
 const label = 'com.coloyond.vault-cranker';
 const home = os.homedir();
-const configPath = process.env.COLONYOND_HYDRA_CRANKER_CONFIG;
 const plistPath = path.join(home, 'Library', 'LaunchAgents', `${label}.plist`);
 const logDir = path.join(home, 'Library', 'Logs', 'Coloyond');
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runnerPath = path.join(projectDir, 'scripts', 'run-hydra-cranker-fleet.mjs');
+const defaultConfigPath = path.join(projectDir, 'target', 'hydra-cranker-fleet.json');
+const configPath = process.env.COLONYOND_HYDRA_CRANKER_CONFIG ?? defaultConfigPath;
 
 if (process.argv.includes('--self-check')) {
+  if (!path.isAbsolute(defaultConfigPath)) throw new Error('Default config path self-check failed.');
   const xml = renderPlist({ nodePath: '/usr/local/bin/node', runnerPath: '/tmp/runner.mjs', projectDir: '/tmp/project', configPath: '/tmp/config.json', logDir: '/tmp/logs' });
   if (!xml.includes('<key>KeepAlive</key><true/>') || !xml.includes('<string>/tmp/config.json</string>')) throw new Error('LaunchAgent plist self-check failed.');
   if (escapeXml('a&b<c>') !== 'a&amp;b&lt;c&gt;') throw new Error('XML escaping self-check failed.');
@@ -22,7 +24,7 @@ if (process.argv.includes('--self-check')) {
 }
 
 if (!configPath || !path.isAbsolute(configPath)) {
-  throw new Error('Set COLONYOND_HYDRA_CRANKER_CONFIG to the absolute path of the official Hydra cranker fleet JSON config before installing.');
+  throw new Error('COLONYOND_HYDRA_CRANKER_CONFIG must be an absolute JSON config path.');
 }
 if (configPath.includes('\n') || configPath.includes('\0')) throw new Error('Cranker config path contains invalid characters.');
 
