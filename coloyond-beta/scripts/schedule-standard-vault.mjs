@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Register one 60-second Hydra task for a standard-SPL vault on Devnet. */
+/** Register a configurable, guarded Hydra task for a standard-SPL vault on Devnet. */
 import { createHash } from 'node:crypto';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -33,7 +33,11 @@ import {
 const PROGRAM_ID = new PublicKey('HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d');
 const HYDRA_ID = new PublicKey('eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf');
 const INSTRUCTIONS_SYSVAR = new PublicKey('Sysvar1nstructions1111111111111111111111111');
-const INTERVAL_SLOTS = 5_700; // About 61 seconds at the observed Devnet ER slot rate.
+const MIN_INTERVAL_SECONDS = Number(process.env.COLONYOND_CRANK_INTERVAL_SECONDS ?? 60);
+if (!Number.isInteger(MIN_INTERVAL_SECONDS) || MIN_INTERVAL_SECONDS < 60 || MIN_INTERVAL_SECONDS > 86_400) {
+  throw new Error('COLONYOND_CRANK_INTERVAL_SECONDS must be a whole number from 60 to 86400.');
+}
+const INTERVAL_SLOTS = Math.ceil(MIN_INTERVAL_SECONDS * 5_700 / 60);
 const SPONSOR_FUNDING_LAMPORTS = 5_000_000;
 const forceReplace = process.env.COLONYOND_FORCE_REPLACE === '1';
 const BASE_RPC = process.env.COLONYOND_BASE_RPC ?? 'https://rpc.magicblock.app/devnet';
@@ -68,16 +72,19 @@ const assets = Array.from({ length: assetCount }, (_, index) => {
     feed: new PublicKey(stateInfo.data.subarray(offset + 35, offset + 67)),
   };
 });
-const [authority, shareMint, executor, schedulerConfig, marketAuthority] = [
+const [authority, shareMint, executor, schedulerConfig, crankPolicy, marketAuthority] = [
   derive([Buffer.from('vault-authority'), stateAddress.toBuffer()]),
   derive([Buffer.from('share-mint'), stateAddress.toBuffer()]),
   derive([Buffer.from('executor'), stateAddress.toBuffer()]),
   derive([Buffer.from('scheduler-config'), stateAddress.toBuffer()]),
+  derive([Buffer.from('crank-policy'), stateAddress.toBuffer()]),
   derive([Buffer.from('market-authority')]),
 ];
 const vaultTokens = assets.map(({ mint }) => getAssociatedTokenAddressSync(mint, authority, true));
 const marketTokens = assets.map(({ mint }) => getAssociatedTokenAddressSync(mint, marketAuthority, true));
 const feeds = assets.map(({ feed }) => feed).filter((feed) => !feed.equals(PublicKey.default));
+if (feeds.length === 0) throw new Error('This vault has no Pyth-backed asset for the 0.1% movement guard.');
+await setCrankPolicy(MIN_INTERVAL_SECONDS);
 
 // Ensure the standard SPL market ATAs exist; these are reserve accounts, never vault custody.
 const marketSetup = new Transaction();
@@ -196,7 +203,8 @@ for (const candidate of candidates) {
   if (!crankInfo) continue;
   if (!crankInfo.owner.equals(HYDRA_ID)) throw new Error(`Task PDA ${candidateCrank} has an unexpected owner.`);
   const interval = Number(crankInfo.data.readBigUInt64LE(72));
-  if (!forceReplace && candidate.equals(cranker.publicKey) && interval === INTERVAL_SLOTS) {
+  if (!forceReplace && candidate.equals(cranker.publicKey) && interval === INTERVAL_SLOTS &&
+      callbackMatches(crankInfo.data, stateAddress, executor, schedulerConfig, crankPolicy)) {
     currentTask = { sponsor: candidate, crank: candidateCrank, interval };
     continue;
   }
@@ -229,6 +237,7 @@ if (!currentTask) {
     { pubkey: stateAddress, isWritable: false },
     { pubkey: executor, isWritable: true },
     { pubkey: schedulerConfig, isWritable: false },
+    { pubkey: crankPolicy, isWritable: false },
     { pubkey: authority, isWritable: false },
     { pubkey: marketAuthority, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isWritable: false },
@@ -275,7 +284,7 @@ console.log(JSON.stringify({
   hydraCrank: currentTask.crank.toBase58(),
   requestedIntervalSlots: INTERVAL_SLOTS,
   registeredIntervalSlots: currentTask.interval,
-  targetIntervalSeconds: 60,
+  targetIntervalSeconds: MIN_INTERVAL_SECONDS,
   scheduleSignature: currentTask.createSignature ?? '',
   marketSetupSignature,
   replacedTasks,
@@ -296,6 +305,41 @@ async function setSchedulerSponsor(sponsor) {
     data: Buffer.concat([discriminator('set_scheduler_sponsor'), sponsor.toBuffer()]),
   });
   await sendAndConfirmTransaction(base, new Transaction().add(instruction), [owner]);
+}
+
+async function setCrankPolicy(seconds) {
+  const instruction = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: stateAddress, isSigner: false, isWritable: false },
+      { pubkey: crankPolicy, isSigner: false, isWritable: true },
+      { pubkey: owner.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([discriminator('set_crank_policy'), u64(seconds)]),
+  });
+  await sendAndConfirmTransaction(base, new Transaction().add(instruction), [owner]);
+}
+
+function callbackMatches(data, state, executorKey, scheduler, policy) {
+  try {
+    const length = data.readUInt16LE(112);
+    if (!length || data.length < 120 + length) return false;
+    const region = data.subarray(120, 120 + length);
+    let offset = 0;
+    const count = region.readUInt16LE(offset); offset += 2;
+    const keys = [];
+    for (let index = 0; index < count; index += 1) {
+      offset += 1;
+      keys.push(new PublicKey(region.subarray(offset, offset + 32)));
+      offset += 32;
+    }
+    const program = new PublicKey(region.subarray(offset, offset + 32)); offset += 32;
+    const dataLength = region.readUInt16LE(offset); offset += 2;
+    const ixData = region.subarray(offset, offset + dataLength);
+    return program.equals(PROGRAM_ID) && ixData.subarray(0, 8).equals(discriminator('rebalance_ephemeral')) &&
+      keys[1]?.equals(state) && keys[2]?.equals(executorKey) && keys[3]?.equals(scheduler) && keys[4]?.equals(policy);
+  } catch { return false; }
 }
 
 async function waitDelegation(account) {

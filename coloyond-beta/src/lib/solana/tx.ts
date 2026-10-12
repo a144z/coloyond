@@ -1,5 +1,13 @@
-import { Keypair, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { connection } from './connection';
+
+/** Browser wallet signing surface used by the app. Runtime-only; never persist it. */
+export interface WalletSigner {
+  publicKey: PublicKey;
+  signTransaction(transaction: Transaction): Promise<Transaction>;
+}
+
+export type OwnerSigner = Keypair | WalletSigner;
 
 export interface TxResult {
   sig: string;
@@ -10,12 +18,29 @@ export interface TxResult {
  * Sign (all signers), send and confirm a transaction on devnet.
  * Fees are charged to tx.feePayer, which callers set explicitly.
  */
-export async function signSendConfirm(tx: Transaction, signers: Keypair[]): Promise<TxResult> {
+export async function signSendConfirm(
+  tx: Transaction,
+  owner: OwnerSigner,
+  additionalSigners: Keypair[] = [],
+): Promise<TxResult> {
   const blockhash = await connection.getLatestBlockhash('confirmed');
   tx.recentBlockhash = blockhash.blockhash;
   tx.lastValidBlockHeight = blockhash.lastValidBlockHeight;
+  tx.feePayer = owner.publicKey;
 
-  const sig = await connection.sendTransaction(tx, signers, { skipPreflight: false });
+  let signed: Transaction;
+  if (owner instanceof Keypair) {
+    tx.partialSign(owner, ...additionalSigners);
+    signed = tx;
+  } else {
+    // Some instructions include an ephemeral sponsor key which must sign
+    // before the connected wallet approves the transaction.
+    if (additionalSigners.length) tx.partialSign(...additionalSigners);
+    signed = await owner.signTransaction(tx);
+    if (!signed.signature) throw new Error('The connected wallet did not sign the transaction.');
+  }
+
+  const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
   const confirmation = await connection.confirmTransaction(
     { signature: sig, blockhash: blockhash.blockhash, lastValidBlockHeight: blockhash.lastValidBlockHeight },
     'confirmed',

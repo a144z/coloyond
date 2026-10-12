@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from './lib/store';
-import { ensureScheduler } from './lib/automation';
+import { ensureScheduler, stopScheduler } from './lib/automation';
 import { wireAndroid } from './lib/android';
 import { AppFrame, AppHeader, BottomNav, ExecutionOverlay, ToastLayer } from './components/layout/AppFrame';
 import { Onboarding } from './screens/Onboarding';
@@ -18,13 +18,15 @@ import { SystemScreen } from './screens/SystemScreen';
 export default function App() {
   const stack = useStore((s) => s.stack);
   const wallet = useStore((s) => s.wallet);
+  const connectedWallet = useStore((s) => s.connectedWallet);
   const screen = stack[stack.length - 1];
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // ER status, balances and live feeds sync while the app is open.
   useEffect(() => {
-    if (wallet) ensureScheduler();
-  }, [wallet]);
+    if (wallet || connectedWallet) ensureScheduler();
+    else stopScheduler();
+  }, [wallet, connectedWallet]);
 
   // Android shell: hardware back + pulp status bar (no-op on web)
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function App() {
           {screen.id === 'vault' ? <VaultDetail vaultId={screen.vaultId ?? ''} /> : null}
         </div>
       </main>
-      {wallet && atTabLevel ? <BottomNav /> : null}
+      {(wallet || connectedWallet) && atTabLevel ? <BottomNav /> : null}
       <ToastLayer />
       <ExecutionOverlay />
     </AppFrame>

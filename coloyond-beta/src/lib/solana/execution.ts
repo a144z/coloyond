@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer';
 import {
+  AccountInfo,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -28,7 +29,7 @@ import { mintOf, mintToAssetMap, type AssetId } from './assets';
 import { EXECUTION_PROGRAM_ID, ROUTER_RPC_URL } from './config';
 import { connection } from './connection';
 import { wrapSolInstructions } from './wallet';
-import { signSendConfirm, type TxResult } from './tx';
+import { signSendConfirm, type OwnerSigner, type TxResult } from './tx';
 
 export const EXECUTION_PROGRAM = new PublicKey(EXECUTION_PROGRAM_ID);
 export const HYDRA_EPHEMERAL_PROGRAM = new PublicKey('eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf');
@@ -40,6 +41,7 @@ const VAULT_AUTHORITY_SEED = Buffer.from('vault-authority');
 const SHARE_MINT_SEED = Buffer.from('share-mint');
 const EXECUTOR_SEED = Buffer.from('executor');
 const SCHEDULER_CONFIG_SEED = Buffer.from('scheduler-config');
+const CRANK_POLICY_SEED = Buffer.from('crank-policy');
 const CRANK_SEED = Buffer.from('crank');
 const TASK_SPONSOR_INITIAL_LAMPORTS = 5_000_000;
 const INSTRUCTIONS_SYSVAR_ID = new PublicKey('Sysvar1nstructions1111111111111111111111111');
@@ -55,6 +57,7 @@ const DISCRIMINATOR: Record<string, number[]> = {
   updateTargets: [0xaa, 0x7b, 0xef, 0x60, 0x3f, 0x4d, 0x67, 0xb9],
   delegateExecutor: [0x99, 0x0f, 0x08, 0xdb, 0x23, 0xb6, 0xbc, 0x38],
   setSchedulerSponsor: [0x98, 0xce, 0x0d, 0x35, 0xeb, 0xcb, 0xe7, 0x6f],
+  setCrankPolicy: [0xe2, 0xfa, 0xab, 0x25, 0x6f, 0x70, 0xb0, 0xeb],
   cancel: [0xb2, 0x5b, 0x89, 0x92, 0x63, 0x43, 0x97, 0x6e],
 };
 
@@ -64,6 +67,7 @@ export interface VaultAddresses {
   shareMint: PublicKey;
   executor: PublicKey;
   schedulerConfig: PublicKey;
+  crankPolicy: PublicKey;
   marketAuthority: PublicKey;
 }
 
@@ -130,8 +134,9 @@ export function deriveVaultAddresses(owner: PublicKey, id: bigint): VaultAddress
   const [shareMint] = PublicKey.findProgramAddressSync([SHARE_MINT_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [executor] = PublicKey.findProgramAddressSync([EXECUTOR_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [schedulerConfig] = PublicKey.findProgramAddressSync([SCHEDULER_CONFIG_SEED, state.toBuffer()], EXECUTION_PROGRAM);
+  const [crankPolicy] = PublicKey.findProgramAddressSync([CRANK_POLICY_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [marketAuthority] = PublicKey.findProgramAddressSync([MARKET_AUTHORITY_SEED], EXECUTION_PROGRAM);
-  return { state, authority, shareMint, executor, schedulerConfig, marketAuthority };
+  return { state, authority, shareMint, executor, schedulerConfig, crankPolicy, marketAuthority };
 }
 
 export function vaultAddressesForState(state: PublicKey): VaultAddresses {
@@ -139,8 +144,9 @@ export function vaultAddressesForState(state: PublicKey): VaultAddresses {
   const [shareMint] = PublicKey.findProgramAddressSync([SHARE_MINT_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [executor] = PublicKey.findProgramAddressSync([EXECUTOR_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [schedulerConfig] = PublicKey.findProgramAddressSync([SCHEDULER_CONFIG_SEED, state.toBuffer()], EXECUTION_PROGRAM);
+  const [crankPolicy] = PublicKey.findProgramAddressSync([CRANK_POLICY_SEED, state.toBuffer()], EXECUTION_PROGRAM);
   const [marketAuthority] = PublicKey.findProgramAddressSync([MARKET_AUTHORITY_SEED], EXECUTION_PROGRAM);
-  return { state, authority, shareMint, executor, schedulerConfig, marketAuthority };
+  return { state, authority, shareMint, executor, schedulerConfig, crankPolicy, marketAuthority };
 }
 
 export function vaultAssetAccounts(state: OnChainVaultState, authority: PublicKey): PublicKey[] {
@@ -183,7 +189,7 @@ export async function readVaultState(address: PublicKey): Promise<OnChainVaultSt
 }
 
 export async function initializeVault(
-  owner: Keypair,
+  owner: OwnerSigner,
   id: bigint,
   assets: AssetId[],
   targets: Record<string, number>,
@@ -215,11 +221,11 @@ export async function initializeVault(
     data,
   }));
   tx.feePayer = owner.publicKey;
-  return { addresses, result: await signSendConfirm(tx, [owner]) };
+  return { addresses, result: await signSendConfirm(tx, owner) };
 }
 
 export async function createVaultTokenAccounts(
-  owner: Keypair,
+  owner: OwnerSigner,
   stateAddress: PublicKey,
   assets: AssetId[],
 ): Promise<TxResult> {
@@ -256,11 +262,11 @@ export async function createVaultTokenAccounts(
     addresses.shareMint,
   ));
   tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, [owner]);
+  return signSendConfirm(tx, owner);
 }
 
 export async function depositToVault(
-  owner: Keypair,
+  owner: OwnerSigner,
   stateAddress: PublicKey,
   amounts: Record<string, number>,
   minimumSharesOut = 1n,
@@ -307,11 +313,11 @@ export async function depositToVault(
     ]),
   }));
   tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, [owner]);
+  return signSendConfirm(tx, owner);
 }
 
 export async function redeemFromVault(
-  owner: Keypair,
+  owner: OwnerSigner,
   stateAddress: PublicKey,
   shares: bigint,
   minimumAmountsOut: bigint[],
@@ -350,11 +356,11 @@ export async function redeemFromVault(
     ]),
   }));
   tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, [owner]);
+  return signSendConfirm(tx, owner);
 }
 
 export async function updateVaultTargets(
-  owner: Keypair,
+  owner: OwnerSigner,
   stateAddress: PublicKey,
   targets: Record<string, number>,
 ): Promise<TxResult> {
@@ -369,10 +375,10 @@ export async function updateVaultTargets(
     data: Buffer.concat([Buffer.from(DISCRIMINATOR.updateTargets), u32(weights.length), ...weights.map(u16)]),
   }));
   tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, [owner]);
+  return signSendConfirm(tx, owner);
 }
 
-export async function setVaultActive(owner: Keypair, stateAddress: PublicKey, active: boolean): Promise<TxResult> {
+export async function setVaultActive(owner: OwnerSigner, stateAddress: PublicKey, active: boolean): Promise<TxResult> {
   const tx = new Transaction().add(new TransactionInstruction({
     programId: EXECUTION_PROGRAM,
     keys: [
@@ -382,13 +388,43 @@ export async function setVaultActive(owner: Keypair, stateAddress: PublicKey, ac
     data: Buffer.concat([Buffer.from(DISCRIMINATOR.setActive), Buffer.from([active ? 1 : 0])]),
   }));
   tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, [owner]);
+  return signSendConfirm(tx, owner);
 }
 
-export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Promise<TxResult> {
+export function slotsForCadence(seconds: number): number {
+  if (!Number.isInteger(seconds) || seconds < 60 || seconds > 86_400) {
+    throw new Error('Rebalance interval must be between 60 seconds and 24 hours.');
+  }
+  return Math.ceil(seconds * REBALANCE_INTERVAL_SLOTS / TARGET_REBALANCE_SECONDS);
+}
+
+async function setCrankPolicy(owner: OwnerSigner, stateAddress: PublicKey, minIntervalSeconds: number): Promise<TxResult> {
+  const addresses = vaultAddressesForState(stateAddress);
+  const instruction = new TransactionInstruction({
+    programId: EXECUTION_PROGRAM,
+    keys: [
+      { pubkey: stateAddress, isSigner: false, isWritable: false },
+      { pubkey: addresses.crankPolicy, isSigner: false, isWritable: true },
+      { pubkey: owner.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([Buffer.from(DISCRIMINATOR.setCrankPolicy), u64(BigInt(minIntervalSeconds))]),
+  });
+  const tx = new Transaction().add(instruction);
+  tx.feePayer = owner.publicKey;
+  return signSendConfirm(tx, owner);
+}
+
+export async function scheduleVault(
+  owner: OwnerSigner,
+  stateAddress: PublicKey,
+  minIntervalSeconds = TARGET_REBALANCE_SECONDS,
+): Promise<TxResult> {
   const state = await readVaultState(stateAddress);
   if (!state.active) throw new Error('Resume the portfolio on Solana before scheduling it.');
+  const intervalSlots = slotsForCadence(minIntervalSeconds);
   const addresses = vaultAddressesForState(stateAddress);
+  await setCrankPolicy(owner, stateAddress, minIntervalSeconds);
   const vaultTokens = vaultAssetAccounts(state, addresses.authority);
   const marketTokens = marketAssetAccounts(state, addresses.marketAuthority);
   const feeds = state.assets.filter((asset) => !asset.feedAccount.equals(PublicKey.default)).map((asset) => asset.feedAccount);
@@ -410,7 +446,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
     }));
   }
   marketSetup.feePayer = owner.publicKey;
-  await signSendConfirm(marketSetup, [owner]);
+  await signSendConfirm(marketSetup, owner);
 
   const executorStatus = await ensureExecutorDelegated(owner, stateAddress, addresses.executor);
   const host = new ConnectionMagicRouter(executorStatus.fqdn, 'confirmed');
@@ -418,10 +454,10 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
   if (configuredSponsor) {
     const existingCrank = await host.getAccountInfo(crankAddress(configuredSponsor, stateAddress), 'confirmed');
     if (existingCrank) {
-      if (!existingCrank.owner.equals(HYDRA_EPHEMERAL_PROGRAM) || Number(existingCrank.data.readBigUInt64LE(72)) !== REBALANCE_INTERVAL_SLOTS) {
-        throw new Error('An existing Hydra task has an unexpected owner or interval.');
+      if (hydraTaskMatches(existingCrank, stateAddress, addresses, intervalSlots)) {
+        return { sig: '', slot: await connection.getSlot('confirmed') };
       }
-      return { sig: '', slot: await connection.getSlot('confirmed') };
+      await cancelVaultSchedule(owner, stateAddress);
     }
   }
 
@@ -435,7 +471,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
     lamports: TASK_SPONSOR_INITIAL_LAMPORTS,
   }));
   fundSponsor.feePayer = owner.publicKey;
-  await signSendConfirm(fundSponsor, [owner]);
+  await signSendConfirm(fundSponsor, owner);
 
   const validator = await readValidatorIdentity(executorStatus.fqdn);
   const delegationBuffer = delegateBufferPdaFromDelegatedAccountAndOwnerProgram(sponsor.publicKey, SystemProgram.programId);
@@ -461,7 +497,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
   });
   const delegationTx = new Transaction().add(delegateSponsor);
   delegationTx.feePayer = owner.publicKey;
-  await signSendConfirm(delegationTx, [owner, sponsor]);
+  await signSendConfirm(delegationTx, owner, [sponsor]);
   let sponsorStatus: { isDelegated: boolean; fqdn?: string } | null = null;
   for (let attempt = 0; attempt < 30; attempt += 1) {
     sponsorStatus = await router.getDelegationStatus(sponsor.publicKey) as { isDelegated: boolean; fqdn?: string };
@@ -484,7 +520,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
   });
   const configTx = new Transaction().add(setSponsor);
   configTx.feePayer = owner.publicKey;
-  await signSendConfirm(configTx, [owner]);
+  await signSendConfirm(configTx, owner);
 
   const crank = crankAddress(sponsor.publicKey, stateAddress);
   const scheduledMetas = [
@@ -492,6 +528,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
     { pubkey: stateAddress, isWritable: false },
     { pubkey: addresses.executor, isWritable: true },
     { pubkey: addresses.schedulerConfig, isWritable: false },
+    { pubkey: addresses.crankPolicy, isWritable: false },
     { pubkey: addresses.authority, isWritable: false },
     { pubkey: addresses.marketAuthority, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isWritable: false },
@@ -503,7 +540,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
     ...feeds.map((pubkey) => ({ pubkey, isWritable: false })),
   ];
   const callbackData = Buffer.from([0xeb, 0xf6, 0x7d, 0x55, 0x89, 0x61, 0xde, 0xdf]);
-  const createData = encodeHydraCreate(stateAddress, addresses.executor, scheduledMetas, callbackData, await host.getSlot('confirmed'));
+  const createData = encodeHydraCreate(stateAddress, addresses.executor, scheduledMetas, callbackData, await host.getSlot('confirmed'), intervalSlots);
   const createInstruction = new TransactionInstruction({
     programId: HYDRA_EPHEMERAL_PROGRAM,
     keys: [
@@ -522,7 +559,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
     throw new Error('Hydra Create confirmed, but the expected crank account was not found on the ER.');
   }
   const interval = Number(crankInfo.data.readBigUInt64LE(72));
-  if (interval !== REBALANCE_INTERVAL_SLOTS) throw new Error(`The registered interval was ${interval} slots, expected ${REBALANCE_INTERVAL_SLOTS}.`);
+  if (interval !== intervalSlots) throw new Error(`The registered interval was ${interval} slots, expected ${intervalSlots}.`);
   return { sig: signature, slot: await connection.getSlot('confirmed') };
 }
 
@@ -540,6 +577,7 @@ function encodeHydraCreate(
   metas: Array<{ pubkey: PublicKey; isWritable: boolean }>,
   callbackData: Buffer,
   currentSlot: number,
+  intervalSlots: number,
 ): Buffer {
   const bodyLength = 35 + 33 * metas.length + callbackData.length;
   // Hydra wire data includes a one-byte instruction discriminator before the
@@ -549,8 +587,8 @@ function encodeHydraCreate(
   data[offset++] = 0;
   state.toBuffer().copy(data, offset); offset += 32;
   authority.toBuffer().copy(data, offset); offset += 32;
-  u64(BigInt(currentSlot + REBALANCE_INTERVAL_SLOTS)).copy(data, offset); offset += 8;
-  u64(BigInt(REBALANCE_INTERVAL_SLOTS)).copy(data, offset); offset += 8;
+  u64(BigInt(currentSlot + intervalSlots)).copy(data, offset); offset += 8;
+  u64(BigInt(intervalSlots)).copy(data, offset); offset += 8;
   u64(0n).copy(data, offset); offset += 8;
   u64(0n).copy(data, offset); offset += 8;
   data.writeUInt32LE(800_000, offset); offset += 4;
@@ -565,7 +603,40 @@ function encodeHydraCreate(
   return data;
 }
 
-export async function cancelVaultSchedule(owner: Keypair, stateAddress: PublicKey): Promise<TxResult> {
+function hydraTaskMatches(
+  info: AccountInfo<Buffer>,
+  state: PublicKey,
+  addresses: VaultAddresses,
+  intervalSlots: number,
+): boolean {
+  const data = Buffer.from(info.data);
+  if (!info.owner.equals(HYDRA_EPHEMERAL_PROGRAM) || data.length < 120 || Number(data.readBigUInt64LE(72)) !== intervalSlots) return false;
+  const regionLength = data.readUInt16LE(112);
+  if (!regionLength || data.length < 120 + regionLength) return false;
+  const region = Buffer.from(data.subarray(120, 120 + regionLength));
+  if (region.length < 2) return false;
+  const count = region.readUInt16LE(0);
+  let offset = 2;
+  if (region.length < offset + count * 33 + 34) return false;
+  const keys: PublicKey[] = [];
+  for (let index = 0; index < count; index += 1) {
+    offset += 1;
+    keys.push(new PublicKey(region.subarray(offset, offset + 32)));
+    offset += 32;
+  }
+  const programId = new PublicKey(region.subarray(offset, offset + 32)); offset += 32;
+  const dataLength = region.readUInt16LE(offset); offset += 2;
+  const instructionData = region.subarray(offset);
+  return instructionData.length === dataLength
+    && programId.equals(EXECUTION_PROGRAM)
+    && Buffer.from(instructionData).equals(Buffer.from([0xeb, 0xf6, 0x7d, 0x55, 0x89, 0x61, 0xde, 0xdf]))
+    && keys[1]?.equals(state)
+    && keys[2]?.equals(addresses.executor)
+    && keys[3]?.equals(addresses.schedulerConfig)
+    && keys[4]?.equals(addresses.crankPolicy);
+}
+
+export async function cancelVaultSchedule(owner: OwnerSigner, stateAddress: PublicKey): Promise<TxResult> {
   const addresses = vaultAddressesForState(stateAddress);
   if (!(await router.getDelegationStatus(addresses.executor)).isDelegated) {
     return { sig: '', slot: await connection.getSlot('confirmed') };
@@ -590,7 +661,20 @@ export async function cancelVaultSchedule(owner: Keypair, stateAddress: PublicKe
     ],
     data: Buffer.from(DISCRIMINATOR.cancel),
   });
-  const sig = await router.sendAndConfirmTransaction(new Transaction().add(instruction), [owner]);
+  const routed = new Transaction().add(instruction);
+  routed.feePayer = owner.publicKey;
+  const blockhash = await router.getLatestBlockhashForTransaction(routed);
+  routed.recentBlockhash = blockhash.blockhash;
+  routed.lastValidBlockHeight = blockhash.lastValidBlockHeight;
+  const signed = owner instanceof Keypair
+    ? (routed.partialSign(owner), routed)
+    : await owner.signTransaction(routed);
+  const sig = await router.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+  const confirmed = await router.confirmTransaction(
+    { signature: sig, blockhash: blockhash.blockhash, lastValidBlockHeight: blockhash.lastValidBlockHeight },
+    'confirmed',
+  );
+  if (confirmed.value.err) throw new Error(`MagicBlock transaction failed: ${JSON.stringify(confirmed.value.err)}`);
   return { sig, slot: await connection.getSlot('confirmed') };
 }
 
@@ -608,7 +692,7 @@ async function waitForExecutorHost(executor: PublicKey): Promise<{ fqdn: string 
 }
 
 async function ensureExecutorDelegated(
-  owner: Keypair,
+  owner: OwnerSigner,
   stateAddress: PublicKey,
   executor: PublicKey,
 ): Promise<{ fqdn: string }> {
@@ -631,7 +715,7 @@ async function ensureExecutorDelegated(
     });
     const tx = new Transaction().add(delegate);
     tx.feePayer = owner.publicKey;
-    await signSendConfirm(tx, [owner]);
+    await signSendConfirm(tx, owner);
   }
   return waitForExecutorHost(executor);
 }

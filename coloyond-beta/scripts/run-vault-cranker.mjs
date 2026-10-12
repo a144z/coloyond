@@ -8,11 +8,13 @@ const HYDRA_ID = new PublicKey('eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf');
 const PROGRAM_ID = new PublicKey('HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d');
 const INSTRUCTIONS_SYSVAR = new PublicKey('Sysvar1nstructions1111111111111111111111111');
 const CALLBACK = Buffer.from([0xeb, 0xf6, 0x7d, 0x55, 0x89, 0x61, 0xde, 0xdf]);
-const INTERVAL_SLOTS = 5_700;
+const SLOTS_PER_MINUTE = 5_700;
+const SELF_CHECK_INTERVAL_SLOTS = SLOTS_PER_MINUTE;
 const ROUTER_RPC = process.env.COLONYOND_ROUTER_RPC ?? 'https://devnet-router.magicblock.app/';
 const BASE_RPC = process.env.COLONYOND_BASE_RPC ?? 'https://rpc.magicblock.app/devnet';
 const PROGRAM_SEED = Buffer.from('executor');
 const CONFIG_SEED = Buffer.from('scheduler-config');
+const POLICY_SEED = Buffer.from('crank-policy');
 const CRANK_SEED = Buffer.from('crank');
 
 if (process.argv.includes('--self-check')) {
@@ -42,7 +44,7 @@ for (const stateText of states) {
 }
 
 let cursor = 0;
-log('watching', { vaultStates: states, intervalSlots: INTERVAL_SLOTS, vaultCount: states.length });
+log('watching', { vaultStates: states, vaultCount: states.length, cadence: 'per-vault CrankPolicy' });
 while (true) {
   const now = Date.now();
   let nextWakeMs = 5_000;
@@ -60,6 +62,12 @@ while (true) {
       }
       const crankInfo = await vault.host.getAccountInfo(vault.crank, 'confirmed');
       if (!crankInfo || !crankInfo.owner.equals(HYDRA_ID)) throw new Error('Configured Hydra task is missing or has an unexpected owner.');
+      const policyInfo = await base.getAccountInfo(vault.crankPolicy, 'confirmed');
+      if (!policyInfo || !policyInfo.owner.equals(PROGRAM_ID) || policyInfo.data.length < 92 ||
+          !policyInfo.data.subarray(8, 40).equals(vault.state.toBuffer())) throw new Error('Crank Policy is missing or malformed.');
+      vault.minIntervalSeconds = safeNumber(policyInfo.data.readBigUInt64LE(72), 'minimum interval seconds');
+      if (vault.minIntervalSeconds < 60 || vault.minIntervalSeconds > 86_400) throw new Error('Crank Policy interval is out of range.');
+      vault.expectedIntervalSlots = Math.ceil(vault.minIntervalSeconds * SLOTS_PER_MINUTE / 60);
       const task = readTask(crankInfo.data, vault);
       const currentSlot = await vault.host.getSlot('confirmed');
       if (currentSlot < task.nextExecSlot) continue;
@@ -97,10 +105,10 @@ async function configureVault(stateText, signerPath) {
   const derive = (seeds, programId = PROGRAM_ID) => PublicKey.findProgramAddressSync(seeds, programId)[0];
   const executor = derive([PROGRAM_SEED, state.toBuffer()]);
   const schedulerConfig = derive([CONFIG_SEED, state.toBuffer()]);
-  const crank = derive([CRANK_SEED, signer.publicKey.toBuffer(), state.toBuffer()], HYDRA_ID);
-  const [stateInfo, configInfo] = await Promise.all([
+  const [stateInfo, configInfo, policyInfo] = await Promise.all([
     base.getAccountInfo(state, 'confirmed'),
     base.getAccountInfo(schedulerConfig, 'confirmed'),
+    base.getAccountInfo(derive([POLICY_SEED, state.toBuffer()]), 'confirmed'),
   ]);
   if (!stateInfo || !stateInfo.owner.equals(PROGRAM_ID) || stateInfo.data.length < 81) throw new Error('Vault State is missing or malformed.');
   if (stateInfo.data.readUInt8(80) !== 1) throw new Error('Vault is inactive.');
@@ -109,19 +117,27 @@ async function configureVault(stateText, signerPath) {
   const owner = new PublicKey(stateInfo.data.subarray(16, 48));
   if (!configInfo.data.subarray(40, 72).equals(owner.toBuffer())) throw new Error('Scheduler Config owner does not match the vault owner.');
   const sponsor = new PublicKey(configInfo.data.subarray(72, 104));
-  if (!sponsor.equals(signer.publicKey)) throw new Error('Signer does not match the vault Scheduler Config sponsor.');
-  const [executorStatus, sponsorStatus] = await Promise.all([
+  if (!policyInfo || !policyInfo.owner.equals(PROGRAM_ID) || policyInfo.data.length < 92 ||
+      !policyInfo.data.subarray(8, 40).equals(state.toBuffer())) throw new Error('Crank Policy is missing or malformed.');
+  const minIntervalSeconds = safeNumber(policyInfo.data.readBigUInt64LE(72), 'minimum interval seconds');
+  if (minIntervalSeconds < 60 || minIntervalSeconds > 86_400) throw new Error('Crank Policy interval is out of range.');
+  const expectedIntervalSlots = Math.ceil(minIntervalSeconds * SLOTS_PER_MINUTE / 60);
+  const crank = derive([CRANK_SEED, sponsor.toBuffer(), state.toBuffer()], HYDRA_ID);
+  const [executorStatus, sponsorStatus, operatorStatus] = await Promise.all([
     router.getDelegationStatus(executor),
     router.getDelegationStatus(sponsor),
+    router.getDelegationStatus(signer.publicKey),
   ]);
   if (!executorStatus.isDelegated || !executorStatus.fqdn) throw new Error('Vault Executor is not delegated to an ER.');
   if (!sponsorStatus.isDelegated || sponsorStatus.fqdn !== executorStatus.fqdn) throw new Error('Scheduler sponsor is not delegated to the same ER as the vault Executor.');
+  if (!operatorStatus.isDelegated || operatorStatus.fqdn !== executorStatus.fqdn) throw new Error('Permissionless operator is not delegated to the same ER as the vault Executor.');
   const host = new Connection(executorStatus.fqdn, 'confirmed');
   const crankInfo = await host.getAccountInfo(crank, 'confirmed');
   if (!crankInfo || !crankInfo.owner.equals(HYDRA_ID)) throw new Error('Hydra task is missing or owned by an unexpected program.');
-  const vault = { state, stateText, owner, signer, sponsor, executor, schedulerConfig, crank, host, signerPath };
+  const crankPolicy = derive([POLICY_SEED, state.toBuffer()]);
+  const vault = { state, stateText, owner, signer, sponsor, executor, schedulerConfig, crankPolicy, expectedIntervalSlots, minIntervalSeconds, crank, host, signerPath };
   readTask(crankInfo.data, vault);
-  log('vault_ready', { vaultState: stateText, executor: executor.toBase58(), sponsor: sponsor.toBase58(), crank: crank.toBase58(), er: executorStatus.fqdn });
+  log('vault_ready', { vaultState: stateText, executor: executor.toBase58(), sponsor: sponsor.toBase58(), operator: signer.publicKey.toBase58(), crank: crank.toBase58(), er: executorStatus.fqdn });
   return vault;
 }
 
@@ -129,13 +145,14 @@ function readTask(data, vault) {
   if (data.length < 120) throw new Error('Hydra task template is malformed.');
   const nextExecSlot = safeNumber(data.readBigUInt64LE(64), 'next execution slot');
   const intervalSlots = safeNumber(data.readBigUInt64LE(72), 'interval');
-  if (intervalSlots !== INTERVAL_SLOTS) throw new Error(`Expected a ${INTERVAL_SLOTS}-slot task; found ${intervalSlots}.`);
+  if (intervalSlots !== vault.expectedIntervalSlots) throw new Error(`Expected a ${vault.expectedIntervalSlots}-slot task; found ${intervalSlots}.`);
   const regionLength = data.readUInt16LE(112);
   if (regionLength === 0 || data.length < 120 + regionLength) throw new Error('Hydra task callback is malformed.');
   const callback = decodeInstruction(data.subarray(120, 120 + regionLength));
   const keys = callback.keys.map(({ pubkey }) => pubkey);
   if (!callback.programId.equals(PROGRAM_ID) || !callback.data.subarray(0, 8).equals(CALLBACK)
-    || !keys[1]?.equals(vault.state) || !keys[2]?.equals(vault.executor) || !keys[3]?.equals(vault.schedulerConfig)) {
+    || !keys[1]?.equals(vault.state) || !keys[2]?.equals(vault.executor) || !keys[3]?.equals(vault.schedulerConfig)
+    || !keys[4]?.equals(vault.crankPolicy)) {
     throw new Error('Hydra task is not this vault program’s rebalance callback.');
   }
   return { nextExecSlot, intervalSlots, callback, computeUnits: data.readUInt32LE(115) };
@@ -208,14 +225,19 @@ function selfCheck() {
     data: CALLBACK,
   });
   const vault = { state: statePk, executor, schedulerConfig: config };
-  const taskData = encodeTaskData(callback);
-  const task = readTask(taskData, vault);
-  if (task.intervalSlots !== INTERVAL_SLOTS) throw new Error('Valid task self-check failed.');
-  const wrongVault = { ...vault, state: second };
+  const crankPolicy = PublicKey.findProgramAddressSync([POLICY_SEED, statePk.toBuffer()], PROGRAM_ID)[0];
+  const vaultWithPolicy = { ...vault, crankPolicy, expectedIntervalSlots: SLOTS_PER_MINUTE, minIntervalSeconds: 60 };
+  const taskDataWithPolicy = encodeTaskData(new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [INSTRUCTIONS_SYSVAR, statePk, executor, config, crankPolicy].map((pubkey) => ({ pubkey, isSigner: false, isWritable: false })),
+    data: CALLBACK,
+  }));
+  const task = readTask(taskDataWithPolicy, vaultWithPolicy);
+  if (task.intervalSlots !== SLOTS_PER_MINUTE) throw new Error('Valid task self-check failed.');
   let rejected = false;
-  try { readTask(taskData, wrongVault); } catch { rejected = true; }
+  try { readTask(taskDataWithPolicy, { ...vaultWithPolicy, state: second }); } catch { rejected = true; }
   if (!rejected) throw new Error('Foreign task filter self-check failed.');
-  log('self_check_passed', { checks: ['vault-list-parsing', 'signer-map-parsing', 'config-parsing', 'valid-task', 'foreign-task-rejected'] });
+  log('self_check_passed', { checks: ['vault-list-parsing', 'signer-map-parsing', 'config-parsing', 'valid-task', 'foreign-task-rejected', 'policy-account-in-callback'] });
 }
 
 function encodeTaskData(callback) {
@@ -231,7 +253,7 @@ function encodeTaskData(callback) {
   callback.data.copy(region, offset);
   const data = Buffer.alloc(120 + region.length);
   data.writeBigUInt64LE(1234n, 64);
-  data.writeBigUInt64LE(BigInt(INTERVAL_SLOTS), 72);
+  data.writeBigUInt64LE(BigInt(SELF_CHECK_INTERVAL_SLOTS), 72);
   data.writeUInt16LE(region.length, 112);
   data.writeUInt32LE(400_000, 115);
   region.copy(data, 120);

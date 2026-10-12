@@ -5,6 +5,8 @@ dist-ssr
 *.local
 .DS_Store
 *.tsbuildinfo
+playwright-report
+test-results
 
 # capacitor / android build artifacts
 android/.gradle

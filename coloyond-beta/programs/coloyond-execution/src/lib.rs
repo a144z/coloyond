@@ -24,6 +24,7 @@ const VAULT_AUTHORITY_SEED: &[u8] = b"vault-authority";
 const SHARE_MINT_SEED: &[u8] = b"share-mint";
 const EXECUTOR_SEED: &[u8] = b"executor";
 const SCHEDULER_CONFIG_SEED: &[u8] = b"scheduler-config";
+const CRANK_POLICY_SEED: &[u8] = b"crank-policy";
 const MARKET_AUTHORITY_SEED: &[u8] = b"market-authority";
 const CRANK_SEED: &[u8] = b"crank";
 const MARKET_CONFIG_SEED: &[u8] = b"market-config";
@@ -33,6 +34,9 @@ const ACTION_MAX_AGE_SEC: i64 = 90;
 const USD_SCALE: u64 = 1_000_000;
 const MAX_DEVNET_USD_SUPPLY_RAW: u64 = 100_000_000_000; // 100,000 tokens at 6 decimals.
 const BPS: u128 = 10_000;
+const MIN_PRICE_CHANGE_BPS: u128 = 10;
+const MIN_CRANK_INTERVAL_SEC: u64 = 60;
+const MAX_CRANK_INTERVAL_SEC: u64 = 86_400;
 const SWAP_FEE_BPS: u128 = 30;
 const RECEIVER_PROGRAM: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 const HYDRA_EPHEMERAL_PROGRAM: Pubkey = pubkey!("eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf");
@@ -123,6 +127,23 @@ pub struct SchedulerConfig {
     pub vault_state: Pubkey,
     pub owner: Pubkey,
     pub sponsor: Pubkey,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct PriceSnapshot {
+    pub mint: Pubkey,
+    pub price: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct CrankPolicy {
+    pub vault_state: Pubkey,
+    pub owner: Pubkey,
+    pub min_interval_seconds: u64,
+    pub last_execution_timestamp: i64,
+    #[max_len(4)]
+    pub last_prices: Vec<PriceSnapshot>,
 }
 
 #[account]
@@ -293,6 +314,42 @@ pub mod coloyond_execution {
         Ok(())
     }
 
+    /// The vault owner (the setup/configuration payer) chooses the minimum delay between settlements.
+    pub fn set_crank_policy(ctx: Context<SetCrankPolicy>, min_interval_seconds: u64) -> Result<()> {
+        require!(
+            (MIN_CRANK_INTERVAL_SEC..=MAX_CRANK_INTERVAL_SEC).contains(&min_interval_seconds),
+            ErrorCode::InvalidCrankPolicy
+        );
+        require!(
+            ctx.accounts
+                .vault_state
+                .assets
+                .iter()
+                .any(|asset| asset.feed_account != Pubkey::default()),
+            ErrorCode::InvalidCrankPolicy
+        );
+        let policy = &mut ctx.accounts.crank_policy;
+        if policy.vault_state == Pubkey::default() {
+            policy.vault_state = ctx.accounts.vault_state.key();
+            policy.owner = ctx.accounts.owner.key();
+            policy.last_execution_timestamp = 0;
+            policy.last_prices = Vec::new();
+        } else {
+            require_keys_eq!(
+                policy.vault_state,
+                ctx.accounts.vault_state.key(),
+                ErrorCode::InvalidCrankPolicy
+            );
+            require_keys_eq!(
+                policy.owner,
+                ctx.accounts.owner.key(),
+                ErrorCode::InvalidCrankPolicy
+            );
+        }
+        policy.min_interval_seconds = min_interval_seconds;
+        Ok(())
+    }
+
     /// Cancel this vault's existing Hydra task before replacing its schedule.
     pub fn cancel_rebalance(ctx: Context<CancelRebalance>) -> Result<()> {
         let state = &ctx.accounts.vault_state;
@@ -341,7 +398,7 @@ pub mod coloyond_execution {
         Ok(())
     }
 
-    /// Hydra invokes this read-only ER calculation after Trigger; it requests, but never performs, SPL transfers.
+    /// Permissionless ER rebalance calculation. Hydra calls this on schedule; any caller may also invoke it.
     pub fn rebalance_ephemeral(ctx: Context<RebalanceEphemeral>) -> Result<()> {
         let state = &ctx.accounts.vault_state;
         require!(state.active, ErrorCode::InactiveVault);
@@ -355,7 +412,17 @@ pub mod coloyond_execution {
             state.owner,
             ErrorCode::InvalidAuthority
         );
-        verify_hydra_trigger(
+        require_keys_eq!(
+            ctx.accounts.crank_policy.vault_state,
+            state.key(),
+            ErrorCode::InvalidCrankPolicy
+        );
+        require_keys_eq!(
+            ctx.accounts.crank_policy.owner,
+            state.owner,
+            ErrorCode::InvalidCrankPolicy
+        );
+        let scheduled = is_hydra_trigger(
             &ctx.accounts.instructions_sysvar,
             &state.key(),
             &ctx.accounts.scheduler_config.sponsor,
@@ -367,6 +434,18 @@ pub mod coloyond_execution {
             &ctx.accounts.vault_authority.key(),
             &ctx.accounts.market_authority.key(),
         )?;
+        let clock = Clock::get()?;
+        let interval_open = crank_interval_open(&ctx.accounts.crank_policy, clock.unix_timestamp)?;
+        let price_moved =
+            price_movement_exceeds_threshold(&ctx.accounts.crank_policy, &state.assets, &prices)?;
+        if !interval_open || !price_moved {
+            if scheduled {
+                msg!("Scheduled rebalance skipped: minimum delay or price-movement guard not met");
+                return Ok(());
+            }
+            require!(interval_open, ErrorCode::CrankTooSoon);
+            return err!(ErrorCode::PriceChangeTooSmall);
+        }
         let total_value = state
             .assets
             .iter()
@@ -496,7 +575,6 @@ pub mod coloyond_execution {
             .checked_add(1)
             .ok_or(ErrorCode::MathOverflow)?;
         ctx.accounts.executor.next_action_nonce = nonce;
-        let clock = Clock::get()?;
         require!(legs.len() <= 3, ErrorCode::InvalidRequest);
         let request = RebalanceRequest {
             nonce,
@@ -521,6 +599,10 @@ pub mod coloyond_execution {
             ShortAccountMeta {
                 pubkey: ctx.accounts.token_program.key().to_bytes().into(),
                 is_writable: false,
+            },
+            ShortAccountMeta {
+                pubkey: ctx.accounts.crank_policy.key().to_bytes().into(),
+                is_writable: true,
             },
         ];
         // `#[action]` places these two escrow accounts in the destination instruction's
@@ -634,6 +716,19 @@ pub mod coloyond_execution {
             &ctx.accounts.vault_authority.key(),
             &ctx.accounts.market_authority.key(),
         )?;
+        let policy = &mut ctx.accounts.crank_policy;
+        require_keys_eq!(
+            policy.vault_state,
+            state.key(),
+            ErrorCode::InvalidCrankPolicy
+        );
+        require_keys_eq!(policy.owner, state.owner, ErrorCode::InvalidCrankPolicy);
+        let now = Clock::get()?.unix_timestamp;
+        require!(crank_interval_open(policy, now)?, ErrorCode::CrankTooSoon);
+        require!(
+            price_movement_exceeds_threshold(policy, &state.assets, &prices)?,
+            ErrorCode::PriceChangeTooSmall
+        );
         let (vault_accounts, market_accounts, _) =
             unpack_settlement_accounts(state, settlement_remaining)?;
         for account in vault_accounts.iter().chain(market_accounts.iter()) {
@@ -741,6 +836,17 @@ pub mod coloyond_execution {
         }
 
         state.last_settled_nonce = request.nonce;
+        policy.last_execution_timestamp = now;
+        policy.last_prices = state
+            .assets
+            .iter()
+            .zip(prices.iter())
+            .filter(|(asset, _)| asset.feed_account != Pubkey::default())
+            .map(|(asset, price)| PriceSnapshot {
+                mint: asset.mint,
+                price: *price,
+            })
+            .collect();
         msg!(
             "Base-layer SPL rebalance settled atomically: nonce {}, {} legs",
             request.nonce,
@@ -1192,6 +1298,23 @@ pub struct SetSchedulerSponsor<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetCrankPolicy<'info> {
+    #[account(has_one = owner)]
+    pub vault_state: Account<'info, VaultState>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + CrankPolicy::INIT_SPACE,
+        seeds = [CRANK_POLICY_SEED, vault_state.key().as_ref()],
+        bump
+    )]
+    pub crank_policy: Account<'info, CrankPolicy>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CancelRebalance<'info> {
     #[account(has_one = owner)]
     pub vault_state: Account<'info, VaultState>,
@@ -1225,6 +1348,8 @@ pub struct RebalanceEphemeral<'info> {
     pub executor: Account<'info, Executor>,
     #[account(seeds = [SCHEDULER_CONFIG_SEED, vault_state.key().as_ref()], bump)]
     pub scheduler_config: Account<'info, SchedulerConfig>,
+    #[account(seeds = [CRANK_POLICY_SEED, vault_state.key().as_ref()], bump)]
+    pub crank_policy: Account<'info, CrankPolicy>,
     /// CHECK: deterministic PDA used as the vault SPL token authority.
     #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
@@ -1253,6 +1378,8 @@ pub struct SettleRebalance<'info> {
     /// CHECK: global market token authority verified in the handler.
     pub market_authority: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
+    #[account(mut, seeds = [CRANK_POLICY_SEED, vault_state.key().as_ref()], bump)]
+    pub crank_policy: Account<'info, CrankPolicy>,
     /// CHECK: injected by Magic Actions and validated against this vault's Executor PDA.
     pub escrow_auth: UncheckedAccount<'info>,
     /// CHECK: injected signer derived from MagicBlock's delegated Executor escrow.
@@ -1542,6 +1669,57 @@ fn normalize_price(price: i64, exponent: i32) -> Result<u64> {
     u64::try_from(value).map_err(|_| error!(ErrorCode::MathOverflow))
 }
 
+fn crank_interval_open(policy: &CrankPolicy, now: i64) -> Result<bool> {
+    require!(
+        (MIN_CRANK_INTERVAL_SEC..=MAX_CRANK_INTERVAL_SEC).contains(&policy.min_interval_seconds),
+        ErrorCode::InvalidCrankPolicy
+    );
+    if policy.last_execution_timestamp == 0 {
+        return Ok(true);
+    }
+    let elapsed = now
+        .checked_sub(policy.last_execution_timestamp)
+        .ok_or(ErrorCode::MathOverflow)?;
+    Ok(elapsed >= policy.min_interval_seconds as i64)
+}
+
+fn price_movement_exceeds_threshold(
+    policy: &CrankPolicy,
+    assets: &[VaultAsset],
+    prices: &[u64],
+) -> Result<bool> {
+    require!(assets.len() == prices.len(), ErrorCode::InvalidCrankPolicy);
+    if policy.last_prices.is_empty() {
+        return Ok(true);
+    }
+
+    let mut has_oracle_asset = false;
+    let mut moved = false;
+    for (asset, current) in assets.iter().zip(prices.iter()) {
+        if asset.feed_account == Pubkey::default() {
+            continue;
+        }
+        has_oracle_asset = true;
+        let previous = policy
+            .last_prices
+            .iter()
+            .find(|snapshot| snapshot.mint == asset.mint)
+            .ok_or(ErrorCode::InvalidCrankPolicy)?
+            .price as u128;
+        require!(previous > 0, ErrorCode::InvalidCrankPolicy);
+        let delta = (*current as u128).abs_diff(previous);
+        let changed = delta.checked_mul(BPS).ok_or(ErrorCode::MathOverflow)?
+            > previous
+                .checked_mul(MIN_PRICE_CHANGE_BPS)
+                .ok_or(ErrorCode::MathOverflow)?;
+        moved |= changed;
+    }
+    if !has_oracle_asset {
+        return Ok(false);
+    }
+    Ok(moved)
+}
+
 fn pow10(decimals: u8) -> Result<u128> {
     10u128
         .checked_pow(decimals as u32)
@@ -1604,32 +1782,27 @@ fn settlement_accounts<'a, 'info>(
         .collect())
 }
 
-fn verify_hydra_trigger(
+fn is_hydra_trigger(
     instructions: &AccountInfo,
     vault_state: &Pubkey,
     sponsor: &Pubkey,
-) -> Result<()> {
+) -> Result<bool> {
     let task_seed = task_seed(vault_state);
     let (expected_crank, _) = Pubkey::find_program_address(
         &[CRANK_SEED, sponsor.as_ref(), task_seed.as_ref()],
         &HYDRA_EPHEMERAL_PROGRAM,
     );
     let current = instructions_sysvar::load_current_index_checked(instructions)? as usize;
-    require!(current > 0, ErrorCode::InvalidTask);
+    if current == 0 {
+        return Ok(false);
+    }
     let previous = instructions_sysvar::load_instruction_at_checked(current - 1, instructions)?;
-    require_keys_eq!(
-        previous.program_id,
-        HYDRA_EPHEMERAL_PROGRAM,
-        ErrorCode::InvalidTask
-    );
-    require!(previous.data.as_slice() == [1], ErrorCode::InvalidTask);
-    require!(!previous.accounts.is_empty(), ErrorCode::InvalidTask);
-    require_keys_eq!(
-        previous.accounts[0].pubkey,
-        expected_crank,
-        ErrorCode::InvalidTask
-    );
-    Ok(())
+    Ok(previous.program_id == HYDRA_EPHEMERAL_PROGRAM
+        && previous.data.as_slice() == [1]
+        && previous
+            .accounts
+            .first()
+            .is_some_and(|account| account.pubkey == expected_crank))
 }
 
 #[error_code]
@@ -1670,4 +1843,85 @@ pub enum ErrorCode {
     InsufficientShares,
     #[msg("The instruction is not an authorized Hydra scheduled invocation")]
     InvalidTask,
+    #[msg("The minimum interval since the last successful rebalance has not elapsed")]
+    CrankTooSoon,
+    #[msg("No oracle-backed asset has moved more than the configured 0.1% threshold")]
+    PriceChangeTooSmall,
+    #[msg("The per-vault crank policy is missing, malformed, or owned by another vault")]
+    InvalidCrankPolicy,
+}
+
+#[cfg(test)]
+mod crank_policy_tests {
+    use super::*;
+
+    fn asset(mint: Pubkey, feed_account: Pubkey) -> VaultAsset {
+        VaultAsset {
+            mint,
+            decimals: 6,
+            target_bps: 5_000,
+            feed_account,
+            feed_id: [0; 32],
+        }
+    }
+
+    fn policy(last_execution_timestamp: i64, last_price: u64) -> CrankPolicy {
+        CrankPolicy {
+            vault_state: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(),
+            min_interval_seconds: 60,
+            last_execution_timestamp,
+            last_prices: vec![PriceSnapshot {
+                mint: Pubkey::new_unique(),
+                price: last_price,
+            }],
+        }
+    }
+
+    #[test]
+    fn interval_opens_at_the_configured_second() {
+        let policy = policy(1_000, 1_000_000);
+        assert!(!crank_interval_open(&policy, 1_059).unwrap());
+        assert!(crank_interval_open(&policy, 1_060).unwrap());
+    }
+
+    #[test]
+    fn price_guard_requires_strictly_more_than_ten_basis_points() {
+        let mint = Pubkey::new_unique();
+        let feed = Pubkey::new_unique();
+        let policy = CrankPolicy {
+            vault_state: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(),
+            min_interval_seconds: 60,
+            last_execution_timestamp: 1_000,
+            last_prices: vec![PriceSnapshot {
+                mint,
+                price: 1_000_000,
+            }],
+        };
+        let assets = [asset(mint, feed)];
+        assert!(!price_movement_exceeds_threshold(&policy, &assets, &[1_001_000]).unwrap());
+        assert!(price_movement_exceeds_threshold(&policy, &assets, &[1_001_001]).unwrap());
+        assert!(price_movement_exceeds_threshold(&policy, &assets, &[998_999]).unwrap());
+    }
+
+    #[test]
+    fn price_guard_ignores_fixed_price_assets() {
+        let mint = Pubkey::new_unique();
+        let no_feed = Pubkey::default();
+        let policy = CrankPolicy {
+            vault_state: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(),
+            min_interval_seconds: 60,
+            last_execution_timestamp: 1_000,
+            last_prices: vec![PriceSnapshot {
+                mint,
+                price: 1_000_000,
+            }],
+        };
+        assert!(
+            !price_movement_exceeds_threshold(&policy, &[asset(mint, no_feed)], &[1_002_000])
+                .unwrap()
+        );
+    }
 }

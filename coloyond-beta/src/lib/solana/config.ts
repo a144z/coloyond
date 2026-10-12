@@ -22,7 +22,7 @@ export const CURVE_CAP_PCT = 3.0;
 export const DEFAULT_THRESHOLD_PCT = 2.0;
 /** 5,700 Hydra slots targets about one minute on the current Devnet ER. */
 export const REBALANCE_INTERVAL_SEC = 60;
-export const CADENCE_OPTIONS_SEC = [REBALANCE_INTERVAL_SEC] as const;
+export const CADENCE_OPTIONS_SEC = [REBALANCE_INTERVAL_SEC, 120, 300, 600, 1_800, 3_600] as const;
 export const BUDGET_FLOOR_LAMPORTS = 2_000_000; // below this, automation halts (blocked: budget)
 export const MIN_TX_LAMPORTS = 5_000;
 /** Upper bound on trades executed within a single rebalance check. */

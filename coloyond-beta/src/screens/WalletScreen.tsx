@@ -24,6 +24,7 @@ export function WalletScreen() {
   useNow(1000);
 
   const wallet = useStore((s) => s.wallet);
+  const connectedWallet = useStore((s) => s.connectedWallet);
   const balances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
   const airdrop = useStore((s) => s.airdrop);
@@ -37,7 +38,9 @@ export function WalletScreen() {
   const [wrapSubmitting, setWrapSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  if (!wallet) return null;
+  const external = connectedWallet !== null;
+  const address = connectedWallet?.publicKey.toBase58() ?? wallet?.publicKey;
+  if (!address) return null;
 
   const prices = price ? Object.fromEntries(assetList().map((spec) => [spec.id, priceOf(price, spec.id) ?? 0])) : null;
 
@@ -53,16 +56,18 @@ export function WalletScreen() {
     <Screen>
       <ScreenHeading
         micro="W / Owner wallet"
-        title="The owner key."
-        sub="Signs portfolio setup and owner actions, holds your SOL and token balances, and funds devnet transactions."
+        title={external ? 'Your connected wallet.' : 'The owner key.'}
+        sub={external
+          ? 'Signs portfolio setup and owner actions, holds your SOL and token balances, and funds devnet transactions.'
+          : 'Your device wallet signs portfolio setup and owner actions, holds your SOL and token balances, and funds devnet transactions.'}
       />
 
-      <LedgerPanel stripe="Owner address" meta={shortKey(wallet.publicKey)}>
-        <p className="break-all font-mono text-[11.5px] leading-relaxed font-bold">{wallet.publicKey}</p>
+      <LedgerPanel stripe={external ? 'Connected wallet' : 'Owner address'} meta={shortKey(address)}>
+        <p className="break-all font-mono text-[11.5px] leading-relaxed font-bold">{address}</p>
         <div className="mt-2.5 flex items-center justify-between gap-3">
-          <MicroLabel>m/44'/501'/0'/0' · SLIP-0010</MicroLabel>
+          <MicroLabel>{external ? 'browser wallet · devnet' : "m/44'/501'/0'/0' · SLIP-0010"}</MicroLabel>
           <a
-            href={explorerAddress(wallet.publicKey)}
+            href={explorerAddress(address)}
             target="_blank"
             rel="noreferrer"
             className="font-mono text-[11px] font-bold text-petrol underline underline-offset-2"
@@ -118,7 +123,7 @@ export function WalletScreen() {
             Choose an allocation and deposit SOL. The app wraps it as WSOL and mints transferable vault shares; the Hydra task can trade the vault's standard SPL assets toward those weights.
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-iron">
-            This build does not execute an instant wallet swap. The task targets 5,700 ER slots (about 60 seconds); actual timing depends on an active cranker. dUSD is synthetic Devnet USD with a fixed $1 display price.
+            This build does not execute an instant wallet swap. Portfolio cranks use the owner-configured delay and need more than 0.1% movement in a Pyth-backed asset. dUSD is synthetic Devnet USD with a fixed $1 display price.
           </p>
           <Button variant="primary" full onClick={() => pushScreen({ id: 'create' })}>
             Create portfolio →
@@ -126,7 +131,7 @@ export function WalletScreen() {
         </LedgerPanel>
       </div>
 
-      <div className="mt-4">
+      {!external && wallet ? <div className="mt-4">
         <LedgerPanel stripe="Owner key controls" meta="device-local">
           <div className="grid grid-cols-2 gap-2.5">
             <Button variant="secondary" onClick={() => setSeedOpen(true)}>
@@ -137,7 +142,7 @@ export function WalletScreen() {
             </Button>
           </div>
         </LedgerPanel>
-      </div>
+      </div> : null}
 
       <WrapSheet
         open={wrapOpen}
@@ -161,6 +166,7 @@ export function WalletScreen() {
             full
             onClick={async () => {
               try {
+                if (!wallet) return;
                 await navigator.clipboard.writeText(wallet.mnemonic);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
@@ -173,9 +179,9 @@ export function WalletScreen() {
           </Button>
         }
       >
-        <div className="border-2 border-ink bg-ledger-subtle p-4">
+        {wallet ? <div className="border-2 border-ink bg-ledger-subtle p-4">
           <p className="break-words font-mono text-[13px] font-bold leading-[1.9]">{wallet.mnemonic}</p>
-        </div>
+        </div> : null}
         <div className="mt-4">
           <Notice tone="danger" title="Anyone with these words owns the funds">
             Write them down and keep them offline. This demo stores the phrase unencrypted in this
