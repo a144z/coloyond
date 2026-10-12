@@ -14,6 +14,7 @@ pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5
 pub const SOL_USD_FEED_ACCOUNT: Pubkey = pubkey!("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
 pub const BTC_USD_FEED_ACCOUNT: Pubkey = pubkey!("4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo");
 pub const USDC_USD_FEED_ACCOUNT: Pubkey = pubkey!("Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX");
+pub const ETH_USD_FEED_ACCOUNT: Pubkey = pubkey!("4C3PyjeYu3pLxfWdQCczQ24tDc1KbxT6fbPgWncC8WZp");
 
 pub const SOL_USD_FEED_ID: &str =
     "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";
@@ -21,6 +22,8 @@ pub const BTC_USD_FEED_ID: &str =
     "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
 pub const USDC_USD_FEED_ID: &str =
     "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
+pub const ETH_USD_FEED_ID: &str =
+    "0xff614c390706451d097053042206f6440a71793677011587f0f56f47d0a06303";
 
 /// Representation scale used for prices. It is not an oracle confidence or
 /// freshness policy; those limits are explicitly supplied by the caller.
@@ -31,6 +34,7 @@ pub enum PinnedFeed {
     SolUsd,
     BtcUsd,
     UsdcUsd,
+    EthUsd,
 }
 
 impl PinnedFeed {
@@ -39,6 +43,7 @@ impl PinnedFeed {
             Self::SolUsd => SOL_USD_FEED_ACCOUNT,
             Self::BtcUsd => BTC_USD_FEED_ACCOUNT,
             Self::UsdcUsd => USDC_USD_FEED_ACCOUNT,
+            Self::EthUsd => ETH_USD_FEED_ACCOUNT,
         }
     }
 
@@ -47,6 +52,7 @@ impl PinnedFeed {
             Self::SolUsd => SOL_USD_FEED_ID,
             Self::BtcUsd => BTC_USD_FEED_ID,
             Self::UsdcUsd => USDC_USD_FEED_ID,
+            Self::EthUsd => ETH_USD_FEED_ID,
         }
     }
 }
@@ -396,7 +402,12 @@ mod tests {
         // Push Oracle program ID. The account data itself is Receiver-owned.
         let push_oracle_program = pubkey!("pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT");
         let shard_zero = 0u16.to_le_bytes();
-        for feed in [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd] {
+        for feed in [
+            PinnedFeed::SolUsd,
+            PinnedFeed::BtcUsd,
+            PinnedFeed::UsdcUsd,
+            PinnedFeed::EthUsd,
+        ] {
             let feed_id = get_feed_id_from_hex(feed.id_hex()).unwrap();
             let (derived, _) = Pubkey::find_program_address(
                 &[&shard_zero, feed_id.as_ref()],
@@ -580,7 +591,12 @@ mod tests {
 
     #[test]
     fn rejects_each_other_pinned_feed_id_for_every_feed() {
-        let feeds = [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd];
+        let feeds = [
+            PinnedFeed::SolUsd,
+            PinnedFeed::BtcUsd,
+            PinnedFeed::UsdcUsd,
+            PinnedFeed::EthUsd,
+        ];
         for expected_feed in feeds {
             for embedded_feed in feeds {
                 if expected_feed == embedded_feed {

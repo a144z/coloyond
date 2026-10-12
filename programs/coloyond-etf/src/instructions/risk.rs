@@ -237,7 +237,7 @@ pub fn poke(ctx: Context<Poke>) -> Result<()> {
     err!(EtfError::PolicyNotFrozen)
 }
 
-fn oracle_accounts<'info, A>(accounts: &A) -> [Option<AccountInfo<'info>>; 3]
+fn oracle_accounts<'info, A>(accounts: &A) -> [Option<AccountInfo<'info>>; 4]
 where
     A: OracleAccountFields<'info>,
 {
@@ -251,6 +251,9 @@ where
         accounts
             .oracle_feed_2()
             .map(|account| account.to_account_info()),
+        accounts
+            .oracle_feed_3()
+            .map(|account| account.to_account_info()),
     ]
 }
 
@@ -258,6 +261,7 @@ trait OracleAccountFields<'info> {
     fn oracle_feed_0(&self) -> Option<&UncheckedAccount<'info>>;
     fn oracle_feed_1(&self) -> Option<&UncheckedAccount<'info>>;
     fn oracle_feed_2(&self) -> Option<&UncheckedAccount<'info>>;
+    fn oracle_feed_3(&self) -> Option<&UncheckedAccount<'info>>;
 }
 
 impl<'info> OracleAccountFields<'info> for SeedPool<'info> {
@@ -269,6 +273,9 @@ impl<'info> OracleAccountFields<'info> for SeedPool<'info> {
     }
     fn oracle_feed_2(&self) -> Option<&UncheckedAccount<'info>> {
         self.oracle_feed_2.as_ref()
+    }
+    fn oracle_feed_3(&self) -> Option<&UncheckedAccount<'info>> {
+        self.oracle_feed_3.as_ref()
     }
 }
 
@@ -282,6 +289,9 @@ impl<'info> OracleAccountFields<'info> for SwapExactIn<'info> {
     fn oracle_feed_2(&self) -> Option<&UncheckedAccount<'info>> {
         self.oracle_feed_2.as_ref()
     }
+    fn oracle_feed_3(&self) -> Option<&UncheckedAccount<'info>> {
+        self.oracle_feed_3.as_ref()
+    }
 }
 
 impl<'info> OracleAccountFields<'info> for Poke<'info> {
@@ -293,6 +303,9 @@ impl<'info> OracleAccountFields<'info> for Poke<'info> {
     }
     fn oracle_feed_2(&self) -> Option<&UncheckedAccount<'info>> {
         self.oracle_feed_2.as_ref()
+    }
+    fn oracle_feed_3(&self) -> Option<&UncheckedAccount<'info>> {
+        self.oracle_feed_3.as_ref()
     }
 }
 

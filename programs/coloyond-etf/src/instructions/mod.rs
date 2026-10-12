@@ -110,6 +110,8 @@ pub struct SeedPool<'info> {
     pub oracle_feed_1: Option<UncheckedAccount<'info>>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
     pub oracle_feed_2: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_3: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
@@ -129,6 +131,8 @@ pub struct SwapExactIn<'info> {
     pub oracle_feed_1: Option<UncheckedAccount<'info>>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
     pub oracle_feed_2: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_3: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
@@ -145,6 +149,8 @@ pub struct Poke<'info> {
     pub oracle_feed_1: Option<UncheckedAccount<'info>>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
     pub oracle_feed_2: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_3: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
@@ -226,4 +232,6 @@ pub struct Rebalance<'info> {
     pub oracle_feed_1: Option<UncheckedAccount<'info>>,
     /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
     pub oracle_feed_2: Option<UncheckedAccount<'info>>,
+    /// CHECK: ordered feed identity, Receiver owner, layout, feed ID and Full level are checked.
+    pub oracle_feed_3: Option<UncheckedAccount<'info>>,
 }

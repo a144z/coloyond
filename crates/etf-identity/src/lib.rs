@@ -64,7 +64,7 @@ impl EtfPoolConfigV1 {
         if self.protocol_version != CONFIG_VERSION_V1 {
             return Err(IdentityError::UnsupportedVersion);
         }
-        if !(2..=3).contains(&self.assets.len()) {
+        if !(2..=4).contains(&self.assets.len()) {
             return Err(IdentityError::InvalidAssetCount);
         }
         if self
@@ -154,7 +154,7 @@ fn preflight_vector_lengths(bytes: &[u8]) -> Result<(), IdentityError> {
     }
     offset += 1;
     let asset_count = read_u32(bytes, &mut offset)? as usize;
-    if !(2..=3).contains(&asset_count) {
+    if !(2..=4).contains(&asset_count) {
         return Err(IdentityError::InvalidAssetCount);
     }
     advance(bytes, &mut offset, asset_count * 164)?;

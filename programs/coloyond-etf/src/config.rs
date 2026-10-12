@@ -145,7 +145,7 @@ fn asset_matches_pinned_feed(asset: &EtfAssetConfigV1) -> bool {
 }
 
 fn pinned_feed_for_asset(asset: &EtfAssetConfigV1) -> Result<PinnedFeed> {
-    [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd]
+    [PinnedFeed::SolUsd, PinnedFeed::BtcUsd, PinnedFeed::UsdcUsd, PinnedFeed::EthUsd]
         .into_iter()
         .find(|feed| {
             Pubkey::new_from_array(asset.oracle_account) == feed.address()
@@ -159,10 +159,10 @@ fn pinned_feed_for_asset(asset: &EtfAssetConfigV1) -> Result<PinnedFeed> {
 /// intentionally not accepted here until the S5A policy is frozen.
 pub fn validate_oracle_feed_accounts<'info>(
     config: &EtfPoolConfigV1,
-    accounts: [Option<AccountInfo<'info>>; 3],
+    accounts: [Option<AccountInfo<'info>>; 4],
 ) -> Result<()> {
     require!(
-        (2..=3).contains(&config.assets.len()),
+        (2..=4).contains(&config.assets.len()),
         EtfError::InvalidConfig
     );
     for (index, asset) in config.assets.iter().enumerate() {
@@ -194,7 +194,7 @@ pub fn validate_oracle_feed_accounts<'info>(
 /// checked by the shared Pyth adapter; all failures map to a stable ETF error.
 pub fn validate_devnet_oracle_prices<'info>(
     config: &EtfPoolConfigV1,
-    accounts: [Option<AccountInfo<'info>>; 3],
+    accounts: [Option<AccountInfo<'info>>; 4],
     clock: &Clock,
     mechanics: DevnetMechanicsV1,
 ) -> Result<Vec<ValidatedPrice>> {
@@ -369,12 +369,12 @@ mod tests {
         );
         assert!(validate_oracle_feed_accounts(
             &config,
-            [Some(sol_account.clone()), Some(usd_account.clone()), None]
+            [Some(sol_account.clone()), Some(usd_account.clone()), None, None]
         )
         .is_ok());
         assert!(validate_oracle_feed_accounts(
             &config,
-            [Some(usd_account.clone()), Some(sol_account.clone()), None]
+            [Some(usd_account.clone()), Some(sol_account.clone()), None, None]
         )
         .is_err());
 
@@ -398,7 +398,7 @@ mod tests {
         );
         assert!(validate_oracle_feed_accounts(
             &config,
-            [Some(partial_account), Some(usd_account), None]
+            [Some(partial_account), Some(usd_account), None, None]
         )
         .is_err());
     }
@@ -442,7 +442,7 @@ mod tests {
             false,
             0,
         );
-        let feeds = [Some(sol_account.clone()), Some(usd_account.clone()), None];
+        let feeds = [Some(sol_account.clone()), Some(usd_account.clone()), None, None];
         let mut clock = Clock {
             unix_timestamp: 1_060,
             ..Clock::default()
@@ -487,7 +487,7 @@ mod tests {
         );
         assert!(validate_devnet_oracle_prices(
             &config,
-            [Some(sol_account), Some(wide_account), None],
+            [Some(sol_account), Some(wide_account), None, None],
             &Clock {
                 unix_timestamp: 1_000,
                 ..Clock::default()
