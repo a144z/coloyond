@@ -16,6 +16,7 @@ export function MixBar({
   ariaLabel,
   interactive = false,
   onChange,
+  lockedKeys = [],
 }: {
   segments: MixSegment[];
   ticks?: number[];
@@ -26,6 +27,8 @@ export function MixBar({
   interactive?: boolean;
   /** Called with updated segments when a handle is dragged. */
   onChange?: (segments: MixSegment[]) => void;
+  /** Asset keys with pinned weights; handles touching them are omitted. */
+  lockedKeys?: readonly string[];
 }) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
@@ -182,39 +185,43 @@ export function MixBar({
         />
       ))}
 
-      {/* Draggable handles between segments */}
+      {/* Draggable handles between segments; a pinned segment has no movable boundary */}
       {interactive &&
-        segments.slice(0, -1).map((s, i) => {
-          const leftPct = positions[i] + Math.min(100, Math.max(0, s.pct));
-          const leftSpec = assetSpec(segments[i].key);
-          const rightSpec = assetSpec(segments[i + 1].key);
-          const leftPctVal = segments[i].pct;
-          const rightPctVal = segments[i + 1].pct;
-          const minVal = 0;
-          const maxVal = Math.round(leftPctVal + rightPctVal);
-          return (
-            <button
-              key={`handle-${i}`}
-              className="absolute top-1/2 z-10 flex h-[20px] w-[10px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center border border-ink bg-ink transition-[left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-petrol active:bg-petrol"
-              style={{ left: `${leftPct}%` }}
-              role="slider"
-              aria-label={`Drag to move share between ${leftSpec.symbol} and ${rightSpec.symbol}`}
-              aria-valuemin={minVal}
-              aria-valuemax={maxVal}
-              aria-valuenow={Math.round(leftPctVal)}
-              aria-valuetext={`${leftSpec.symbol} ${leftPctVal.toFixed(0)}%, ${rightSpec.symbol} ${rightPctVal.toFixed(0)}%`}
-              onPointerDown={handlePointerDown(i)}
-              onKeyDown={handleKeyDown(i)}
-              tabIndex={0}
-            >
-              <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-sm bg-ink px-1 py-0.5 text-[8px] font-bold text-pulp opacity-0 transition-opacity group-hover:opacity-100"
-                style={{ opacity: dragging === i ? 1 : undefined }}
+        (() => {
+          const lockedSet = new Set(lockedKeys);
+          return segments.slice(0, -1).map((s, i) => {
+            if (lockedSet.has(segments[i].key) || lockedSet.has(segments[i + 1].key)) return null;
+            const leftPct = positions[i] + Math.min(100, Math.max(0, s.pct));
+            const leftSpec = assetSpec(segments[i].key);
+            const rightSpec = assetSpec(segments[i + 1].key);
+            const leftPctVal = segments[i].pct;
+            const rightPctVal = segments[i + 1].pct;
+            const minVal = 0;
+            const maxVal = Math.round(leftPctVal + rightPctVal);
+            return (
+              <button
+                key={`handle-${i}`}
+                className="absolute top-1/2 z-10 flex h-[20px] w-[10px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center border border-ink bg-ink transition-[left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-petrol active:bg-petrol"
+                style={{ left: `${leftPct}%` }}
+                role="slider"
+                aria-label={`Drag to move share between ${leftSpec.symbol} and ${rightSpec.symbol}`}
+                aria-valuemin={minVal}
+                aria-valuemax={maxVal}
+                aria-valuenow={Math.round(leftPctVal)}
+                aria-valuetext={`${leftSpec.symbol} ${leftPctVal.toFixed(0)}%, ${rightSpec.symbol} ${rightPctVal.toFixed(0)}%`}
+                onPointerDown={handlePointerDown(i)}
+                onKeyDown={handleKeyDown(i)}
+                tabIndex={0}
               >
-                {leftSpec.symbol} {leftPctVal.toFixed(0)} / {rightPctVal.toFixed(0)}
-              </span>
-            </button>
-          );
-        })}
+                <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-sm bg-ink px-1 py-0.5 text-[8px] font-bold text-pulp opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ opacity: dragging === i ? 1 : undefined }}
+                >
+                  {leftSpec.symbol} {leftPctVal.toFixed(0)} / {rightSpec.symbol} {rightPctVal.toFixed(0)}
+                </span>
+              </button>
+            );
+          });
+        })()}
     </div>
   );
 }

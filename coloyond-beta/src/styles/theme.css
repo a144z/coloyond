@@ -135,6 +135,23 @@
     outline: 3px solid var(--color-ink);
     outline-offset: 3px;
   }
+
+  /* Ledger slider, frozen: a pinned weight. Petrol thumb over deep lacquer —
+     the value is still real, it just no longer moves. */
+  .ledger-range:disabled {
+    background: var(--color-pulp-deep);
+    cursor: default;
+  }
+  .ledger-range:disabled::-webkit-slider-thumb {
+    background: var(--color-petrol);
+    border-color: var(--color-pulp);
+    cursor: default;
+  }
+  .ledger-range:disabled::-moz-range-thumb {
+    background: var(--color-petrol);
+    border-color: var(--color-pulp);
+    cursor: default;
+  }
 }
 
 @keyframes coloyond-appear {
