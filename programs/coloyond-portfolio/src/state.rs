@@ -1,710 +1,901 @@
-use crate::errors::PortfolioError;
+//! State and pure math for the single-account ETF pool.
+//!
+//! One `EtfPool` account replaces the earlier registry / vault / authority /
+//! custody / controller / admission set: the basket, its target weights, the
+//! cached Pyth prices and the permissionless crank policy all live together,
+//! and the pool's `vault` PDA is the only token authority.
+//!
+//! Every rule the on-chain handlers enforce is a `pub` method or free function
+//! here, so the no-validator scenario suite exercises exactly the code that
+//! runs on-chain.
+
 use anchor_lang::prelude::*;
 
-pub const REGISTRY_SPACE: usize = 300;
-pub const VAULT_SPACE: usize = 500;
-pub const AUTHORITY_SPACE: usize = 64;
-pub const CUSTODY_SPACE: usize = 96;
-pub const CONTROLLER_SPACE: usize = 300;
-pub const ADMISSION_SPACE: usize = 500;
+use crate::errors::PortfolioError;
 
-pub const VAULT_ASSETS_MIN: usize = 2;
-pub const VAULT_ASSETS_MAX: usize = 3;
+/// At least two legs, or it is not a portfolio.
+pub const POOL_ASSETS_MIN: usize = 2;
+/// Upper bound on basket size, so one crank stays inside a single packet.
+pub const POOL_ASSETS_MAX: usize = 10;
+/// Weights and every ratio in this program are basis points of this.
 pub const WEIGHTS_SUM_BPS: u64 = 10_000;
-pub const WEIGHT_MIN_BPS: u64 = 100;
 
-#[account]
-pub struct OwnerRegistryV2 {
-    pub bump: u8,
-    pub owner: Pubkey,
-    pub next_vault_nonce: u64,
-    pub closed_tombstones: Vec<u64>,
-}
+/// The most a single swap may lose against its own quote.
+pub const SWAP_MAX_SLIPPAGE_BPS: u16 = 500;
 
-#[account]
-pub struct PortfolioVaultV2 {
-    pub bump: u8,
-    pub owner: Pubkey,
-    pub nonce: u64,
-    pub lifecycle: VaultLifecycleV2,
-    pub mints: Vec<Pubkey>,
-    pub target_weights: Vec<u64>,
-    pub owner_op_sequence: u64,
-    pub units: Vec<u64>,
-    pub last_run_unix_timestamp: i64,
-}
+/// Widest decimal-exponent span the pool will rescale across.
+pub const MAX_SCALE_POWER: u32 = 18;
 
-#[account]
-pub struct VaultAuthorityV2 {
-    pub bump: u8,
-    pub vault: Pubkey,
-}
+/// Decimal places the pool's own value unit uses. Prices arrive on a feeder's
+/// own exponent, so a leg's value is normalised into micro-dollars; that keeps
+/// the sizes small enough for a u64 share supply while staying exact to a
+/// millionth of a dollar.
+pub const POOL_VALUE_DECIMALS: u8 = 6;
 
-#[account]
-pub struct CustodyV2 {
-    pub bump: u8,
-    pub vault: Pubkey,
-    pub asset_index: u8,
+/// Gate mode: open the crank on cadence OR on a price move.
+pub const GATE_OR: u8 = 0;
+/// Gate mode: open the crank only when cadence AND a price move agree.
+pub const GATE_AND: u8 = 1;
+
+/// The only venue a crank may route through: Jupiter's aggregator. Pinning it
+/// is what stops a permissionless cranker from naming an arbitrary "venue" and
+/// handing it the pool's token authority.
+pub const JUPITER_PROGRAM_ID: Pubkey = pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
+
+/// One basket leg: where its price comes from, where its tokens live, and what
+/// share of the pool it should hold.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+pub struct AssetConfig {
+    /// Pyth Receiver account that carries this asset's price.
+    pub pyth_feed: Pubkey,
+    /// The 32-byte Pyth feed id that account must contain, so a swapped-in feed
+    /// account cannot silently reprice the leg.
+    pub feed_id: [u8; 32],
+    /// SPL mint of the asset.
     pub mint: Pubkey,
+    /// The pool vault's token account for this asset. The program only requires
+    /// that the vault PDA owns it and its mint matches; it does not assume it is
+    /// the canonical associated token account.
+    pub vault_token_account: Pubkey,
+    /// Target weight in basis points of 10_000.
+    pub target_weight_bps: u16,
+    /// Cached Pyth mantissa from the last successful crank (0 = never priced).
+    pub last_price: i64,
+    /// Cached Pyth exponent for `last_price`.
+    pub last_price_exponent: i32,
+    /// Cached Pyth confidence for `last_price`.
+    pub last_confidence: u64,
 }
 
+/// One basket leg as the initializer supplies it, before any price is cached.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AssetInit {
+    pub pyth_feed: Pubkey,
+    pub feed_id: [u8; 32],
+    pub mint: Pubkey,
+    pub vault_token_account: Pubkey,
+    pub target_weight_bps: u16,
+}
+
+/// One venue swap the crank should make: sell an overweight leg, buy an
+/// underweight one, against the caller's own quote.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SwapParam {
+    /// Index of the leg the pool gives away.
+    pub sell_asset: u8,
+    /// Index of the leg the pool receives.
+    pub buy_asset: u8,
+    /// Opaque venue instruction data for this route.
+    pub route_data: Vec<u8>,
+    /// Raw units of `buy_asset` the caller expects out.
+    pub quoted_out_amount: u64,
+    /// Shortfall the caller will tolerate against its own quote.
+    pub slippage_bps: u16,
+    /// Offset into the crank's venue accounts where this route's slice begins.
+    pub accounts_start: u8,
+    /// How many venue accounts this route uses.
+    pub accounts_count: u8,
+}
+
+/// The owner-set policy that decides when the permissionless crank may run.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
+pub struct CrankPolicy {
+    /// Seconds that must pass before a cadence-gated crank may run.
+    pub min_crank_interval_secs: u64,
+    /// Basis points a basket price must move to open the price gate.
+    pub min_price_change_bps: u16,
+    /// Drift worth a crank; 0 disables the drift check.
+    pub min_rebalance_bps: u16,
+    /// How old a cached price may be before a deposit refuses to use it.
+    pub max_staleness_secs: u64,
+    /// How wide a Pyth confidence interval may be, in basis points.
+    pub max_confidence_bps: u16,
+    /// `GATE_OR` or `GATE_AND`.
+    pub gate_mode: u8,
+}
+
+/// The whole pool: basket, prices and crank policy in one account.
 #[account]
-pub struct AutomationControllerV2 {
+pub struct EtfPool {
     pub bump: u8,
+    pub pool_id: u64,
+    pub admin: Pubkey,
+    /// Share mint, created before the pool with the `vault` PDA as its mint
+    /// authority and no freeze authority.
+    pub share_mint: Pubkey,
+    /// Token authority PDA; owns every custody account and mints shares.
     pub vault: Pubkey,
-    pub generation: u64,
-    pub run_nonce: u64,
-    pub interval_seconds: u64,
-    pub min_price_delta_bps: u16,
-    pub last_prices: Vec<RecordedPrice>,
+    pub assets: Vec<AssetConfig>,
+    /// Unix time of the last successful crank (0 = never cranked).
+    pub last_crank_unix_timestamp: i64,
+    pub policy: CrankPolicy,
+    /// True when deposits and cranks are closed; exits stay open either way.
+    pub paused: bool,
+    /// Monotonic sequence guarding the admin's configure calls.
+    pub owner_op_sequence: u64,
 }
 
-impl AutomationControllerV2 {
-    pub fn set_params(&mut self, interval_seconds: u64, min_price_delta_bps: u16) {
-        self.interval_seconds = interval_seconds;
-        self.min_price_delta_bps = min_price_delta_bps;
-    }
+impl EtfPool {
+    /// Worst-case account size: the 8-byte discriminator, every fixed field,
+    /// and the basket at its maximum length. Borsh prefixes a `Vec` with a u32
+    /// and each `AssetConfig` is fixed size, so this is an exact upper bound.
+    pub const SPACE: usize = 8             // discriminator
+        + 1                                // bump
+        + 8                                // pool_id
+        + 32                               // admin
+        + 32                               // share_mint
+        + 32                               // vault
+        + 4 + POOL_ASSETS_MAX * AssetConfig::INIT_SPACE // assets
+        + 8                                // last_crank_unix_timestamp
+        + CrankPolicy::INIT_SPACE          // policy
+        + 1                                // paused
+        + 8; // owner_op_sequence
 
-    /// Returns Ok(true) if at least one basket position has moved by at least
-    /// `self.min_price_delta_bps` since the previous successful rebalance.
-    /// Returns Ok(false) when the last and current vectors have the same length
-    /// but no basket position exceeded the threshold (which includes the empty
-    /// first-run case, since an empty last vector never opens the gate).
-    /// Errors when the two vectors have different lengths, which is a wiring bug
-    /// on the caller side rather than a policy failure.
-    pub fn any_price_moved_enough(&self, current: &[RecordedPrice]) -> Result<bool> {
-        require!(
-            current.len() == self.last_prices.len(),
-            PortfolioError::ControllerBasketMismatch
-        );
-        for (last, now) in self.last_prices.iter().zip(current.iter()) {
-            if let Some(delta) = price_delta_bps(last, now) {
-                if u128::from(self.min_price_delta_bps) <= delta {
-                    return Ok(true);
-                }
-            }
-        }
-        Ok(false)
-    }
-
-    /// The permissionless rebalance gate. Returns Ok(true) when EITHER at least
-    /// one basket position has moved by at least `self.min_price_delta_bps` since
-    /// the previous successful rebalance, OR `interval_seconds` has elapsed since
-    /// `last_run` as measured against `now`. A negative `now` is rejected with
-    /// WrongLifecycle, matching the Solana clock's signed range.
-    pub fn rebalance_gate_open(
-        &self,
-        current: &[RecordedPrice],
-        last_run: i64,
-        now: i64,
-    ) -> Result<bool> {
-        if self.any_price_moved_enough(current)? {
-            return Ok(true);
-        }
-        require!(now >= 0, PortfolioError::WrongLifecycle);
-        let elapsed = (now.saturating_sub(last_run)) as u64;
-        Ok(elapsed >= self.interval_seconds)
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RecordedPrice {
-    pub mantissa: u64,
-    pub exponent: i32,
-}
-
-impl RecordedPrice {
-    /// Re-scale the mantissa so it lives at `target`, where `target` must be at
-    /// or below `self.exponent` (so the shift is exact). Returns None when the
-    /// exponent gap exceeds the internal 10^18 cap.
-    pub fn to_shared_exponent(&self, target: i32) -> Option<u128> {
-        let diff = u32::try_from(self.exponent.checked_sub(target)?).ok()?;
-        let scale = pow_10(diff)?;
-        u128::from(self.mantissa).checked_mul(scale)
-    }
-}
-
-pub const SWAP_MAX_SLIPPAGE_BPS: u128 = 500;
-
-const MAX_EXPONENT_SPAN: u32 = 18;
-
-fn pow_10(exponent: u32) -> Option<u128> {
-    if exponent > MAX_EXPONENT_SPAN {
-        return None;
-    }
-    let mut scale: u128 = 1;
-    let mut left = exponent;
-    while left > 0 {
-        scale = scale.checked_mul(10)?;
-        left -= 1;
-    }
-    Some(scale)
-}
-
-/// Absolute percentage move in basis points, on a shared scale. A pair whose
-/// exponents span more than 18 places is rejected with None, since that pair is
-/// unusable for a percentage comparison. A zero last price is rejected with None
-/// as well.
-pub fn price_delta_bps(last: &RecordedPrice, now: &RecordedPrice) -> Option<u128> {
-    let shared_exponent = last.exponent.min(now.exponent);
-    let last_scale = pow_10(u32::try_from(last.exponent - shared_exponent).ok()?)?;
-    let now_scale = pow_10(u32::try_from(now.exponent - shared_exponent).ok()?)?;
-    let last_value = u128::from(last.mantissa).checked_mul(last_scale)?;
-    let now_value = u128::from(now.mantissa).checked_mul(now_scale)?;
-    if last_value == 0 {
-        return None;
-    }
-    let spread = now_value.abs_diff(last_value);
-    spread
-        .checked_mul(WEIGHTS_SUM_BPS as u128)?
-        .checked_div(last_value)
-}
-
-/// Program-wide admission gate: the list of mints that have a Pyth price feed and
-/// therefore may enter a vault. Enforced in `fund_vault`, `withdraw_in_kind` and
-/// `update_allocation`. Anything not on this list is a rug-pull candidate.
-#[account]
-pub struct PortfolioAdmissionV2 {
-    pub bump: u8,
-    pub mints: Vec<Pubkey>,
-    pub feeds: Vec<Pubkey>,
-}
-
-impl PortfolioAdmissionV2 {
-    pub fn admits(&self, mint: &Pubkey) -> bool {
-        self.mints.iter().any(|candidate| candidate == mint)
-    }
-
-    pub fn feed_for(&self, mint: &Pubkey) -> Option<Pubkey> {
-        self.mints
-            .iter()
-            .zip(self.feeds.iter())
-            .find(|(candidate, _)| **candidate == *mint)
-            .map(|(_, feed)| *feed)
-    }
-
-    pub fn assert_admitted(&self, mint: &Pubkey) -> Result<()> {
-        require!(self.admits(mint), PortfolioError::FeedNotAdmitted);
-        Ok(())
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VaultLifecycleV2 {
-    Paused,
-    Active,
-    Closed,
-}
-
-impl OwnerRegistryV2 {
-    pub fn new(owner: Pubkey, bump: u8) -> Self {
-        Self {
-            bump,
-            owner,
-            next_vault_nonce: 0,
-            closed_tombstones: Vec::new(),
-        }
-    }
-}
-
-impl PortfolioVaultV2 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bump: u8,
-        owner: Pubkey,
-        nonce: u64,
-        mints: Vec<Pubkey>,
-        target_weights: Vec<u64>,
+        pool_id: u64,
+        admin: Pubkey,
+        share_mint: Pubkey,
+        vault: Pubkey,
+        assets: Vec<AssetConfig>,
+        policy: CrankPolicy,
     ) -> Result<Self> {
-        let count = mints.len();
-        require!(
-            (VAULT_ASSETS_MIN..=VAULT_ASSETS_MAX).contains(&count),
-            PortfolioError::WeightLengthMismatch
-        );
-        require!(
-            target_weights.len() == count,
-            PortfolioError::WeightLengthMismatch
-        );
-        let mut sum: u64 = 0;
-        for weight in &target_weights {
-            require!(
-                *weight >= WEIGHT_MIN_BPS,
-                PortfolioError::WeightsSumMismatch
-            );
-            sum = sum
-                .checked_add(*weight)
-                .ok_or(PortfolioError::WeightsSumMismatch)?;
-        }
-        require!(sum == WEIGHTS_SUM_BPS, PortfolioError::WeightsSumMismatch);
-        let units: Vec<u64> = vec![0_u64; count];
+        Self::assert_assets_valid(&assets)?;
+        Self::assert_policy_valid(&policy)?;
         Ok(Self {
             bump,
-            owner,
-            nonce,
-            lifecycle: VaultLifecycleV2::Active,
-            mints,
-            target_weights,
+            pool_id,
+            admin,
+            share_mint,
+            vault,
+            assets,
+            last_crank_unix_timestamp: 0,
+            policy,
+            paused: false,
             owner_op_sequence: 1,
-            units,
-            last_run_unix_timestamp: 0,
         })
     }
 
-    pub fn assert_owner(&self, signer: &Pubkey) -> Result<()> {
-        require_keys_eq!(self.owner, *signer, PortfolioError::UnauthorizedVaultOwner);
-        Ok(())
-    }
-
-    pub fn assert_lifecycle(&self, want: VaultLifecycleV2) -> Result<()> {
-        require!(self.lifecycle == want, PortfolioError::WrongLifecycle);
-        Ok(())
-    }
-
-    pub fn assert_empty(&self) -> Result<()> {
-        for u in &self.units {
-            require!(*u == 0, PortfolioError::VaultNotEmpty);
-        }
-        Ok(())
-    }
-
-    pub fn assert_weights_match_basket(&self, weights: &[u64]) -> Result<()> {
+    /// Basket shape: 2..=10 legs, a live feed, mint and weight on each, no
+    /// duplicate mints, and weights summing to exactly 10_000.
+    pub fn assert_assets_valid(assets: &[AssetConfig]) -> Result<()> {
         require!(
-            weights.len() == self.mints.len(),
-            PortfolioError::WeightLengthMismatch
+            assets.len() >= POOL_ASSETS_MIN,
+            PortfolioError::NotEnoughAssets
+        );
+        require!(
+            assets.len() <= POOL_ASSETS_MAX,
+            PortfolioError::TooManyAssets
         );
         let mut sum: u64 = 0;
-        for w in weights {
-            require!(*w >= WEIGHT_MIN_BPS, PortfolioError::WeightsSumMismatch);
+        for (index, asset) in assets.iter().enumerate() {
+            require!(
+                asset.pyth_feed != Pubkey::default()
+                    && asset.feed_id != [0u8; 32]
+                    && asset.mint != Pubkey::default()
+                    && asset.vault_token_account != Pubkey::default()
+                    && asset.target_weight_bps > 0,
+                PortfolioError::InvalidAssetConfig
+            );
+            for earlier in &assets[..index] {
+                require!(
+                    earlier.mint != asset.mint,
+                    PortfolioError::DuplicateAssetMint
+                );
+            }
             sum = sum
-                .checked_add(*w)
-                .ok_or(PortfolioError::WeightsSumMismatch)?;
+                .checked_add(u64::from(asset.target_weight_bps))
+                .ok_or(PortfolioError::MathOverflow)?;
         }
         require!(sum == WEIGHTS_SUM_BPS, PortfolioError::WeightsSumMismatch);
         Ok(())
     }
 
-    /// Checks that the caller's proposed swap legs are value-balanced within
-    /// `SWAP_MAX_SLIPPAGE_BPS` AND do not over-donate into the vault. Values are
-    /// computed at the shared (min) exponent of the two swapped feeds so an
-    /// exponent mismatch on the pair cannot be dodged. Errors with
-    /// `SwapValueImbalanced` on either failure mode.
-    pub fn assert_swap_value_balanced(
-        &self,
-        prices: &[RecordedPrice],
-        index_in: usize,
-        index_out: usize,
-        amount_in: u64,
-        amount_out: u64,
-    ) -> Result<()> {
-        let price_in = *prices
-            .get(index_in)
-            .ok_or(PortfolioError::WeightLengthMismatch)?;
-        let price_out = *prices
-            .get(index_out)
-            .ok_or(PortfolioError::WeightLengthMismatch)?;
-        let swap_min_exp = price_in.exponent.min(price_out.exponent);
-        let in_value = u128::from(amount_in)
-            .checked_mul(
-                price_in
-                    .to_shared_exponent(swap_min_exp)
-                    .ok_or(PortfolioError::OracleRejected)?,
-            )
-            .ok_or(PortfolioError::WeightsSumMismatch)?;
-        let out_value = u128::from(amount_out)
-            .checked_mul(
-                price_out
-                    .to_shared_exponent(swap_min_exp)
-                    .ok_or(PortfolioError::OracleRejected)?,
-            )
-            .ok_or(PortfolioError::WeightsSumMismatch)?;
-        require!(out_value <= in_value, PortfolioError::SwapValueImbalanced);
-        let donation_bps = in_value
-            .checked_sub(out_value)
-            .ok_or(PortfolioError::WeightsSumMismatch)?
-            .checked_mul(WEIGHTS_SUM_BPS as u128)
-            .ok_or(PortfolioError::WeightsSumMismatch)?
-            .checked_div(in_value)
-            .ok_or(PortfolioError::WeightsSumMismatch)?;
+    pub fn assert_policy_valid(policy: &CrankPolicy) -> Result<()> {
         require!(
-            donation_bps <= SWAP_MAX_SLIPPAGE_BPS,
-            PortfolioError::SwapValueImbalanced
+            policy.gate_mode == GATE_OR || policy.gate_mode == GATE_AND,
+            PortfolioError::InvalidGateMode
         );
         Ok(())
     }
 
-    /// Checks that the swap direction narrows the current imbalance rather than
-    /// widening it: `asset_out` must be at or above its target weight and
-    /// `asset_in` must be at or below its target weight, evaluated at the shared
-    /// scale across the whole basket so cross-mint value comparison is legal.
-    /// Errors with `WrongDirection` when either side disagrees, or
-    /// `VaultNotEmpty` when the basket has no value to rebalance over.
-    pub fn assert_rebalance_direction(
-        &self,
-        prices: &[RecordedPrice],
-        index_in: usize,
-        index_out: usize,
-    ) -> Result<()> {
+    pub fn assert_admin(&self, signer: &Pubkey) -> Result<()> {
+        require_keys_eq!(self.admin, *signer, PortfolioError::UnauthorizedPoolAdmin);
+        Ok(())
+    }
+
+    pub fn assert_running(&self) -> Result<()> {
+        require!(!self.paused, PortfolioError::PoolPaused);
+        Ok(())
+    }
+
+    pub fn assert_owner_sequence(&self, expected: u64) -> Result<()> {
         require!(
-            prices.len() == self.mints.len() && self.units.len() == self.mints.len(),
-            PortfolioError::WeightLengthMismatch
-        );
-        let basket_min_exp = prices.iter().map(|p| p.exponent).min().unwrap_or_default();
-        let mut values: Vec<u128> = Vec::new();
-        let mut total: u128 = 0;
-        for (slot, price) in prices.iter().enumerate() {
-            let scaled = price
-                .to_shared_exponent(basket_min_exp)
-                .ok_or(PortfolioError::OracleRejected)?;
-            let units = *self
-                .units
-                .get(slot)
-                .ok_or(PortfolioError::WeightLengthMismatch)?;
-            let value = u128::from(units)
-                .checked_mul(scaled)
-                .ok_or(PortfolioError::WeightsSumMismatch)?;
-            total = total
-                .checked_add(value)
-                .ok_or(PortfolioError::WeightsSumMismatch)?;
-            values.push(value);
-        }
-        require!(total > 0, PortfolioError::VaultNotEmpty);
-        let weight_out_bps = (*values
-            .get(index_out)
-            .ok_or(PortfolioError::WeightLengthMismatch)?)
-        .checked_mul(WEIGHTS_SUM_BPS as u128)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_div(total)
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-        let weight_in_bps = (*values
-            .get(index_in)
-            .ok_or(PortfolioError::WeightLengthMismatch)?)
-        .checked_mul(WEIGHTS_SUM_BPS as u128)
-        .ok_or(PortfolioError::WeightsSumMismatch)?
-        .checked_div(total)
-        .ok_or(PortfolioError::WeightsSumMismatch)?;
-        require!(
-            weight_out_bps
-                >= u128::from(
-                    *self
-                        .target_weights
-                        .get(index_out)
-                        .ok_or(PortfolioError::WeightLengthMismatch)?
-                ),
-            PortfolioError::WrongDirection
-        );
-        require!(
-            weight_in_bps
-                <= u128::from(
-                    *self
-                        .target_weights
-                        .get(index_in)
-                        .ok_or(PortfolioError::WeightLengthMismatch)?
-                ),
-            PortfolioError::WrongDirection
+            expected == self.owner_op_sequence,
+            PortfolioError::OwnerSequenceMismatch
         );
         Ok(())
     }
 
-    /// The pro-rata withdrawal shares: floor(`basis_points` / 10_000) of every
-    /// basket leg, in raw units. A pool that carries a ratio must also leave on
-    /// that ratio, so every leg gives up the same share and the floor's dust
-    /// stays in the vault for the holders who remain (a ceil would risk
-    /// over-drawing an underfunded leg). The product is held at u128 scale so a
-    /// whale-sized basket cannot overflow the u64 multiply, and is truncated
-    /// back down afterwards.
-    pub fn withdraw_shares(&self, basis_points: u64) -> Result<Vec<u64>> {
-        require!(
-            basis_points > 0 && basis_points <= WEIGHTS_SUM_BPS,
-            PortfolioError::WithdrawRatioInvalid
-        );
-        let mut shares = Vec::with_capacity(self.units.len());
-        for units in &self.units {
-            let share = u128::from(*units)
-                .checked_mul(u128::from(basis_points))
-                .ok_or(PortfolioError::WithdrawShareOverflow)?
-                .checked_div(u128::from(WEIGHTS_SUM_BPS))
-                .ok_or(PortfolioError::WithdrawShareOverflow)?;
-            shares.push(
-                u64::try_from(share).map_err(|_| error!(PortfolioError::WithdrawShareOverflow))?,
-            );
-        }
-        Ok(shares)
+    /// Consume the current sequence number, so a configure call can be applied
+    /// exactly once.
+    pub fn bump_owner_sequence(&mut self) -> Result<()> {
+        self.owner_op_sequence = self
+            .owner_op_sequence
+            .checked_add(1)
+            .ok_or(PortfolioError::MathOverflow)?;
+        Ok(())
     }
+
+    /// Seconds since the last successful crank, or `None` if the clock moved
+    /// backwards.
+    pub fn elapsed_seconds(&self, now: i64) -> Option<u64> {
+        u64::try_from(now.checked_sub(self.last_crank_unix_timestamp)?).ok()
+    }
+
+    pub fn cadence_elapsed(&self, now: i64) -> bool {
+        self.elapsed_seconds(now)
+            .is_some_and(|age| age >= self.policy.min_crank_interval_secs)
+    }
+
+    /// True when any leg's fresh price has moved at least
+    /// `min_price_change_bps` from the cached one.
+    ///
+    /// A leg that was never priced (fresh pool, or a feed that was just swapped)
+    /// has no history to compare, and the pool cannot be priced at all until a
+    /// crank seeds it. Such a leg therefore opens the gate by itself, or an
+    /// `GATE_AND` pool could never bootstrap and a feed swap could wedge it.
+    pub fn any_price_moved_enough(&self, fresh: &[(i64, i32)]) -> Option<bool> {
+        if fresh.len() != self.assets.len() {
+            return None;
+        }
+        for (asset, (price, exponent)) in self.assets.iter().zip(fresh.iter()) {
+            if asset.last_price == 0 {
+                return Some(true);
+            }
+            if let Some(delta) = price_delta_bps(
+                asset.last_price,
+                asset.last_price_exponent,
+                *price,
+                *exponent,
+            ) {
+                if delta >= u128::from(self.policy.min_price_change_bps) {
+                    return Some(true);
+                }
+            }
+        }
+        Some(false)
+    }
+
+    /// The permissionless crank gate. `GATE_OR` opens on either trigger;
+    /// `GATE_AND` needs both. The error names the trigger the caller is missing,
+    /// so a keeper can tell "wait" from "nothing to do".
+    pub fn crank_gate_open(&self, cadence_elapsed: bool, any_price_moved: bool) -> Result<()> {
+        match self.policy.gate_mode {
+            GATE_AND => {
+                require!(cadence_elapsed, PortfolioError::CrankTooSoon);
+                require!(any_price_moved, PortfolioError::PriceChangeBelowThreshold);
+                Ok(())
+            }
+            _ => {
+                require!(
+                    cadence_elapsed || any_price_moved,
+                    PortfolioError::RebalanceThresholdNotMet
+                );
+                Ok(())
+            }
+        }
+    }
+
+    /// Largest absolute distance between a leg's current weight and its target.
+    pub fn worst_weight_excess_bps(&self, weights_bps: &[u128]) -> Option<u128> {
+        if weights_bps.len() != self.assets.len() {
+            return None;
+        }
+        let mut worst = 0u128;
+        for (asset, weight) in self.assets.iter().zip(weights_bps.iter()) {
+            let gap = weight.abs_diff(u128::from(asset.target_weight_bps));
+            if gap > worst {
+                worst = gap;
+            }
+        }
+        Some(worst)
+    }
+
+    /// A crank with nothing to do should not be paid for. When a minimum drift
+    /// is configured, at least one leg must be that far from target.
+    pub fn assert_rebalance_worthwhile(&self, weights_bps: &[u128]) -> Result<()> {
+        if self.policy.min_rebalance_bps == 0 {
+            return Ok(());
+        }
+        let worst = self
+            .worst_weight_excess_bps(weights_bps)
+            .ok_or(PortfolioError::WeightLengthMismatch)?;
+        require!(
+            worst >= u128::from(self.policy.min_rebalance_bps),
+            PortfolioError::RebalanceExcessTooSmall
+        );
+        Ok(())
+    }
+
+    /// A cached price is only good for `max_staleness_secs`; a deposit priced
+    /// from an older cache would be trading against a stale basket.
+    pub fn assert_cache_fresh(&self, now: i64) -> Result<()> {
+        let age = u64::try_from(
+            now.checked_sub(self.last_crank_unix_timestamp)
+                .ok_or(PortfolioError::MathOverflow)?,
+        )
+        .map_err(|_| PortfolioError::StalePriceCache)?;
+        require!(
+            age <= self.policy.max_staleness_secs,
+            PortfolioError::StalePriceCache
+        );
+        Ok(())
+    }
+
+    /// Overwrite the cached price of one leg after a validated read.
+    pub fn record_price(&mut self, index: usize, price: i64, exponent: i32, confidence: u64) {
+        if let Some(asset) = self.assets.get_mut(index) {
+            asset.last_price = price;
+            asset.last_price_exponent = exponent;
+            asset.last_confidence = confidence;
+        }
+    }
+
+    /// The cached `(price, exponent)` of every leg, in basket order.
+    pub fn cached_prices(&self) -> Vec<(i64, i32)> {
+        self.assets
+            .iter()
+            .map(|asset| (asset.last_price, asset.last_price_exponent))
+            .collect()
+    }
+}
+
+/// `10^power`, capped so a rescale can never represent more precision than the
+/// program is willing to reason about.
+pub fn pow_10(power: u32) -> Option<u128> {
+    if power > MAX_SCALE_POWER {
+        return None;
+    }
+    let mut value = 1u128;
+    for _ in 0..power {
+        value = value.checked_mul(10)?;
+    }
+    Some(value)
+}
+
+/// Scale `value` from one decimal exponent to another. Only scaling up is
+/// allowed (a finer exponent to a coarser one); anything else would have to
+/// discard precision, so it reports `None` instead of rounding.
+pub fn rescale(value: u128, from: i32, to: i32) -> Option<u128> {
+    let shift = from.checked_sub(to)?;
+    if shift < 0 {
+        return None;
+    }
+    value.checked_mul(pow_10(u32::try_from(shift).ok()?)?)
+}
+
+/// Absolute percentage move between a cached price and a fresh one, in basis
+/// points. `None` when the cached price is unset, when the exponent span is
+/// unusable, or on overflow.
+pub fn price_delta_bps(
+    last_price: i64,
+    last_exponent: i32,
+    now_price: i64,
+    now_exponent: i32,
+) -> Option<u128> {
+    let shared = last_exponent.min(now_exponent);
+    let last = rescale(u128::try_from(last_price).ok()?, last_exponent, shared)?;
+    let now = rescale(u128::try_from(now_price).ok()?, now_exponent, shared)?;
+    if last == 0 {
+        return None;
+    }
+    now.abs_diff(last)
+        .checked_mul(u128::from(WEIGHTS_SUM_BPS))?
+        .checked_div(last)
+}
+
+/// One leg's value in the pool's own unit (micro-dollars), floored.
+///
+/// A price carries its feeder's exponent, so it is shifted into the pool's
+/// value unit. Shifting down divides, which floors at a fraction of a
+/// micro-dollar; that is the only rounding in the pool's valuation, and the
+/// same floor is applied to the basket and to every deposit, so the ratio
+/// between them stays fair.
+pub fn leg_value(balance: u64, price: i64, exponent: i32) -> Option<u128> {
+    let mantissa = u128::try_from(price).ok()?;
+    let scaled = u128::from(balance).checked_mul(mantissa)?;
+    let shift = exponent.checked_add(i32::from(POOL_VALUE_DECIMALS))?;
+    if shift >= 0 {
+        scaled.checked_mul(pow_10(u32::try_from(shift).ok()?)?)
+    } else {
+        let divisor = pow_10(u32::try_from(shift.checked_neg()?).ok()?)?;
+        scaled.checked_div(divisor)
+    }
+}
+
+/// Each leg's value in the pool's unit. A basket that cannot be valued (a
+/// non-positive price, an exponent too far away, overflow) yields `None`, and
+/// the caller must treat that as "cannot price this basket", never as zero.
+pub fn basket_values(balances: &[u64], prices: &[(i64, i32)]) -> Option<Vec<u128>> {
+    if balances.len() != prices.len() {
+        return None;
+    }
+    let mut values = Vec::with_capacity(prices.len());
+    for (balance, (price, exponent)) in balances.iter().zip(prices.iter()) {
+        values.push(leg_value(*balance, *price, *exponent)?);
+    }
+    Some(values)
+}
+
+/// Sum of a basket's leg values, or `None` on overflow.
+pub fn basket_total(values: &[u128]) -> Option<u128> {
+    values
+        .iter()
+        .try_fold(0u128, |acc, value| acc.checked_add(*value))
+}
+
+/// Each leg's share of the basket in basis points, floored. `None` when the
+/// basket holds no value.
+pub fn basket_weights_bps(values: &[u128]) -> Option<Vec<u128>> {
+    let total = basket_total(values)?;
+    if total == 0 {
+        return None;
+    }
+    let mut weights = Vec::with_capacity(values.len());
+    for value in values {
+        weights.push(
+            value
+                .checked_mul(u128::from(WEIGHTS_SUM_BPS))?
+                .checked_div(total)?,
+        );
+    }
+    Some(weights)
+}
+
+/// Shares to mint for a deposit.
+///
+/// The first deposit mints one share per unit of value. A later deposit mints
+/// the same fraction of the existing supply that it adds to the pool's value,
+/// so the price of a share never moves for the holders who were already in.
+pub fn shares_for_deposit(supply: u64, pool_value: u128, deposit_value: u128) -> Option<u64> {
+    if deposit_value == 0 {
+        return None;
+    }
+    let shares = if supply == 0 {
+        deposit_value
+    } else {
+        if pool_value == 0 {
+            return None;
+        }
+        u128::from(supply)
+            .checked_mul(deposit_value)?
+            .checked_div(pool_value)?
+    };
+    if shares == 0 {
+        return None;
+    }
+    u64::try_from(shares).ok()
+}
+
+/// Raw units of one leg that `share_amount` of the `supply` may redeem, floored.
+/// Held at u128 so a whale-sized basket cannot wrap the u64 multiply.
+pub fn pro_rata_payout(balance: u64, share_amount: u64, supply: u64) -> Option<u64> {
+    if supply == 0 {
+        return None;
+    }
+    let payout = u128::from(balance)
+        .checked_mul(u128::from(share_amount))?
+        .checked_div(u128::from(supply))?;
+    u64::try_from(payout).ok()
+}
+
+/// The least the vault will accept from a swap: the caller's quote reduced by
+/// its own slippage tolerance, floored. `None` when the tolerance exceeds the
+/// program's cap, so a caller can never quote away the whole output.
+pub fn min_swap_out(quoted_out_amount: u64, slippage_bps: u16) -> Option<u64> {
+    if slippage_bps > SWAP_MAX_SLIPPAGE_BPS {
+        return None;
+    }
+    let kept_bps = u128::from(WEIGHTS_SUM_BPS) - u128::from(slippage_bps);
+    let numerator = u128::from(quoted_out_amount).checked_mul(kept_bps)?;
+    u64::try_from(numerator / u128::from(WEIGHTS_SUM_BPS)).ok()
+}
+
+/// The least *value* a swap may return, measured against the pool's own fresh
+/// prices rather than the caller's quote. A permissionless cranker cannot quote
+/// its way into a cheaper trade - the floor is the value of what the pool gave
+/// away, less the same capped slippage - so the most any single swap can lose is
+/// the slippage on the drift it corrected.
+pub fn min_swap_out_value(sold_value: u128, slippage_bps: u16) -> Option<u128> {
+    if slippage_bps > SWAP_MAX_SLIPPAGE_BPS {
+        return None;
+    }
+    let kept_bps = u128::from(WEIGHTS_SUM_BPS) - u128::from(slippage_bps);
+    sold_value
+        .checked_mul(kept_bps)?
+        .checked_div(u128::from(WEIGHTS_SUM_BPS))
+}
+
+/// A declared swap may only move the two legs it names.
+///
+/// The venue is invoked with the pool's vault PDA as the signer, so a
+/// hand-crafted route could reach a custody account the swap never declared.
+/// Comparing the whole basket before and after closes that: any other leg
+/// changing means value left the pool somewhere the slippage floors were not
+/// watching.
+pub fn assert_only_swap_legs_moved(
+    before: &[u64],
+    after: &[u64],
+    sell: usize,
+    buy: usize,
+) -> Result<()> {
+    require!(
+        before.len() == after.len(),
+        PortfolioError::WeightLengthMismatch
+    );
+    for (index, (before, after)) in before.iter().zip(after.iter()).enumerate() {
+        if index == sell || index == buy {
+            continue;
+        }
+        require!(before == after, PortfolioError::SwapMovedOtherLeg);
+    }
+    Ok(())
+}
+
+/// A swap may only narrow the basket's imbalance.
+///
+/// Before it, the leg being sold must sit at or above its target and the leg
+/// being bought at or below its own; afterwards neither may have crossed to the
+/// far side. Together with the pinned venue and the per-swap slippage cap, this
+/// bounds how much value a permissionless cranker can move: at most the
+/// existing imbalance, and never past the target.
+pub fn assert_swap_narrows(
+    assets: &[AssetConfig],
+    weights_before: &[u128],
+    weights_after: &[u128],
+    sell: usize,
+    buy: usize,
+) -> Result<()> {
+    require!(sell != buy, PortfolioError::WrongDirection);
+    let sell_target = u128::from(
+        assets
+            .get(sell)
+            .ok_or(PortfolioError::WrongDirection)?
+            .target_weight_bps,
+    );
+    let buy_target = u128::from(
+        assets
+            .get(buy)
+            .ok_or(PortfolioError::WrongDirection)?
+            .target_weight_bps,
+    );
+    let sell_before = *weights_before
+        .get(sell)
+        .ok_or(PortfolioError::WrongDirection)?;
+    let buy_before = *weights_before
+        .get(buy)
+        .ok_or(PortfolioError::WrongDirection)?;
+    require!(
+        sell_before >= sell_target && buy_before <= buy_target,
+        PortfolioError::WrongDirection
+    );
+    let sell_after = *weights_after
+        .get(sell)
+        .ok_or(PortfolioError::WrongDirection)?;
+    let buy_after = *weights_after
+        .get(buy)
+        .ok_or(PortfolioError::WrongDirection)?;
+    require!(
+        sell_after >= sell_target && buy_after <= buy_target,
+        PortfolioError::SwapOvershoot
+    );
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn basket(n: usize) -> Vec<Pubkey> {
-        let mut v = Vec::new();
-        for i in 0..n {
-            v.push(Pubkey::new_from_array([i as u8; 32]));
+    fn feed(byte: u8) -> Pubkey {
+        Pubkey::new_from_array([byte; 32])
+    }
+
+    fn asset(mint_byte: u8, weight: u16, feed_byte: u8) -> AssetConfig {
+        AssetConfig {
+            pyth_feed: feed(feed_byte),
+            feed_id: [feed_byte; 32],
+            mint: feed(mint_byte),
+            vault_token_account: feed(mint_byte.wrapping_add(100)),
+            target_weight_bps: weight,
+            last_price: 0,
+            last_price_exponent: 0,
+            last_confidence: 0,
         }
-        v
+    }
+
+    fn policy() -> CrankPolicy {
+        CrankPolicy {
+            min_crank_interval_secs: 60,
+            min_price_change_bps: 100,
+            min_rebalance_bps: 0,
+            max_staleness_secs: 3_600,
+            max_confidence_bps: 100,
+            gate_mode: GATE_OR,
+        }
+    }
+
+    fn pool(assets: Vec<AssetConfig>, policy: CrankPolicy) -> EtfPool {
+        EtfPool::new(1, 7, feed(9), feed(8), feed(7), assets, policy).unwrap()
+    }
+
+    fn priced(mint_byte: u8, weight: u16, price: i64) -> AssetConfig {
+        let mut a = asset(mint_byte, weight, mint_byte);
+        a.last_price = price;
+        a.last_price_exponent = -8;
+        a
     }
 
     #[test]
-    fn vault_new_accepts_a_two_asset_balanced_basket() {
-        PortfolioVaultV2::new(255, Pubkey::default(), 0, basket(2), vec![5_000, 5_000]).unwrap();
+    fn asset_config_is_fifteen_fixed_fields() {
+        // 4 pubkeys, two of them 32-byte arrays, plus 2+8+4+8 scalar bytes.
+        assert_eq!(AssetConfig::INIT_SPACE, 32 * 4 + 2 + 8 + 4 + 8);
     }
 
     #[test]
-    fn vault_new_accepts_a_three_asset_basket() {
-        PortfolioVaultV2::new(
-            255,
-            Pubkey::default(),
-            0,
-            basket(3),
-            vec![4_000, 3_000, 3_000],
-        )
-        .unwrap();
-    }
+    fn pool_state_round_trips_inside_its_reserved_space() {
+        // The longest legal basket: ten legs at an even 1_000 bps each. Byte
+        // zero is the "unset" sentinel, so the legs start at one.
+        let assets: Vec<AssetConfig> = (1..=POOL_ASSETS_MAX as u8)
+            .map(|i| asset(i, 1_000, i))
+            .collect();
+        let full = pool(assets, policy());
 
-    #[test]
-    fn vault_new_rejects_an_out_of_range_basket_size() {
-        assert!(PortfolioVaultV2::new(0, Pubkey::default(), 0, basket(1), vec![10_000],).is_err());
-        assert!(PortfolioVaultV2::new(
-            0,
-            Pubkey::default(),
-            0,
-            basket(4),
-            vec![2_500, 2_500, 2_500, 2_500],
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn vault_new_rejects_weights_that_miss_the_10_000_sum() {
-        assert!(
-            PortfolioVaultV2::new(0, Pubkey::default(), 0, basket(2), vec![4_000, 5_000],).is_err()
-        );
-    }
-
-    #[test]
-    fn owner_assertion_rejects_a_wrong_signer() {
-        let vault = PortfolioVaultV2::new(
-            0,
-            Pubkey::new_from_array([1; 32]),
-            0,
-            basket(2),
-            vec![5_000, 5_000],
-        )
-        .unwrap();
-        assert!(vault
-            .assert_owner(&Pubkey::new_from_array([2; 32]))
-            .is_err());
-        assert!(vault.assert_owner(&Pubkey::new_from_array([1; 32])).is_ok());
-    }
-
-    #[test]
-    fn lifecycle_assertion_matches_only_the_requested_state() {
-        let mut vault =
-            PortfolioVaultV2::new(0, Pubkey::default(), 0, basket(2), vec![5_000, 5_000]).unwrap();
-        assert!(vault.assert_lifecycle(VaultLifecycleV2::Active).is_ok());
-        vault.lifecycle = VaultLifecycleV2::Closed;
-        assert!(vault.assert_lifecycle(VaultLifecycleV2::Active).is_err());
-        assert!(vault.assert_lifecycle(VaultLifecycleV2::Closed).is_ok());
-    }
-
-    #[test]
-    fn empty_check_allows_only_a_zero_units_vault() {
-        let mut vault =
-            PortfolioVaultV2::new(0, Pubkey::default(), 0, basket(2), vec![5_000, 5_000]).unwrap();
-        assert!(vault.assert_empty().is_ok());
-        vault.units[0] = 1;
-        assert!(vault.assert_empty().is_err());
-    }
-
-    #[test]
-    fn weights_must_have_the_same_length_as_the_basket_and_still_sum_to_the_total() {
-        let vault =
-            PortfolioVaultV2::new(0, Pubkey::default(), 0, basket(2), vec![5_000, 5_000]).unwrap();
-        assert!(vault.assert_weights_match_basket(&[6_000, 4_000]).is_ok());
-        assert!(vault
-            .assert_weights_match_basket(&[5_000, 5_000, 0])
-            .is_err());
-        assert!(vault.assert_weights_match_basket(&[6_000, 5_000]).is_err());
-    }
-
-    #[test]
-    fn vault_state_round_trips_through_its_anchor_codec() {
-        let mut vault = PortfolioVaultV2::new(
-            255,
-            Pubkey::default(),
-            0,
-            basket(3),
-            vec![4_000, 3_000, 3_000],
-        )
-        .unwrap();
-        vault.units[0] = 100;
-        vault.owner_op_sequence = 3;
-        let mut bytes = vec![0u8; VAULT_SPACE];
+        let mut bytes = vec![0u8; EtfPool::SPACE];
         let mut output: &mut [u8] = &mut bytes;
-        vault.try_serialize(&mut output).unwrap();
+        full.try_serialize(&mut output).unwrap();
+        let written = EtfPool::SPACE - output.len();
         assert!(
-            output.len() < VAULT_SPACE,
-            "vault state must leave slack inside the reserved space"
+            written <= EtfPool::SPACE,
+            "a full basket must fit inside the reserved space"
         );
+        assert!(
+            EtfPool::SPACE - written <= 8,
+            "the reserved space should not carry more than a few bytes of slack"
+        );
+
+        // The bytes the handler will persist read back as the same pool.
+        let mut reader: &[u8] = &bytes[..written];
+        let round_tripped = EtfPool::try_deserialize(&mut reader).unwrap();
+        assert_eq!(round_tripped.assets, full.assets);
+        assert_eq!(round_tripped.policy, full.policy);
+        assert_eq!(round_tripped.admin, full.admin);
+        assert_eq!(round_tripped.owner_op_sequence, full.owner_op_sequence);
     }
 
     #[test]
-    fn controller_state_round_trips_and_leaves_slack() {
-        let controller = AutomationControllerV2 {
-            bump: 255,
-            vault: Pubkey::new_from_array([11; 32]),
-            generation: 7,
-            run_nonce: 42,
-            interval_seconds: 75,
-            min_price_delta_bps: 10,
-            last_prices: vec![
-                RecordedPrice {
-                    mantissa: 1_000_000_000,
-                    exponent: -8,
-                },
-                RecordedPrice {
-                    mantissa: 2_000_000_000,
-                    exponent: -8,
-                },
-            ],
-        };
-        let mut bytes = vec![0u8; CONTROLLER_SPACE];
-        let mut output: &mut [u8] = &mut bytes;
-        controller.try_serialize(&mut output).unwrap();
-        assert!(
-            output.len() < CONTROLLER_SPACE,
-            "controller state must leave slack inside the reserved space"
-        );
+    fn assets_must_be_a_two_to_ten_leg_basket_that_sums_to_ten_thousand() {
+        assert!(EtfPool::assert_assets_valid(&[asset(1, 10_000, 1)]).is_err());
+        let too_many: Vec<AssetConfig> = (0..(POOL_ASSETS_MAX as u8 + 1))
+            .map(|i| asset(i, 100, i))
+            .collect();
+        assert!(EtfPool::assert_assets_valid(&too_many).is_err());
+        assert!(EtfPool::assert_assets_valid(&[asset(1, 5_000, 1), asset(2, 5_000, 2)]).is_ok());
+        assert!(EtfPool::assert_assets_valid(&[asset(1, 5_000, 1), asset(2, 4_999, 2)]).is_err());
+        // A repeated mint is rejected even when the weights balance.
+        assert!(EtfPool::assert_assets_valid(&[asset(1, 5_000, 1), asset(1, 5_000, 2)]).is_err());
+        // A zero weight is not a leg.
+        assert!(EtfPool::assert_assets_valid(&[asset(1, 10_000, 1), asset(2, 0, 2)]).is_err());
     }
 
     #[test]
-    fn price_delta_bps_ignores_exponent_difference() {
-        let last = RecordedPrice {
-            mantissa: 1_000_000_000,
-            exponent: -8,
-        };
-        // Same-exponent pair, one percent higher: exactly 100 basis points.
-        let up_same = RecordedPrice {
-            mantissa: 1_010_000_000,
-            exponent: -8,
-        };
-        assert_eq!(price_delta_bps(&last, &up_same), Some(100));
-        let down_same = RecordedPrice {
-            mantissa: 990_000_000,
-            exponent: -8,
-        };
-        assert_eq!(price_delta_bps(&last, &down_same), Some(100));
-        // Coarser exponent, same real price delta: 100 basis points again.
-        let up_coarse = RecordedPrice {
-            mantissa: 1_010_000,
-            exponent: -5,
-        };
-        assert_eq!(price_delta_bps(&last, &up_coarse), Some(100));
-        // A zero last price has no meaningful ratio and yields None.
-        let zero = RecordedPrice {
-            mantissa: 0,
-            exponent: -8,
-        };
-        assert_eq!(price_delta_bps(&zero, &up_same), None);
-        // An exponent span wider than the internal 10^18 cap yields None.
-        let too_far = RecordedPrice {
-            mantissa: 1,
-            exponent: -100,
-        };
-        assert!(price_delta_bps(&last, &too_far).is_none());
+    fn gate_matrix_matches_the_configured_mode() {
+        let mut or_pool = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], policy());
+        assert!(or_pool.crank_gate_open(true, false).is_ok());
+        assert!(or_pool.crank_gate_open(false, true).is_ok());
+        assert!(or_pool.crank_gate_open(true, true).is_ok());
+        assert!(or_pool.crank_gate_open(false, false).is_err());
+
+        let mut and_policy = policy();
+        and_policy.gate_mode = GATE_AND;
+        let and_pool = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], and_policy);
+        assert!(and_pool.crank_gate_open(true, true).is_ok());
+        assert!(and_pool.crank_gate_open(false, true).is_err());
+        assert!(and_pool.crank_gate_open(true, false).is_err());
+        assert!(and_pool.crank_gate_open(false, false).is_err());
+        or_pool.policy.gate_mode = 9;
+        assert!(EtfPool::assert_policy_valid(&or_pool.policy).is_err());
     }
 
     #[test]
-    fn any_price_moved_enough_only_opens_when_a_basket_position_passes_the_threshold() {
-        // Threshold of ten basis points against two $1.00 last prices (mantissa 100_000_000
-        // at exponent -8). A move to 100_100_000 hits the threshold exactly, so the
-        // gate opens; 100_090_000 is one basis point below, so it does not.
-        let last_prices = vec![
-            RecordedPrice {
-                mantissa: 100_000_000,
-                exponent: -8,
-            },
-            RecordedPrice {
-                mantissa: 100_000_000,
-                exponent: -8,
-            },
-        ];
-        let mut controller = AutomationControllerV2 {
-            bump: 255,
-            vault: Pubkey::default(),
-            generation: 0,
-            run_nonce: 0,
-            interval_seconds: 0,
-            min_price_delta_bps: 10,
-            last_prices: last_prices.clone(),
-        };
-        assert!(
-            controller
-                .any_price_moved_enough(&[
-                    RecordedPrice {
-                        mantissa: 100_090_000,
-                        exponent: -8
-                    },
-                    RecordedPrice {
-                        mantissa: 100_100_000,
-                        exponent: -8
-                    },
-                ])
-                .unwrap(),
-            "one basket position at the threshold must open the gate"
-        );
-        assert!(
-            !controller
-                .any_price_moved_enough(&[
-                    RecordedPrice {
-                        mantissa: 100_009_000,
-                        exponent: -8
-                    },
-                    RecordedPrice {
-                        mantissa: 100_001_000,
-                        exponent: -8
-                    },
-                ])
-                .unwrap(),
-            "two basket positions under the threshold must keep the gate closed"
-        );
-        controller.last_prices = vec![];
-        assert!(
-            controller
-                .any_price_moved_enough(&[RecordedPrice {
-                    mantissa: 999_999_999,
-                    exponent: -8
-                },])
-                .is_err(),
-            "a length mismatch is reported as an error, not as a silent gate pass"
-        );
-        controller.last_prices = last_prices.clone();
-        assert!(!controller.any_price_moved_enough(&last_prices).unwrap());
-    }
-
-    #[test]
-    fn admission_state_round_trips_and_admits_by_mint() {
-        let admitted = Pubkey::new_from_array([21; 32]);
-        let missing = Pubkey::new_from_array([88; 32]);
-        let admission = PortfolioAdmissionV2 {
-            bump: 255,
-            mints: vec![admitted],
-            feeds: vec![Pubkey::new_from_array([41; 32])],
-        };
-        assert!(admission.admits(&admitted));
-        assert!(!admission.admits(&missing));
-        assert!(admission.assert_admitted(&admitted).is_ok());
-        assert!(admission.assert_admitted(&missing).is_err());
+    fn price_delta_ignores_the_exponent_difference() {
         assert_eq!(
-            admission.feed_for(&admitted),
-            Some(Pubkey::new_from_array([41; 32]))
+            price_delta_bps(1_000_000_000, -8, 1_010_000_000, -8),
+            Some(100)
         );
-        assert!(admission.feed_for(&missing).is_none());
-        let mut bytes = vec![0u8; ADMISSION_SPACE];
-        let mut output: &mut [u8] = &mut bytes;
-        admission.try_serialize(&mut output).unwrap();
-        assert!(
-            output.len() < ADMISSION_SPACE,
-            "admission state must leave slack inside the reserved space"
+        assert_eq!(
+            price_delta_bps(1_000_000_000, -8, 990_000_000, -8),
+            Some(100)
         );
+        assert_eq!(price_delta_bps(1_000_000_000, -8, 1_010_000, -5), Some(100));
+        assert_eq!(price_delta_bps(0, -8, 1, -8), None);
+        assert!(price_delta_bps(1_000_000_000, -8, 1, -100).is_none());
+    }
+
+    #[test]
+    fn any_price_moved_enough_only_opens_when_one_leg_passes_the_threshold() {
+        let mut p = pool(
+            vec![priced(1, 5_000, 100_000_000), priced(2, 5_000, 100_000_000)],
+            policy(),
+        );
+        // A 100 bps threshold: a one-percent move hits it, smaller ones do not.
+        assert_eq!(
+            p.any_price_moved_enough(&[(101_000_000, -8), (100_100_000, -8)]),
+            Some(true)
+        );
+        assert_eq!(
+            p.any_price_moved_enough(&[(100_009_000, -8), (100_001_000, -8)]),
+            Some(false)
+        );
+        assert_eq!(p.any_price_moved_enough(&[(1, -8)]), None);
+        // A leg that was never priced opens the gate by itself: the pool cannot
+        // be valued until a crank seeds it.
+        p.assets[0].last_price = 0;
+        assert_eq!(
+            p.any_price_moved_enough(&[(999_999_999, -8), (1, -8)]),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn cadence_and_staleness_read_the_clock_forward_only() {
+        let mut p = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], policy());
+        p.last_crank_unix_timestamp = 1_000;
+        assert!(!p.cadence_elapsed(1_059));
+        assert!(p.cadence_elapsed(1_060));
+        assert!(p.cadence_elapsed(9_999));
+        assert!(p.elapsed_seconds(999).is_none());
+        assert!(p.assert_cache_fresh(1_000 + 3_600).is_ok());
+        assert!(p.assert_cache_fresh(1_000 + 3_601).is_err());
+    }
+
+    #[test]
+    fn values_normalise_across_exponents_into_the_pool_unit() {
+        // Two legs of equal real value on different exponents: 1 unit at
+        // mantissa 1.5e8 with exponent -8, and 1 unit at 1.5e9 with exponent
+        // -9, are both 1.5 micro-dollars.
+        let values = basket_values(&[1, 1], &[(150_000_000, -8), (1_500_000_000, -9)]).unwrap();
+        assert_eq!(values, vec![1_500_000, 1_500_000]);
+        let weights = basket_weights_bps(&values).unwrap();
+        assert_eq!(weights, vec![5_000, 5_000]);
+        // A one-dollar leg priced at exponent -8 is exactly a million micro-dollars.
+        assert_eq!(leg_value(1, 100_000_000, -8), Some(1_000_000));
+        // A span wider than the cap refuses to value rather than guessing.
+        assert!(basket_values(&[1, 1], &[(1, -8), (1, -100)]).is_none());
+        // A length mismatch is a bug, not a zero.
+        assert!(basket_values(&[1, 1], &[(1, -8)]).is_none());
+        assert!(basket_weights_bps(&[0, 0]).is_none());
+    }
+
+    #[test]
+    fn deposit_shares_track_the_pool_price() {
+        // First deposit: one share per unit of value.
+        assert_eq!(shares_for_deposit(0, 0, 1_000), Some(1_000));
+        // A pool holding 4_000 of value with 2_000 shares: a 1_000 deposit
+        // mints 500 shares, exactly its fraction.
+        assert_eq!(shares_for_deposit(2_000, 4_000, 1_000), Some(500));
+        // Rounding is down, and a deposit too small to buy a share is refused
+        // rather than minted as zero.
+        assert_eq!(shares_for_deposit(3, 10, 1), None);
+        assert_eq!(shares_for_deposit(0, 0, 0), None);
+        assert_eq!(shares_for_deposit(5, 0, 10), None);
+    }
+
+    #[test]
+    fn pro_rata_payouts_keep_the_pool_ratio() {
+        // A quarter of the supply redeems a quarter of every leg.
+        assert_eq!(pro_rata_payout(400, 25, 100), Some(100));
+        assert_eq!(pro_rata_payout(999, 1, 3), Some(333));
+        assert_eq!(pro_rata_payout(1, 1, 3), Some(0));
+        assert_eq!(pro_rata_payout(1, 1, 0), None);
+        // A balance large enough to wrap the u64 multiply stays exact at u128.
+        assert_eq!(
+            pro_rata_payout(u64::MAX, u64::MAX, u64::MAX),
+            Some(u64::MAX)
+        );
+    }
+
+    #[test]
+    fn min_swap_out_floors_the_quote_and_caps_slippage() {
+        assert_eq!(min_swap_out(1_000, 0), Some(1_000));
+        assert_eq!(min_swap_out(1_000, 100), Some(990));
+        assert_eq!(min_swap_out(999, 500), Some(949));
+        assert_eq!(min_swap_out(1_000, SWAP_MAX_SLIPPAGE_BPS + 1), None);
+        assert_eq!(min_swap_out(1_000, 10_000), None);
+        // The value floor is the same shape, in the pool's own unit.
+        assert_eq!(min_swap_out_value(2_000, 0), Some(2_000));
+        assert_eq!(min_swap_out_value(2_000, 250), Some(1_950));
+        assert_eq!(min_swap_out_value(0, 100), Some(0));
+        assert_eq!(min_swap_out_value(2_000, SWAP_MAX_SLIPPAGE_BPS + 1), None);
+    }
+
+    #[test]
+    fn swaps_may_only_narrow_the_gap() {
+        let assets = vec![asset(1, 5_000, 1), asset(2, 5_000, 2)];
+        // Selling the overweight leg into the underweight one is allowed.
+        assert!(assert_swap_narrows(&assets, &[6_000, 4_000], &[5_500, 4_500], 0, 1).is_ok());
+        // Selling the underweight leg is not.
+        assert!(assert_swap_narrows(&assets, &[6_000, 4_000], &[6_500, 3_500], 1, 0).is_err());
+        // Overshooting past the target is not allowed, even in the right direction.
+        assert!(assert_swap_narrows(&assets, &[6_000, 4_000], &[4_000, 6_000], 0, 1).is_err());
+        // A leg to itself is never a swap.
+        assert!(assert_swap_narrows(&assets, &[6_000, 4_000], &[6_000, 4_000], 0, 0).is_err());
+    }
+
+    #[test]
+    fn a_swap_may_not_move_an_undeclared_leg() {
+        let before = [1_000u64, 1_000, 1_000];
+        // Only the named legs may change.
+        assert!(assert_only_swap_legs_moved(&before, &[900, 1_100, 1_000], 0, 1).is_ok());
+        // A route that also drains a third custody account is
+        // refused even though the named legs look fine.
+        assert!(assert_only_swap_legs_moved(&before, &[900, 1_100, 1], 0, 1).is_err());
+        // The same applies to a leg the route quietly tops up.
+        assert!(assert_only_swap_legs_moved(&before, &[900, 1_100, 2_000], 0, 1).is_err());
+        // Shape mismatches are refused rather than silently zipped short.
+        assert!(assert_only_swap_legs_moved(&before, &[900, 1_100], 0, 1).is_err());
+    }
+
+    #[test]
+    fn rebalance_is_not_worthwhile_below_the_configured_drift() {
+        let mut p = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], policy());
+        // min_rebalance_bps == 0 disables the check entirely.
+        assert!(p.assert_rebalance_worthwhile(&[9_000, 1_000]).is_ok());
+        p.policy.min_rebalance_bps = 100;
+        assert!(p.assert_rebalance_worthwhile(&[5_100, 4_900]).is_ok());
+        assert!(p.assert_rebalance_worthwhile(&[5_099, 4_901]).is_err());
+        assert_eq!(p.worst_weight_excess_bps(&[5_200, 4_800]), Some(200));
+    }
+
+    #[test]
+    fn owner_sequence_only_moves_forward() {
+        let mut p = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], policy());
+        assert_eq!(p.owner_op_sequence, 1);
+        assert!(p.assert_owner_sequence(1).is_ok());
+        assert!(p.assert_owner_sequence(2).is_err());
+        p.bump_owner_sequence().unwrap();
+        assert_eq!(p.owner_op_sequence, 2);
+        assert!(p.assert_owner_sequence(1).is_err());
+        assert!(p.assert_admin(&feed(9)).is_ok());
+        assert!(p.assert_admin(&feed(10)).is_err());
+    }
+
+    #[test]
+    fn paused_closes_deposits_and_cranks_only() {
+        let mut p = pool(vec![asset(1, 5_000, 1), asset(2, 5_000, 2)], policy());
+        assert!(p.assert_running().is_ok());
+        p.paused = true;
+        assert!(p.assert_running().is_err());
     }
 }

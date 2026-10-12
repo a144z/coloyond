@@ -1,38 +1,23 @@
+//! Program-derived addresses for the ETF pool.
+
 use anchor_lang::prelude::*;
 
-pub const REGISTRY_SEED: &[u8] = b"portfolio_owner_v2";
-pub const VAULT_SEED: &[u8] = b"portfolio_vault_v2";
-pub const AUTHORITY_SEED: &[u8] = b"portfolio_authority_v2";
-pub const CUSTODY_SEED: &[u8] = b"portfolio_custody_v2";
-pub const CONTROLLER_SEED: &[u8] = b"portfolio_controller_v2";
-pub const ADMISSION_SEED: &[u8] = b"portfolio_admission_v2";
+/// Seeds of the single pool state account: `[POOL_SEED, admin, pool_id_le]`.
+pub const POOL_SEED: &[u8] = b"etf_pool";
+/// Seeds of the pool's token authority: `[VAULT_SEED, pool]`.
+pub const VAULT_SEED: &[u8] = b"etf_vault";
 
-pub fn admission() -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[ADMISSION_SEED], &crate::ID)
-}
-
-pub fn registry(owner: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[REGISTRY_SEED, owner.as_ref()], &crate::ID)
-}
-
-pub fn vault(owner: &Pubkey, nonce: u64) -> (Pubkey, u8) {
+/// The pool account for one admin and one `pool_id`.
+pub fn pool(admin: &Pubkey, pool_id: u64) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[VAULT_SEED, owner.as_ref(), &nonce.to_le_bytes()],
+        &[POOL_SEED, admin.as_ref(), &pool_id.to_le_bytes()],
         &crate::ID,
     )
 }
 
-pub fn authority(vault: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[AUTHORITY_SEED, vault.as_ref()], &crate::ID)
-}
-
-pub fn custody(vault: &Pubkey, asset_index: u8) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[CUSTODY_SEED, vault.as_ref(), &[asset_index]], &crate::ID)
-}
-
-pub fn controller(vault: &Pubkey, generation: u64) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[CONTROLLER_SEED, vault.as_ref(), &generation.to_le_bytes()],
-        &crate::ID,
-    )
+/// The token authority that owns every custody account and mints shares. It
+/// holds no data of its own, so it can never be used to take the pool's assets
+/// anywhere except through a token transfer the program itself signs.
+pub fn vault(pool: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[VAULT_SEED, pool.as_ref()], &crate::ID)
 }

@@ -175,6 +175,46 @@ pub fn validate_fixed_feed(
     limits: OracleLimits,
 ) -> Result<ValidatedPrice> {
     require_keys_eq!(account_key, feed.address(), OracleError::WrongFeedAccount);
+    let feed_id = get_feed_id_from_hex(feed.id_hex())
+        .map_err(|_| error!(OracleError::InvalidConfiguredFeedId))?;
+    validate_update(feed_id, account_owner, update, clock, limits)
+}
+
+/// Decode and validate any Receiver-format price account against the feed id
+/// the caller stored for it.
+///
+/// Unlike `validate_fixed_feed`, the feed is not pinned to one of the four
+/// manifest addresses: the ETF pool carries each leg's feed id in its own
+/// state, so admission is the presence of a live, Fully verified feed whose id
+/// matches the stored one. The caller has already required the account's key in
+/// its own account set, so this only checks the owner, the layout and the
+/// decoded price.
+pub fn validate_feed_by_id(
+    feed_id: [u8; 32],
+    account_owner: Pubkey,
+    data: &[u8],
+    clock: &Clock,
+    limits: OracleLimits,
+) -> Result<ValidatedPrice> {
+    require!(
+        (PriceUpdateV2::LEN - 1..=PriceUpdateV2::LEN).contains(&data.len()),
+        OracleError::InvalidAccountData
+    );
+    let mut bytes = data;
+    let update = PriceUpdateV2::try_deserialize(&mut bytes)
+        .map_err(|_| error!(OracleError::InvalidAccountData))?;
+    validate_update(feed_id, account_owner, &update, clock, limits)
+}
+
+/// The checks shared by every Receiver-format read: owner, policy, freshness,
+/// feed id, positivity, exponent window, publish time and confidence width.
+fn validate_update(
+    feed_id: [u8; 32],
+    account_owner: Pubkey,
+    update: &PriceUpdateV2,
+    clock: &Clock,
+    limits: OracleLimits,
+) -> Result<ValidatedPrice> {
     require_keys_eq!(
         account_owner,
         PYTH_RECEIVER_PROGRAM_ID,
@@ -186,8 +226,6 @@ pub fn validate_fixed_feed(
         OracleError::InvalidPolicy
     );
 
-    let feed_id = get_feed_id_from_hex(feed.id_hex())
-        .map_err(|_| error!(OracleError::InvalidConfiguredFeedId))?;
     let price = update
         .get_price_no_older_than_with_custom_verification_level(
             clock,
@@ -943,5 +981,83 @@ mod tests {
             confidence_bps: 0,
         };
         assert!(interval_overflow.confidence_interval(30).is_err());
+    }
+
+    #[test]
+    fn by_id_validation_accepts_any_receiver_account_and_rejects_mismatches() {
+        let value = update(
+            PinnedFeed::EthUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW,
+        );
+        let mut bytes = Vec::new();
+        value.try_serialize(&mut bytes).unwrap();
+        let feed_id = get_feed_id_from_hex(PinnedFeed::EthUsd.id_hex()).unwrap();
+
+        // A live account validates against the id the caller stored, wherever
+        // that account happens to live: there is no address pin on this path.
+        let price = validate_feed_by_id(
+            feed_id,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes,
+            &clock(),
+            limits(),
+        )
+        .unwrap();
+        assert_eq!(price.mantissa, 100_000_000);
+
+        let other_id = get_feed_id_from_hex(PinnedFeed::SolUsd.id_hex()).unwrap();
+        assert!(
+            validate_feed_by_id(
+                other_id,
+                PYTH_RECEIVER_PROGRAM_ID,
+                &bytes,
+                &clock(),
+                limits()
+            )
+            .is_err(),
+            "a stored id that is not the account's own id must be refused"
+        );
+        assert!(
+            validate_feed_by_id(feed_id, Pubkey::new_unique(), &bytes, &clock(), limits()).is_err()
+        );
+        assert!(validate_feed_by_id(
+            feed_id,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &bytes[..PriceUpdateV2::LEN - 2],
+            &clock(),
+            limits()
+        )
+        .is_err());
+        let mut oversized = bytes.clone();
+        oversized.extend_from_slice(&[0, 0]);
+        assert!(validate_feed_by_id(
+            feed_id,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &oversized,
+            &clock(),
+            limits()
+        )
+        .is_err());
+
+        let stale = update(
+            PinnedFeed::EthUsd,
+            VerificationLevel::Full,
+            100_000_000,
+            1_000,
+            NOW - 61,
+        );
+        let mut stale_bytes = Vec::new();
+        stale.try_serialize(&mut stale_bytes).unwrap();
+        assert!(validate_feed_by_id(
+            feed_id,
+            PYTH_RECEIVER_PROGRAM_ID,
+            &stale_bytes,
+            &clock(),
+            limits()
+        )
+        .is_err());
     }
 }

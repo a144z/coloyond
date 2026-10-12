@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|error| format!("{error:?}"))?;
     let raw_confidence_bps = if raw.price > 0 {
         let denominator = raw.price as u128;
-        Some((u128::from(raw.conf) * 10_000 + denominator - 1) / denominator)
+        Some((u128::from(raw.conf) * 10_000).div_ceil(denominator))
     } else {
         None
     };
