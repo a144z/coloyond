@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:cli": "tsx src/main.ts",
+    "hydra:cranker": "node coloyond-beta/scripts/run-hydra-cranker-fleet.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test:solana": "node --import tsx --test src/ui/app/lib/solana/explore.test.ts src/ui/app/lib/solana/share-metadata.test.ts src/ui/app/lib/solana/wallet.test.ts src/ui/app/lib/store.test.ts",

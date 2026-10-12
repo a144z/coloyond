@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store.js';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault.js';
 import { bookStatus, pricesFromBook, priceOf } from '../lib/solana/price.js';
-import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config.js';
+import { PRICE_MAX_AGE_MS, REBALANCE_INTERVAL_SEC } from '../lib/solana/config.js';
 import { assetSpec, type AssetId } from '../lib/solana/assets.js';
 import { explorerAddress } from '../lib/solana/connection.js';
 import { fmtCountdown, fmtSol, fmtToken, fmtTimeAgo, fmtUsd, rawFromToken, shortKey, parseAmountOrZero } from '../lib/format.js';
@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button.js';
 import { LedgerPanel } from '../components/ui/LedgerPanel.js';
 import { MixBar, segmentsOf } from '../components/ui/MixBar.js';
 import { Sheet } from '../components/ui/Sheet.js';
-import { Field, inputClass, selectClass } from '../components/ui/Field.js';
+import { Field, inputClass } from '../components/ui/Field.js';
 import { AssetSwatch, Divider, KeyValue, MicroLabel, Notice, SignatureLink, Skeleton, StatusSwatch } from '../components/ui/primitives.js';
 import { WeightSliders, normalizeShares, sharesFromTargets, type WeightLocks } from '../components/ui/WeightSliders.js';
 import { BlockedNotice, VaultStatusLine } from './PortfolioList.js';
@@ -30,16 +30,14 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
   const logs = useStore((s) => s.logs);
   const pauseVault = useStore((s) => s.pauseVault);
   const resumeVault = useStore((s) => s.resumeVault);
-  const updateCadence = useStore((s) => s.updateCadence);
+  const updateUnifiedCadence = useStore((s) => s.updateUnifiedCadence);
   const [fundOpen, setFundOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
   const [weightsOpen, setWeightsOpen] = useState(false);
-  const [cadenceSec, setCadenceSec] = useState(60);
 
   useEffect(() => {
     void useStore.getState().refreshVaultBalances(vaultId);
   }, [vaultId]);
-  useEffect(() => setCadenceSec(vault?.cadenceSec ?? 60), [vault?.cadenceSec, vaultId]);
 
   if (!vault) {
     return <Screen><ScreenHeading micro="03 / Portfolio" title="Vault not found." /></Screen>;
@@ -83,21 +81,21 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         <LedgerPanel stripe="Automation" meta={paused || closed ? 'Paused' : 'Active on Solana'}>
           <div className="flex items-center gap-2 text-[12.5px] font-bold"><VaultStatusLine vault={vault} /></div>
           <KeyValue rows={[
-            { k: 'Registered cadence', v: `About every ${vault.cadenceSec} seconds` },
+            { k: 'Shared cadence', v: vault.cadenceSec === REBALANCE_INTERVAL_SEC ? 'About every 60 seconds' : `Older schedule · about every ${vault.cadenceSec} seconds` },
             { k: 'Settled Magic Action nonce', v: bal ? String(vault.tradeCount) : 'Reading Vault State…' },
             { k: 'Last settlement observed', v: vault.lastTradeAt ? fmtTimeAgo(vault.lastTradeAt) : 'None observed yet' },
             { k: 'Deviation threshold', v: `± ${vault.thresholdPct.toFixed(1)}%` },
           ]} />
-          <div className="mt-3 space-y-2">
-            <Field label="Minimum delay · owner pays setup" hint="The operator pays each trigger fee.">
-              <select value={cadenceSec} onChange={(event) => setCadenceSec(Number(event.target.value))} className={selectClass} aria-label="Minimum rebalance delay">
-                {CADENCE_OPTIONS_SEC.map((seconds) => <option key={seconds} value={seconds}>{seconds >= 3600 ? `Every ${seconds / 3600} hour${seconds === 3600 ? '' : 's'}` : seconds >= 60 ? `Every ${seconds / 60} minute${seconds === 60 ? '' : 's'}` : `Every ${seconds} seconds`}</option>)}
-              </select>
-            </Field>
-            <Button variant="secondary" full disabled={paused || cadenceSec === vault.cadenceSec} onClick={() => void updateCadence(vaultId, cadenceSec)}>
-              Apply minimum delay on Solana
-            </Button>
-          </div>
+          {vault.cadenceSec !== REBALANCE_INTERVAL_SEC && !paused && !closed ? (
+            <div className="mt-3">
+              <Button variant="secondary" full onClick={() => void updateUnifiedCadence(vaultId)}>
+                Switch to the shared 60-second schedule
+              </Button>
+            </div>
+          ) : null}
+          {vault.cadenceSec !== REBALANCE_INTERVAL_SEC && paused ? (
+            <p className="mt-3 text-[11px] leading-relaxed text-iron">Resume this portfolio to register it on the shared 60-second schedule.</p>
+          ) : null}
           {vault.blockedReason ? <div className="mt-3"><BlockedNotice reason={vault.blockedReason} /></div> : null}
           {!closed ? (
             <div className="mt-4">
@@ -107,7 +105,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             </div>
           ) : null}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            Hydra's interval is measured in ER slots; wall-clock timing depends on an active cranker. A run needs more than 0.1% movement in at least one Pyth-backed asset since the last successful settlement. The Solana vault program rechecks delay, feed identity and verification, slippage and replay protection before SPL transfers; it does not enforce feed age.
+            One portfolio task evaluates all of this vault's SPL assets together; the running cranker services every active portfolio. A rebalance needs drift and the configured Pyth movement guard, and can safely skip when no trade qualifies. Pyth feed age alone does not block settlement. Wall-clock timing depends on ER slots, the RPC and the active cranker.
           </p>
         </LedgerPanel>
       </div>

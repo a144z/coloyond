@@ -57,4 +57,21 @@ npm run typecheck
 npm run build
 ```
 
+## Sustained Hydra Devnet service
+
+From the repository root, start the monitored MagicBlock service with one
+command:
+
+```sh
+npm run hydra:cranker
+```
+
+It uses the official `hydra-cranker` binary on `PATH`, a funded operator key at
+`coloyond-beta/target/hydra-cranker-devnet.json`, and the Devnet ER default. Set
+`COLONYOND_CRANKER_SIGNER` or `COLONYOND_HYDRA_ER_RPC` when your local setup uses
+different paths or an ER-specific endpoint. Health/restart settings are capped
+to a calculated recovery bound below two minutes. See
+[`coloyond-beta/docs/automated-execution-design.md`](coloyond-beta/docs/automated-execution-design.md)
+for multi-ER configuration and prerequisites.
+
 The [design spec](docs/superpowers/specs/2026-10-09-coloyond-strategy-cards-design.md) and [implementation plan](docs/superpowers/plans/2026-10-09-coloyond-managed-strategies.md) target this Kotlin app. They supersede the earlier React Native/Expo plan. The Android app does not embed the Vite app.

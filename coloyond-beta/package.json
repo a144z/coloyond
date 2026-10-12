@@ -25,6 +25,7 @@
     "crank:vaults": "node scripts/run-vault-cranker.mjs",
     "crank:vaults:self-check": "node scripts/run-vault-cranker.mjs --self-check",
     "crank:service": "node scripts/run-hydra-cranker-fleet.mjs",
+    "hydra:cranker": "node scripts/run-hydra-cranker-fleet.mjs",
     "crank:service:self-check": "node scripts/run-hydra-cranker-fleet.mjs --self-check",
     "crank:service:test": "node --test scripts/run-hydra-cranker-fleet.test.mjs",
     "crank:service:validate-config": "node scripts/run-hydra-cranker-fleet.mjs --validate-config",
