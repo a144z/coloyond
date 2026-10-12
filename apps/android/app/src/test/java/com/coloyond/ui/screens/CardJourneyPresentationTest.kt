@@ -73,7 +73,7 @@ class CardJourneyPresentationTest {
         assertNotEquals(managed.id, draft.id)
         assertTrue(draft.viewOnly)
         assertEquals(CardCreationRecords.targetWeights(managed), CardCreationRecords.targetWeights(draft))
-        assertTrue(draft.value.asObject("draft").fields.keys.none { it in setOf("protocol", "vaultAddress", "shareMint") })
+        assertTrue(draft.value.asObject("draft").keys.none { it in setOf("protocol", "vaultAddress", "shareMint") })
         assertEquals(original, managed.canonicalJson)
     }
 

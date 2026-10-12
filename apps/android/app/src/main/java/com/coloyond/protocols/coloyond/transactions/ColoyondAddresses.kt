@@ -2,6 +2,7 @@ package com.coloyond.protocols.coloyond.transactions
 
 import com.coloyond.protocols.coloyond.VaultAccountDecoder
 import com.solana.publickey.ProgramDerivedAddress
+import kotlinx.coroutines.runBlocking
 import com.solana.publickey.SolanaPublicKey
 
 enum class SolanaCluster { DEVNET, LOCALNET }
@@ -142,7 +143,7 @@ object ColoyondAddresses {
     internal fun key(address: String): SolanaPublicKey = SolanaPublicKey.from(address)
 
     internal fun pda(seeds: List<ByteArray>, programId: SolanaPublicKey): String =
-        ProgramDerivedAddress.find(seeds, programId).getOrThrow().base58()
+        runBlocking { ProgramDerivedAddress.find(seeds, programId) }.getOrThrow().base58()
 
     internal fun u64Le(value: ULong): ByteArray = ByteArray(8) { index ->
         (value shr (index * 8)).toByte()

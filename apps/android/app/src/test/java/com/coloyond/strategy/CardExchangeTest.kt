@@ -35,7 +35,7 @@ class CardExchangeTest {
         val valid = CardExchange.strategyLink(strategy)
         val payloadBytes = Base64.getUrlDecoder().decode(valid.removePrefix(CardExchange.LINK_PREFIX))
         val payload = StrictJson.parse(payloadBytes.toString(Charsets.UTF_8)).asObject("payload")
-        val tampered = JsonValue.Obj(payload.fields + ("strategyId" to JsonValue.Str("cbd1:${"0".repeat(64)}")))
+        val tampered = JsonValue.Obj(payload + ("strategyId" to JsonValue.Str("cbd1:${"0".repeat(64)}")))
         val encodedTampered = Base64.getUrlEncoder().withoutPadding()
             .encodeToString(StrictJson.canonical(tampered).toByteArray(Charsets.UTF_8))
 
