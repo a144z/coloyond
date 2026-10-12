@@ -2,7 +2,7 @@
 
 The installable app now opens the same React mobile product as the website's `/app` route. Capacitor serves the bundled Vite assets locally at `https://localhost/app`; network requests are used for Solana RPC and market data. There is no remote website dependency for the UI.
 
-The previous Kotlin/Compose prototype remains under `app/src/legacy/java` for reference. The shipped source set is `app/src/capacitor/java`; it uses Capacitor `BridgeActivity` and the App/StatusBar plugins. Previous native unit tests belong to the prototype and are excluded from this product build.
+The previous Kotlin/Compose prototype remains under `app/src/legacy/java` for reference. The shipped source set is `app/src/capacitor/java`; it uses Capacitor `BridgeActivity` and the App/StatusBar and Filesystem/Share plugins. Previous native unit tests belong to the prototype and are excluded from this product build.
 
 ## Build
 
@@ -39,6 +39,8 @@ The debug APK is installable and automatically signed with the builder's debug k
 ## Mobile behavior
 
 - `/app` starts with portfolios and supports create, wallet, system, vault detail and all transaction sheets.
+- Portfolio artwork uses the shared target-weight renderer. Share PNG writes a cache-scoped PNG and opens Android's native chooser; broad storage access is not requested.
+- Public remix URLs use `VITE_COLOYOND_PUBLIC_URL` when configured for the actual web deployment. Browser remix links use the current host.
 - Hardware Back pops the app's screen stack; at root it exits the app.
 - Status and navigation surfaces follow the warm paper theme.
 - Wallet connection uses the existing Solana Mobile Wallet Adapter and requires a compatible installed wallet. Device-wallet setup/import is the same devnet-only flow as the web app.

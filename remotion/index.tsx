@@ -1,3 +1,11 @@
+import { beat, camera } from "./camera";
+import {
+  portfolioCardSvg,
+  portfolioGeometry,
+  svgDataUrl,
+  cardFamily,
+  type PortfolioCardInput,
+} from "../src/ui/app/lib/art/portfolio-card";
 import React from "react";
 import {
   AbsoluteFill,
@@ -17,10 +25,9 @@ const P = "#efece6",
   I = "#141414",
   M = "#747069",
   LINE = "#d8d4ca";
-const C = ["#ff4d38", "#184beb", "#ffda23", "#9650cf"];
+const C = ["#ff513b", "#1249ed", "#ffd523", "#8d25d9"];
 export const TOTAL = 1860;
-export const beat = (n: number) =>
-  Math.round((MUSIC.phaseSeconds + (n * 60) / MUSIC.fittedBpm) * 30);
+
 const ease = Easing.bezier(0.65, 0, 0.25, 1);
 const t = (f: number, a: number, b: number, x = 0, y = 1) =>
   interpolate(f, [a, b], [x, y], {
@@ -327,7 +334,6 @@ function Active({ f, detail = false }: { f: number; detail?: boolean }) {
         style={{
           ...card,
           marginTop: 18,
-          transform: `scale(${1 - 0.025 * pulse(f, 60)})`,
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -357,6 +363,11 @@ function Active({ f, detail = false }: { f: number; detail?: boolean }) {
       </div>
       {detail ? (
         <>
+          <div style={{ marginTop: 16 }}>
+            <Button light pressed={Math.abs(f - beat(68)) < 4}>
+              Share portfolio card ↗
+            </Button>
+          </div>
           <div style={{ ...label, margin: "26px 0 10px" }}>HOLDINGS</div>
           {["WSOL", "dUSD", "tBTC"].map((x, j) => (
             <div
@@ -393,6 +404,210 @@ function Active({ f, detail = false }: { f: number; detail?: boolean }) {
           <Button light>+ Create portfolio</Button>
         </div>
       )}
+    </div>
+  );
+}
+const demoCard: PortfolioCardInput = {
+  id: "demo-everyday",
+  name: "Everyday mix",
+  assets: [
+    { id: "wsol", symbol: "WSOL", color: C[0], weight: 60 },
+    { id: "dusd", symbol: "dUSD", color: C[1], weight: 30 },
+    { id: "tbtc", symbol: "tBTC", color: C[2], weight: 10 },
+  ],
+};
+const galleryCards: PortfolioCardInput[] = [
+  demoCard,
+  {
+    id: "demo-calm",
+    name: "Quiet balance",
+    assets: [
+      { id: "wsol", symbol: "WSOL", color: C[0], weight: 20 },
+      { id: "dusd", symbol: "dUSD", color: C[1], weight: 80 },
+    ],
+  },
+  {
+    id: "demo-horizon",
+    name: "Wide horizon",
+    assets: [
+      { id: "wsol", symbol: "WSOL", color: C[0], weight: 35 },
+      { id: "dusd", symbol: "dUSD", color: C[1], weight: 15 },
+      { id: "tbtc", symbol: "tBTC", color: C[2], weight: 30 },
+      { id: "teth", symbol: "tETH", color: C[3], weight: 20 },
+    ],
+  },
+];
+// Deliberately pick three deterministic example IDs illustrating the three available families.
+galleryCards.forEach((input, j) => {
+  const family = ["Orbit", "Prism", "Stack"][j];
+  for (let n = 0; cardFamily(input) !== family && n < 100; n++)
+    input.id = `demo-${j}-${n}`;
+});
+function CardSheet({ f }: { f: number }) {
+  const p = q(f, 68, 70) * (1 - q(f, 80, 82));
+  if (p === 0) return null;
+  const remix = f >= beat(74) ? 1 : 0;
+  const src = svgDataUrl(portfolioCardSvg({ ...demoCard, remix }));
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `rgba(20,20,20,${p * 0.16})`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: "22px 24px",
+          background: CARD,
+          borderRadius: "24px 24px 0 0",
+          transform: `translateY(${(1 - p) * 700}px)`,
+        }}
+      >
+        <div style={{ ...label, marginBottom: 12 }}>
+          CARD PNG SHARE · LOCAL RENDER
+        </div>
+        <b style={{ fontSize: 25, letterSpacing: -0.8 }}>
+          Your mix, as one picture.
+        </b>
+        <Img
+          src={src}
+          style={{
+            display: "block",
+            width: 250,
+            height: 312.5,
+            margin: "18px auto 14px",
+            border: `1px solid ${LINE}`,
+            borderRadius: 8,
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            margin: "12px 0",
+            ...mono,
+            fontSize: 10,
+          }}
+        >
+          <span>
+            {cardFamily({ ...demoCard, remix })} · Remix {remix}
+          </span>
+          <div
+            style={{
+              padding: 12,
+              border: `1px solid ${LINE}`,
+              borderRadius: 8,
+              background: P,
+              transform: `scale(${1 - 0.04 * pulse(f, 74)})`,
+            }}
+          >
+            Remix artwork
+          </div>
+        </div>
+        <Button pressed={Math.abs(f - beat(78)) < 4}>Share PNG ↗</Button>
+        <div style={{ marginTop: 12 }}>
+          <Button light>Download PNG</Button>
+        </div>
+        <div style={{ ...label, textAlign: "center", marginTop: 15 }}>
+          {f >= beat(78)
+            ? "1200 × 1500 PNG · READY TO SHARE"
+            : "TARGET WEIGHTS · NO WALLET ADDRESS"}
+        </div>
+      </div>
+    </>
+  );
+}
+function CardGallery({ f }: { f: number }) {
+  if (f < beat(66) || f > beat(82)) return null;
+  const enter = q(f, 66, 68),
+    out = q(f, 80, 82);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 850,
+        top: 170,
+        width: 930,
+        opacity: enter * (1 - out),
+      }}
+    >
+      <div style={{ ...mono, color: M, fontSize: 14, marginBottom: 26 }}>
+        06 / CARD PNG SHARE
+      </div>
+      <div
+        style={{
+          fontSize: 78,
+          fontWeight: 750,
+          letterSpacing: -4,
+          lineHeight: 1.1,
+          overflow: "hidden",
+        }}
+      >
+        {["Your portfolio.", "One picture."].map((line, j) => (
+          <div
+            key={line}
+            style={{
+              transform: `translateY(${(1 - q(f, 66 + j * 0.3, 68 + j * 0.3)) * 130}%)`,
+            }}
+          >
+            {line}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 22, lineHeight: 1.6, color: M, marginTop: 25 }}>
+        A visual composition built from your target weights.
+        <br />
+        Generate a PNG. Share it. Remix the picture.
+      </div>
+      <div style={{ display: "flex", gap: 24, marginTop: 40 }}>
+        {galleryCards.map((input, j) => {
+          const p = q(f, 70 + j, 72 + j);
+          const source =
+            j === 0 ? { ...input, remix: f >= beat(74) ? 1 : 0 } : input;
+          return (
+            <div
+              key={input.id}
+              style={{
+                width: 270,
+                opacity: p,
+                transform: `translateY(${(1 - p) * 45}px)`,
+              }}
+            >
+              <Img
+                src={svgDataUrl(portfolioCardSvg(source))}
+                style={{
+                  width: 270,
+                  height: 337.5,
+                  borderRadius: 9,
+                  border: `1px solid ${LINE}`,
+                  boxShadow: "0 12px 30px #1414140d",
+                }}
+              />
+              <div style={{ ...mono, color: M, fontSize: 11, marginTop: 14 }}>
+                {input.name} / {cardFamily(source)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          ...mono,
+          color: M,
+          marginTop: 25,
+          fontSize: 11,
+          opacity: q(f, 77, 79),
+        }}
+      >
+        1200 × 1500 PNG · LOCAL RENDER · SOLANA DEVNET
+      </div>
     </div>
   );
 }
@@ -607,43 +822,6 @@ function Sheet({ f, type }: { f: number; type: "asset" | "review" | "wrap" }) {
   );
 }
 // Camera keyframes are component coordinates, not screenshot magnification.
-const poses = [
-  { n: 0, x: 1100, y: 120, s: 0.9 },
-  { n: 8, x: 1080, y: 116, s: 0.95 },
-  { n: 17, x: 1060, y: 110, s: 1 },
-  { n: 20, x: 866, y: -53, s: 1.58 },
-  { n: 32, x: 866, y: -53, s: 1.58 },
-  { n: 35, x: 1010, y: 94, s: 1.03 },
-  { n: 39, x: 980, y: 25, s: 1.14 },
-  { n: 44, x: 1020, y: 104, s: 1 },
-  { n: 47, x: 330, y: 60, s: 1.05 },
-  { n: 50, x: 330, y: -60, s: 1.25 },
-  { n: 56, x: 1060, y: 112, s: 1 },
-  { n: 62, x: 980, y: -50, s: 1.32 },
-  { n: 66, x: 1050, y: 105, s: 1 },
-  { n: 71, x: 1020, y: 103, s: 1.04 },
-  { n: 77, x: 967, y: 15, s: 1.16 },
-  { n: 83, x: 360, y: 110, s: 1 },
-  { n: 89, x: 360, y: 110, s: 1 },
-  { n: 94, x: -700, y: 110, s: 0.95 },
-];
-function camera(f: number) {
-  let a = poses[0],
-    z = poses[poses.length - 1];
-  for (let j = 0; j < poses.length - 1; j++) {
-    if (f >= beat(poses[j].n) && f < beat(poses[j + 1].n)) {
-      a = poses[j];
-      z = poses[j + 1];
-      break;
-    }
-  }
-  const p = t(f, beat(a.n), beat(z.n));
-  return {
-    x: a.x + (z.x - a.x) * p,
-    y: a.y + (z.y - a.y) * p,
-    s: a.s + (z.s - a.s) * p,
-  };
-}
 const gestures = [
   { n: 11, x: 320, y: 450 },
   { n: 14, x: 193, y: 650 },
@@ -665,14 +843,14 @@ const gestures = [
   { n: 55, x: 260, y: 480 },
   { n: 60, x: 240, y: 321 },
   { n: 64, x: 300, y: 470 },
-  { n: 68, x: 197, y: 805 },
-  { n: 71, x: 270, y: 515 },
-  { n: 74, x: 282, y: 445 },
-  { n: 78, x: 230, y: 520 },
+  { n: 68, x: 195, y: 547 },
+  { n: 71, x: 270, y: 510 },
+  { n: 74, x: 310, y: 637 },
+  { n: 78, x: 195, y: 692 },
   { n: 82, x: 325, y: 805 },
   { n: 87, x: 280, y: 360 },
 ];
-const clicks = [14, 32, 36, 41, 47, 60, 68, 74, 82];
+const clicks = [14, 32, 36, 41, 47, 60, 68, 74, 78, 82];
 function Cursor({ f }: { f: number }) {
   if (f < beat(11) || f > beat(87)) return null;
   let a = gestures[0],
@@ -745,9 +923,9 @@ function Device({ f }: { f: number }) {
   const create = q(f, 14, 17);
   const active = q(f, 54, 57);
   const detail = q(f, 60, 63);
-  const wallet = q(f, 68, 71);
+  const wallet = 0;
   const system = q(f, 82, 85);
-  const nav = f < beat(68) ? 0 : f < beat(82) ? 1 : 2;
+  const nav = f < beat(82) ? 0 : 2;
   // Device and route transform run independently: click, then response; shared chrome stays put.
   return (
     <div
@@ -848,7 +1026,7 @@ function Device({ f }: { f: number }) {
             style={{
               position: "absolute",
               inset: 0,
-              transform: `translateY(${(1 - active) * 220}px) translateX(${-wallet * 390}px)`,
+              transform: `translateY(${(1 - active) * 220}px) translateX(${-system * 390}px)`,
               opacity: active,
             }}
           >
@@ -874,7 +1052,7 @@ function Device({ f }: { f: number }) {
             </div>
           </div>
         ) : null}
-        {f >= beat(68) ? (
+        {false ? (
           <div
             style={{
               position: "absolute",
@@ -928,7 +1106,7 @@ function Device({ f }: { f: number }) {
       </div>
       <Sheet f={f} type="asset" />
       <Sheet f={f} type="review" />
-      <Sheet f={f} type="wrap" />
+      <CardSheet f={f} />
       <Cursor f={f} />
     </div>
   );
@@ -982,9 +1160,9 @@ const scenes = [
   {
     a: 66,
     z: 81,
-    k: "06 / WALLET",
-    lines: ["Your next move.", "Within reach."],
-    copy: "Navigate to balances. Review a wrap in place.",
+    k: "06 / SHARE",
+    lines: ["Your portfolio.", "One picture."],
+    copy: "Generate a PNG. Share it. Remix the composition.",
     mode: "slide",
     color: 1,
   },
@@ -1002,7 +1180,7 @@ function Editorial({ f }: { f: number }) {
   return (
     <>
       {scenes.map((s) => {
-        if (f < beat(s.a) || f > beat(s.z)) return null;
+        if (s.a === 66 || f < beat(s.a) || f > beat(s.z)) return null;
         const enter = q(f, s.a, s.a + 2);
         const out = q(f, s.z - 1, s.z);
         const progress = enter * (1 - out);
@@ -1091,14 +1269,27 @@ function Editorial({ f }: { f: number }) {
                 }}
               >
                 <span
-                  style={{ fontSize: 90, letterSpacing: -6, fontWeight: 700 }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "baseline",
+                    gap: 16,
+                    fontSize: 90,
+                    letterSpacing: -3,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: 195,
+                  }}
                 >
                   {Math.round(
                     q(f, 20, 23, 60, 75) -
                       q(f, 24, 27, 0, 30) +
                       q(f, 28, 30, 0, 15),
                   )}
-                  <span style={{ fontSize: 38 }}>%</span>
+                  <span
+                    style={{ fontSize: 38, letterSpacing: 0, fontWeight: 500 }}
+                  >
+                    %
+                  </span>
                 </span>
                 <span style={{ ...mono, color: M }}>
                   {f >= beat(32) ? "WSOL · LOCKED" : "WSOL · TARGET WEIGHT"}
@@ -1306,7 +1497,9 @@ function Brand({ f, end = false }: { f: number; end?: boolean }) {
           opacity: q(f, a + 2, a + 4),
         }}
       >
-        {end ? "Build your mix. Keep your rhythm." : "Your assets, in balance."}
+        {end
+          ? "Build your mix. Keep your rhythm."
+          : "Your portfolio as one picture."}
       </div>
       {end ? (
         <div
@@ -1378,6 +1571,7 @@ export function Film() {
       <Geometry f={f} />
       <Editorial f={f} />
       <Device f={f} />
+      <CardGallery f={f} />
       <Brand f={f} />
       <Brand f={f} end />
     </AbsoluteFill>

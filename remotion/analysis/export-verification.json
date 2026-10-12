@@ -25,6 +25,19 @@
   "uploadedAudioMatchesAttachment": true,
   "audioCorrelationAfterCodecDelayAlignment": 0.999204,
   "codecAudioDelayMilliseconds": 42.3125,
-  "videoSha256": "68008ead47005ed45313d30c82109f15f7f0558c7d59cb9928d3cdb92705bf53",
-  "videoBytes": 18053642
+  "cameraHoldsStationary": true,
+  "cameraMaxFrameTranslationPixels": 24.35,
+  "percentageUnitGapPixels": 16,
+  "videoSha256": "2c636f01a6e4e84d4bfbbc3b400b9890cf4876146781e4c676a553154b958010",
+  "videoBytes": 12600577,
+  "apkVersion": "1.1.2",
+  "apkSha256": "47118981cc57f6e57d1369f2fe31945386590fd7081ae5e760a8dd584227ea25",
+  "apkBytes": 5791160,
+  "apkPlugins": [
+    "@capacitor/app",
+    "@capacitor/filesystem",
+    "@capacitor/share",
+    "@capacitor/status-bar"
+  ],
+  "androidCleanBuildPassed": true
 }

@@ -4,16 +4,16 @@
 - `npm run build`: passed.
 - `npm run test:mobile`: passed. Checked portfolios/create/wallet/system navigation, exact percentage/slider locking, asset picker, import and Android Back event, deposit, redemption, edit and wrap sheets; no page errors or horizontal page overflow at 320, 360, 430, 768 and 1440px.
 - Gradle `:app:assembleDebug :app:lintDebug`: passed; native lint reported 0 errors and 8 advisory warnings. The Android 8.1 navigation-bar attribute is isolated in `values-v27`. The branding refresh subsequently passed a clean `:app:assembleDebug :app:lintDebug` build.
-- APK signature verification: passed, APK Signature Scheme v2. Package `com.coloyond`, version 1.1.1, min SDK 26, target SDK 37.
+- APK signature verification: passed, APK Signature Scheme v2. Package `com.coloyond`, version 1.1.2, min SDK 26, target SDK 37.
 - APK ZIP inspection: production SPA/assets and `https://localhost/app` startup are included; no remote server URL is configured.
-- Remotion continuous UI revision: rendered 1860 frames with visible slider drag, lock, asset selection, review, portfolio expansion, Wallet/Wrap and System navigation. TypeScript checks passed. Ten representative frames inspected; click alignment and headline clipping corrected before export. Output is 1920×1080 H.264 at 30fps, approximately 62 seconds, with 48kHz stereo AAC audio. Uploaded-to-exported waveform correlation is 0.999204 after accounting for 42.31ms AAC/mux delay (less than two video frames). Peak is −1.9 dB; no clipping. Source upload is byte-identical. See `remotion/analysis/export-verification.json`.
+- Remotion continuous UI revision: rendered 1860 frames with visible slider drag, lock, asset selection, review, portfolio expansion, card export/remix and System navigation. TypeScript checks passed. Thirteen representative frames inspected; click alignment and headline clipping corrected before export. Output is 1920×1080 H.264 at 30fps, approximately 62 seconds, with 48kHz stereo AAC audio. Uploaded-to-exported waveform correlation is 0.999204 after accounting for 42.31ms AAC/mux delay (less than two video frames). Peak is −1.9 dB; no clipping. Source upload is byte-identical. See `remotion/analysis/export-verification.json`.
 
 ## Deliverables
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
-| coloyond-android-debug.apk | 5652022 | `3dcf536009fbd5f4a2bf1324bf7b3bbd11be545d0270bbbe42ce3f84212ba234` |
-| coloyond-mobile-showcase.mp4 | 18053642 | `68008ead47005ed45313d30c82109f15f7f0558c7d59cb9928d3cdb92705bf53` |
+| coloyond-android-debug.apk | 5791160 | `47118981cc57f6e57d1369f2fe31945386590fd7081ae5e760a8dd584227ea25` |
+| coloyond-mobile-showcase.mp4 | 12600577 | `2c636f01a6e4e84d4bfbbc3b400b9890cf4876146781e4c676a553154b958010` |
 
 ## Limits
 
@@ -25,4 +25,12 @@ The film now animates a deterministic UI presentation rather than swapping captu
 
 ## Canonical brand artwork
 
-The uploaded `coloyond.jpg` is preserved byte-for-byte in the repository root, web public assets, Remotion assets and the Android drawable packaged into the APK. Website favicons and launcher density variants are generated from it by `scripts/mobile/brand-assets.py`; the themed launcher mask derives from the same artwork. Browser checks verify the mobile and website logo sources and favicon. The APK identifies itself as **Coloyond 1.1.1** (version code 3). The updated promotion uses the supplied music, verified as 48kHz stereo AAC in the exported film.
+The uploaded `coloyond.jpg` is preserved byte-for-byte in the repository root, web public assets, Remotion assets and the Android drawable packaged into the APK. Website favicons and launcher density variants are generated from it by `scripts/mobile/brand-assets.py`; the themed launcher mask derives from the same artwork. Browser checks verify the mobile and website logo sources and favicon. The APK identifies itself as **Coloyond 1.1.2** (version code 4). The updated promotion uses the supplied music, verified as 48kHz stereo AAC in the exported film.
+
+## Portfolio card and stability revision
+
+Production PNG generation, download signature/dimensions, deterministic artwork, vault/weight/remix differentiation, escaped names, address/balance omission, file-share handoff and new-tab remix-draft loading passed the browser suite. Web Share handoff is mocked; actual Android/iOS OS chooser behavior was not physically tested. Existing mobile checks passed at 320–1440px. Android 1.1.2 assembled and passed lint (0 errors, 8 advisory warnings); its signed APK includes Filesystem and Share plugins, current bundled `/app` assets, and no broad storage permission. Native PNGs use cache files and the Android chooser. Public web remix links on Android require the documented deployment origin; no localhost link is sent.
+
+`npm run test:video-camera` passes all stationary holds and the bounded-motion scan (maximum 24.35px/frame during a deliberate cross-canvas move). There is no device rotation, spring overshoot or audio-driven device scale. Percentage digits and the unit now have a 16px gap and separate typography. The new 62-second render shows share-card preview, artwork remix, PNG handoff and three example portfolio compositions using the production artwork engine.
+
+A final incremental Android rebuild hit duplicate generated resource classes. Clean assembly (`:app:clean :app:assembleDebug`, as used by `npm run android:apk`) and `:app:lintDebug` passed, and the final APK signature and bundled card-sheet copy were rechecked.

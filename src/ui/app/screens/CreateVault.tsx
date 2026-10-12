@@ -1,3 +1,5 @@
+import {readSharedMix} from '../lib/art/remix-link.js';
+import { PortfolioArt, PortfolioShare, cardInput } from '../components/ui/PortfolioArt.js';
 import { useEffect, useMemo, useState } from 'react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore } from '../lib/store.js';
@@ -43,8 +45,9 @@ export function CreateVault() {
     return owner ? s.vaultSetupDrafts[owner] ?? null : null;
   });
 
-  const [name, setName] = useState('Everyday mix');
-  const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
+  const sharedMix = useMemo(() => readSharedMix(window.location.search), []);
+  const [name, setName] = useState(sharedMix?.name ?? 'Everyday mix');
+  const [shares, setShares] = useState<Record<AssetId, number>>({...defaultShares, ...sharedMix?.targets});
   const [locked, setLocked] = useState<WeightLocks>({});
   const [investmentSol, setInvestmentSol] = useState('0.20');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
@@ -132,14 +135,9 @@ export function CreateVault() {
           ? `Resume ${setupDraft.input.name}: confirmed steps and the same Vault State are saved on this device.`
           : 'Pick the assets and their weights, then invest from your SOL balance. The vault starts with wrapped SOL and rebalances toward your mix on schedule.'}
       />
+      <div className="mb-4 space-y-3"><PortfolioArt input={cardInput("draft", name, targets, true)} /><PortfolioShare input={cardInput("draft", name, targets, true)} /></div>
 
-      <div
-        className="relative mb-4 h-[96px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
-        aria-hidden="true"
-      >
-        <img src="/coloyond.jpg" className="absolute inset-0 h-full w-full opacity-80 object-contain" alt="" />
-      </div>
-
+      {sharedMix ? <p className="mb-4 text-[12px] text-iron">Community remix · review this draft and connect your own wallet to create it.</p> : null}
       {setupDraft ? (
         <div className="mb-4">
           <Notice tone="brass">

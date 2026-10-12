@@ -38,7 +38,7 @@ await page.getByRole('button',{name:'Wallet',exact:true}).click();
 await page.getByRole('button',{name:'Import a seed phrase'}).click();
 await page.getByRole('dialog').waitFor();
 await page.evaluate(() => window.dispatchEvent(new Event('coloyond:back')));
-if(await page.getByRole('dialog').count()) throw Error('Import sheet did not close');
+await page.getByRole('dialog').waitFor({state:'hidden'});
 await page.getByRole('button',{name:'System',exact:true}).click();
 await page.getByRole('heading',{name:'The working parts.'}).waitFor();
 await page.screenshot({path:out+'05-system.png'});
@@ -54,6 +54,54 @@ await page.evaluate(async()=>{
 });
 await page.getByRole('button',{name:'Open portfolio →'}).waitFor();
 await page.screenshot({path:out+'06-active.png'});
+// Exercise the production local PNG renderer and share controls, not a mocked image.
+await page.getByRole('button',{name:'Share portfolio card ↗',exact:true}).click();
+await page.getByRole('button',{name:'Share PNG ↗',exact:true}).waitFor();
+const pngDownload=page.waitForEvent('download');
+await page.getByRole('button',{name:'Download PNG',exact:true}).click();
+const downloaded=await pngDownload;
+await downloaded.saveAs('/tmp/coloyond-portfolio-share.png');
+const {readFile}=await import('node:fs/promises');
+const png=await readFile('/tmp/coloyond-portfolio-share.png');
+if(png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||png.readUInt32BE(16)!==1200||png.readUInt32BE(20)!==1500)throw Error('Share download is not a 1200×1500 PNG');
+const originalArt=await page.getByAltText('Everyday mix shareable portfolio card preview').getAttribute('src');
+await page.getByRole('button',{name:'Remix artwork',exact:true}).click();
+const remixedArt=await page.getByAltText('Everyday mix shareable portfolio card preview').getAttribute('src');
+if(originalArt===remixedArt)throw Error('Remix did not change artwork');
+await page.getByRole('button',{name:'Share PNG ↗',exact:true}).waitFor();
+await page.evaluate(()=>{
+ Object.defineProperty(navigator,'canShare',{configurable:true,value:({files})=>files?.[0]?.type==='image/png'});
+ Object.defineProperty(navigator,'share',{configurable:true,value:async({files})=>{window.__sharedPng={name:files[0].name,type:files[0].type,size:files[0].size};}});
+});
+await page.getByRole('button',{name:'Share PNG ↗',exact:true}).click();
+if(!await page.evaluate(()=>window.__sharedPng?.size>1000))throw Error('Share did not receive the rendered PNG');
+const link=await page.evaluate(async()=>{
+ const {useStore}=await import('/src/ui/app/lib/store.ts');
+ const {cardInput}=await import('/src/ui/app/components/ui/PortfolioArt.tsx');
+ const {portfolioCardSvg,renderCardPng}=await import('/src/ui/app/lib/art/portfolio-card.ts');
+ const {remixLink,readSharedMix}=await import('/src/ui/app/lib/art/remix-link.ts');
+ const v=useStore.getState().vaults[0],input=cardInput(v.id,v.name,v.targets);
+ const a=portfolioCardSvg(input);
+ if(a!==portfolioCardSvg(input))throw Error('Card is nondeterministic');
+ if(a===portfolioCardSvg({...input,id:'another-vault'}))throw Error('Portfolio identity did not affect artwork');
+ if(a===portfolioCardSvg({...input,assets:input.assets.map(x=>({...x,weight:x.id==='wsol'?20:x.weight}))}))throw Error('Weights did not affect artwork');
+ if(a.includes(v.publicKey)||a.includes('$'))throw Error('Card leaked address or balance');
+ const malicious=portfolioCardSvg({...input,name:'<script>alert(1)</script>'});
+ if(malicious.includes('<script>'))throw Error('Portfolio name is not escaped');
+ await renderCardPng({...input,assets:[{id:'wsol',symbol:'WSOL',color:'#ff513b',weight:100}]});
+ for(const targets of [{wsol:-1},{wsol:101},{bad:100},{wsol:'100'},{wsol:0},{wsol:null}]){if(readSharedMix('?mix='+encodeURIComponent(JSON.stringify({name:'bad',targets}))))throw Error('Unsafe remix accepted');}
+ const link=remixLink(input,location.origin);const parsed=readSharedMix(new URL(link).search);
+ if(!parsed||parsed.targets.wsol!==50||parsed.targets.dusd!==30)throw Error('Remix link lost allocation');
+ if(useStore.getState().vaults[0].targets.wsol!==50)throw Error('Artwork remix changed the vault');
+ return link;
+});
+await page.screenshot({path:out+'10-share.png'});
+await page.keyboard.press('Escape');
+const linkPage=await context.newPage();await linkPage.goto(link);
+await linkPage.getByRole('heading',{name:'Set the balance.'}).waitFor();
+if(await linkPage.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue()!=='50')throw Error('Remix link did not prefill draft');
+await linkPage.close();
+
 await page.getByRole('button',{name:'Open portfolio →'}).click();
 await page.getByRole('heading',{name:'Everyday mix',exact:true}).waitFor();
 await page.screenshot({path:out+'07-detail.png'});
@@ -81,7 +129,7 @@ await page.locator('.cr-brand-icon').evaluate(image=>image.decode());
 if(await page.locator('.cr-brand-icon').getAttribute('src')!=='/coloyond.jpg') throw Error('Website logo mismatch');
 if(await page.locator('link[rel=icon]').getAttribute('href')!=='/favicon.png') throw Error('Website favicon mismatch');
 if(errors.length) throw Error(errors.join('\n'));
-console.log('PASS: navigation, weight locks, asset picker, import, deposit, redeem, edit, wrap sheets; 320–1440px layout; no page errors.');
+console.log('PASS: deterministic portfolio artwork, actual PNG download, file share, artwork remix, safe draft remix links; navigation, weight locks, asset picker, import, deposit, redeem, edit, wrap sheets; 320–1440px layout; no page errors.');
 await browser.close();
 
 server.kill();

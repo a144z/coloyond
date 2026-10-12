@@ -1,3 +1,4 @@
+import {readSharedMix} from './lib/art/remix-link.js';
 // Mounts the coloyond-beta mobile app in this frontend. The adapter context
 // (ConnectionProvider, WalletProvider, WalletModalProvider) already wraps every
 // route via SolanaWalletProvider in main.tsx; only a ConnectionProvider for the
@@ -26,6 +27,8 @@ function WalletStateBridge() {
 
   useEffect(() => {
     setConnectedWallet(signer);
+    // Wallet association resets navigation; restore a validated, unsigned remix draft afterwards.
+    if (readSharedMix(window.location.search)) useStore.getState().pushScreen({id: "create"});
   }, [setConnectedWallet, signer]);
 
   return <App />;

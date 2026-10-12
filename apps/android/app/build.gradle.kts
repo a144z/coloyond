@@ -7,8 +7,8 @@ android {
         applicationId = "com.coloyond"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.1.2"
     }
     buildTypes {
         release {
@@ -33,6 +33,8 @@ dependencies {
     implementation(project(":capacitor-android"))
     implementation(project(":capacitor-app"))
     implementation(project(":capacitor-status-bar"))
+    implementation(project(":capacitor-filesystem"))
+    implementation(project(":capacitor-share"))
 }
 
 // A direct Gradle build also packages the current mobile UI, never stale assets.

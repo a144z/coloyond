@@ -12,7 +12,8 @@
     "android:apk": "npm run android:sync && cd apps/android && ./gradlew :app:clean :app:assembleDebug --console=plain",
     "test:mobile": "node scripts/mobile/capture.mjs",
     "video:studio": "remotion studio remotion/index.tsx --public-dir=remotion/public",
-    "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2"
+    "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2",
+    "test:video-camera": "node --import tsx scripts/mobile/verify-video-camera.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",
@@ -34,6 +35,8 @@
   "dependencies": {
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/share": "^8.0.3",
     "@capacitor/status-bar": "^8.0.4",
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.16.2",
     "@noble/hashes": "^1.8.0",

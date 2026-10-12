@@ -8,11 +8,11 @@
 - Cursor drags WSOL **60 → 75 → 45 → 60%**. Handle, filled track, percentage, complementary dUSD weight and allocation strip update together. A visible click changes LOCK to LOCKED.
 - Add Asset opens a bottom drawer; selecting tBTC changes the mix to **60 / 30 / 10**, preserving the locked weight.
 - Review opens the allocation sheet. It explicitly requires wallet connection/signing; the film does not imply a submitted transaction.
-- An illustrative existing portfolio opens to holdings; Wallet and System navigation respond to visible clicks. Wrap SOL opens its own review sheet.
-- Layout shifts across the canvas: review and system move the device left and typography right. Other moves include horizontal routes, vertical sheets, card expansion, camera tracking and scrolling to controls.
+- An illustrative existing portfolio opens to holdings; a visible Share Portfolio Card click opens the card sheet. Remix changes its geometry, and Share PNG presents the ready file. Three different portfolio cards show the shared generative artwork engine; System navigation follows.
+- Layout shifts across the canvas: review and system move the device left and typography right. Other moves include horizontal routes, vertical sheets, card expansion, camera tracking and scrolling to controls. Camera rails now use symmetric non-overshooting easing and stationary interaction holds, replacing small scale/position reversals. The large percentage has a separate unit with a 16px gap, tabular digits and independent letter spacing.
 - Text uses letter-by-letter masked rises, opposing horizontal entrances, split-line translations and directional masks. Slider-linked type tracks the gesture. Brand rays become parallel allocation bands, then re-form the prism fan for the closing title.
 
-The UI is a motion presentation model matching `/app` styling and controls, not a recording of live transactions. Portfolio values/status are labeled demonstrations. Capture fixtures remain available separately for app QA.
+The portfolio card SVG/geometry imports the production renderer from `src/ui/app/lib/art/portfolio-card.ts`; the film does not invent unrelated card illustrations. The UI is a motion presentation model matching `/app` styling and controls, not a recording of live transactions. Portfolio values/status are labeled demonstrations. Capture fixtures remain available separately for app QA.
 
 ## Uploaded music and frequency analysis
 
@@ -30,7 +30,7 @@ Primary gestures, camera arrivals and typography entrances use that estimated be
 | 36 / 41 | 21.81 / 24.82s | Open picker / select tBTC |
 | 47 | 28.44s | Review |
 | 60 | 36.27s | Open existing portfolio |
-| 68 / 74 | 41.08 / 44.70s | Wallet / Wrap SOL |
+| 68 / 74 / 78 | 41.08 / 44.70 / 47.11s | Open card / remix artwork / Share PNG |
 | 82 | 49.52s | System |
 | 91–102 | 54.94–61.56s | Prism and closing title |
 
@@ -49,6 +49,7 @@ Reviewed primary studio process and product-film case studies, then applied the 
 
 ```sh
 npm ci
+npm run test:video-camera
 npm run video:studio
 npm run video:render
 # Optional: regenerate the checked-in analysis (FFmpeg, Python, NumPy and SciPy required)
@@ -58,3 +59,7 @@ npm run test:mobile
 ```
 
 Rendering accepts `--browser-executable=/path/to/chrome`. Output: `remotion/out/coloyond-mobile.mp4`. Published artifact: `releases/coloyond-mobile-showcase.mp4`. The uploaded audio, brand image and analysis are checked in, so normal rendering does not require Python, external audio downloads or an analysis rerun.
+
+## Detail checks in the card revision
+
+The camera remains exactly stationary during beats 20–34, 37–44, 47–54 and 67–89. A full-frame numerical scan checks finite, bounded zoom (1–1.58×) and continuous translation; the largest translation step is 24.35px during the deliberate cross-canvas move. The device has no rotation, spring overshoot, periodic shake or sound-reactive scale. Frequency response remains in background accents only. Representative right/left drag, review, card-sheet, artwork-remix and system frames are inspected before the full export.

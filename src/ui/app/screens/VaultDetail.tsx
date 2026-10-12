@@ -1,3 +1,4 @@
+import { PortfolioArt, PortfolioShare, cardInput } from '../components/ui/PortfolioArt.js';
 import { useEffect, useState } from 'react';
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store.js';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault.js';
@@ -67,6 +68,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         sub={<>{assetLabel} · Solana devnet.<br />Vault Authority PDA custody · transferable SPL shares.</>}
       />
 
+      <div className="mb-4 space-y-3"><PortfolioArt input={cardInput(vault.id, vault.name, vault.targets)} /><PortfolioShare input={cardInput(vault.id, vault.name, vault.targets)} /></div>
       <LedgerPanel stripe="Portfolio value" meta={valued ? fmtUsd(valued.totalUsd) : 'price unavailable'}>
         <KeyValue rows={[
           { k: 'Vault NAV', v: valued ? fmtUsd(valued.totalUsd) : 'Waiting for fresh prices' },

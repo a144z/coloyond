@@ -4,8 +4,8 @@
 
 <h1 align="center">Coloyond</h1>
 
-<p align="center"><strong>Your assets. Your balance. Your next move.</strong></p>
-<p align="center">A mobile portfolio desk for Solana.<br/>Choose a token mix, set its target weights, and manage your devnet vault from the web or Android.</p>
+<p align="center"><strong>Your portfolio as one picture.</strong></p>
+<p align="center">A shareable, visual portfolio composition built for the mobile web and powered by Solana.<br/>Compose your mix, generate its artwork, share a PNG, and remix it with your community.</p>
 
 <p align="center">
   <img alt="Solana Devnet" src="https://img.shields.io/badge/Solana-Devnet-9945FF?style=flat-square" />
@@ -31,6 +31,14 @@ The interface turns allocation into something you can work with directly. Move a
 
 **Built for the Solana mobile hackathon:** a focused, installable product with one shared interface across the browser and Android, documented transaction boundaries, and a reproducible promotional film.
 
+## Your mix, ready to share
+
+Generative geometry turns each portfolio into an Orbit, Prism or Stack composition. Its colors and proportions follow the target allocation; each vault and artwork remix has its own deterministic design. Export the exact preview as a PNG for social sharing, or send a remix link that opens a draft with the same weights.
+
+<p align="center"><img src="docs/media/coloyond-portfolio-card.png" alt="Coloyond generative portfolio PNG with asset weights" width="360" /></p>
+
+[See how portfolio cards and remix links work](docs/mobile/portfolio-cards.md).
+
 ## See Coloyond in motion
 
 <p align="center">
@@ -39,9 +47,9 @@ The interface turns allocation into something you can work with directly. Move a
   </a>
 </p>
 
-<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Component close-ups and visible UI gestures · Uploaded stereo music with frequency-based timing</sub></p>
+<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Steady component close-ups, PNG sharing and artwork remixes · Uploaded stereo music with frequency-based timing</sub></p>
 
-The film uses the actual mobile UI. Portfolio balances in presentation scenes are clearly labeled **illustrative devnet data**.
+The film uses a frame-controlled UI demonstration and the same portfolio-art renderer as `/app`. Portfolio balances in presentation scenes are clearly labeled **illustrative devnet data**.
 
 ## The product
 
@@ -49,6 +57,7 @@ The film uses the actual mobile UI. Portfolio balances in presentation scenes ar
 | --- | --- |
 | **Compose** | Name a portfolio, choose supported assets, and configure allocation, delay, and deviation threshold. |
 | **Adjust** | Use sliders or exact percentages; lock a target while the other weights move. |
+| **Card PNG Share** | Generate a 1200 × 1500 visual portfolio card, share/download it, remix its geometry, and copy an unsigned allocation remix link. |
 | **Inspect** | Review target versus actual allocation, holdings, SPL share balances, and task status. |
 | **Manage** | Open deposit, proportional redemption, weight editing, and pause/resume workflows. Owner actions require signing. |
 | **Connect** | Use a compatible Solana wallet; the devnet device-wallet flow is also available. |

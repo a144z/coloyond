@@ -1,3 +1,4 @@
+import { PortfolioArt, PortfolioShare, cardInput } from '../components/ui/PortfolioArt.js';
 import { useStore, vaultTargetList, type VaultConfig } from '../lib/store.js';
 import { computeAssetRows, maxDriftPct } from '../lib/solana/vault.js';
 import { bookStatus, pricesFromBook, priceOf } from '../lib/solana/price.js';
@@ -116,6 +117,7 @@ function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number
       bodyClassName="pt-3.5"
     >
       <p className="text-[11.5px] text-iron">{assetLabel} · Solana devnet</p>
+      <div className="mt-4"><PortfolioArt compact input={cardInput(vault.id, vault.name, vault.targets)} /></div>
 
       <div className="mt-4">
         {valued ? (
@@ -145,6 +147,7 @@ function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number
             : 'No settled Magic Actions observed yet.'}
       </p>
 
+      <div className="mt-4"><PortfolioShare input={cardInput(vault.id, vault.name, vault.targets)} /></div>
       {!closed ? (
         <div className="mt-4">
           <Button variant="secondary" full onClick={() => pushScreen({ id: 'vault', vaultId: vault.id })}>
