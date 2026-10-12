@@ -14,7 +14,7 @@ import { MixBar, segmentsOf } from '../components/ui/MixBar';
 import { Sheet } from '../components/ui/Sheet';
 import { Field, inputClass, selectClass } from '../components/ui/Field';
 import { AssetSwatch, Divider, KeyValue, MicroLabel, Notice, SignatureLink, Skeleton, StatusSwatch } from '../components/ui/primitives';
-import { WeightSliders, normalizeShares, sharesFromTargets } from '../components/ui/WeightSliders';
+import { WeightSliders, normalizeShares, sharesFromTargets, type WeightLocks } from '../components/ui/WeightSliders';
 import { BlockedNotice, VaultStatusLine } from './PortfolioList';
 
 /** Portfolio details are read from the Vault State PDA and standard SPL accounts. */
@@ -266,14 +266,17 @@ function RedeemSheet({ vault, tokens, shareBalanceRaw, shareSupplyRaw, open, onC
 function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: boolean; onClose: () => void }) {
   const editWeights = useStore((s) => s.editWeights);
   const [shares, setShares] = useState<Record<AssetId, number>>(sharesFromTargets(vault.targets, vault.assets));
+  const [locked, setLocked] = useState<WeightLocks>({});
   const [submitting, setSubmitting] = useState(false);
   const cooldownEndsAt = vault.lastWeightEditAt ? vault.lastWeightEditAt + 120_000 : 0;
   const cooling = cooldownEndsAt > Date.now();
-  const nextTargets = normalizeShares(shares, vault.assets);
+  const nextTargets = normalizeShares(shares, vault.assets, locked);
+  const nextTotal = Object.values(nextTargets).reduce((sum, pct) => sum + pct, 0);
+  const totalOk = Math.abs(nextTotal - 100) <= 0.05;
   const changed = JSON.stringify(nextTargets) !== JSON.stringify(vault.targets);
   const nextLabel = Object.entries(nextTargets).filter(([, pct]) => pct > 0).map(([id, pct]) => `${pct.toFixed(0)} ${assetSpec(id as AssetId).symbol}`).join(' / ') || '—';
 
-  return <Sheet open={open} onClose={onClose} micro="Edit weights · owner" title="Retarget the mix" footer={<Button variant="primary" full loading={submitting} disabled={cooling || !changed || Object.keys(nextTargets).length < 2} onClick={async () => {
+  return <Sheet open={open} onClose={onClose} micro="Edit weights · owner" title="Retarget the mix" footer={<Button variant="primary" full loading={submitting} disabled={cooling || !changed || !totalOk || Object.keys(nextTargets).length < 2} onClick={async () => {
     if (cooling || !changed) return;
     setSubmitting(true);
     try { await editWeights(vault.id, nextTargets as Record<string, number>); onClose(); } finally { setSubmitting(false); }
@@ -286,16 +289,21 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
           segments={segmentsOf(vault.assets.filter((id) => (nextTargets[id] ?? 0) > 0).map((assetId) => ({ assetId, pct: nextTargets[assetId] ?? 0 })))}
           height={20}
           interactive
+          lockedKeys={Object.keys(locked)}
           onChange={(segments) => setShares((previous) => {
             const next = { ...previous };
-            for (const segment of segments) next[segment.key as AssetId] = Math.round(segment.pct);
+            for (const segment of segments) {
+              const id = segment.key as AssetId;
+              if (locked[id] !== undefined) continue; // pinned weights are not draggable
+              next[id] = Math.round(segment.pct);
+            }
             return next;
           })}
           ariaLabel="Drag allocation handles to change target percentages"
         />
       ) : null}
-      <WeightSliders shares={shares} onChange={setShares} assetIds={vault.assets} ariaLabel="New target weights" />
+      <WeightSliders shares={shares} onChange={setShares} assetIds={vault.assets} ariaLabel="New target weights" locked={locked} onLockedChange={setLocked} />
     </LedgerPanel>
-    <p className="mt-3 text-[11px] leading-relaxed text-iron">The asset set stays fixed. Set an asset's weight to zero to remove it from the target mix; its SPL account remains part of the vault.</p>
+    <p className="mt-3 text-[11px] leading-relaxed text-iron">The asset set stays fixed. Lock a weight to hold it in place while you move the others; unlocking restores it exactly. Set an asset's weight to zero to remove it from the target mix; its SPL account remains part of the vault.</p>
   </Sheet>;
 }
