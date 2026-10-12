@@ -15,11 +15,10 @@ replay nonce before atomically moving the standard SPL assets.
 
 The browser reads balances and displays actual settlement signatures; it is not
 the trade executor. A Hydra cranker process must be running for scheduled tasks
-to trigger. To run tasks for multiple vaults, configure
-`COLONYOND_VAULT_STATES` and `COLONYOND_CRANKER_SIGNERS` as described in
-[`docs/automated-execution-design.md`](docs/automated-execution-design.md), then
-run `npm run crank:vaults`. `npm run crank:vaults:self-check` runs its offline
-task-validation checks.
+to trigger. The app can use MagicBlock's official `hydra-cranker` binary in
+Ephemeral Rollup mode; it needs an operator key per ER, not each portfolio's
+one-time task-creation signer. Setup is described in
+[`docs/automated-execution-design.md`](docs/automated-execution-design.md).
 
 ## Devnet asset and swap limits
 
@@ -57,7 +56,7 @@ Useful commands:
 | `npm run bootstrap:devnet-test-usd` | Create the capped synthetic USD market |
 | `npm run bootstrap:standard-rebalance-vault` | Create the standard-SPL Devnet canary |
 | `npm run schedule:standard-vault` | Register or replace one vault’s Hydra task |
-| `npm run crank:vaults` | Run the multi-vault Hydra task cranker |
-| `npm run crank:vaults:self-check` | Run offline cranker validation checks |
-| `npm run crank:vaults:install-agent` | Install a macOS LaunchAgent for the multi-vault cranker (does not start it) |
-| `npm run crank:vaults:agent:self-check` | Validate LaunchAgent generation offline |
+| `npm run crank:service` | Supervise MagicBlock's official Hydra cranker per configured ER |
+| `npm run crank:service:self-check` | Validate service configuration and command generation offline |
+| `npm run crank:service:install-agent` | Install a macOS LaunchAgent for the official cranker service (does not start it) |
+| `npm run crank:service:agent:self-check` | Validate LaunchAgent generation offline |

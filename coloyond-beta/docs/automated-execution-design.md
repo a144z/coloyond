@@ -29,33 +29,46 @@ Set `COLONYOND_VAULT_STATE` to an active portfolio PDA and run `npm run schedule
 
 The scheduled task is one task per portfolio. It will execute only while a Hydra cranker is available on that ER and only when prices are fresh, the vault has a rebalance drift above its threshold, and the synthetic market has enough liquidity. For the single-vault Devnet canary, `npm run crank:standard-vault` runs a scoped local cranker that watches only the configured portfolio task; stop it with Ctrl-C. A long-lived deployment should run a monitored cranker service for its own registered tasks.
 
-For several already-scheduled vaults, `npm run crank:vaults` runs one long-lived process and fairly polls each ER task, continuing when one vault is temporarily unavailable. Set `COLONYOND_VAULT_STATES` to a comma-separated list of active Vault State PDA addresses, and `COLONYOND_CRANKER_SIGNERS` to a JSON object mapping each exact PDA to its local Hydra sponsor keypair file, for example:
+### Operator-run Hydra service
+
+MagicBlock's Hydra project provides an official `hydra-cranker` binary. Hydra tasks are permissionlessly triggerable when due; for an Ephemeral Rollup, the binary runs with `--ephemeral`, connects to the ER and base RPC, and delegates its own operator keypair. This means the per-portfolio sponsor key generated during task registration is only needed for task creation and does not need to be stored or shared with the service. The public Hydra materials document the cranker software, not a MagicBlock-operated hosted cranker service. See the [official Hydra repository](https://github.com/magicblock-labs/hydra).
+
+Use one process and one dedicated operator keypair for each distinct ER endpoint. The official cranker watches Hydra tasks on that ER, including newly created tasks; it does not need a list of portfolio sponsor keys. Create a separate Devnet-only operator keypair for each ER and fund it with enough Devnet SOL for its initial delegation. Never use an owner's wallet or commit a keypair.
+
+Install the upstream binary for the machine's architecture. For Apple silicon, the official package is:
 
 ```sh
-COLONYOND_VAULT_STATES='VaultStatePda1,VaultStatePda2' \
-COLONYOND_CRANKER_SIGNERS='{"VaultStatePda1":"target/sponsor-1.json","VaultStatePda2":"target/sponsor-2.json"}' \
-npm run crank:vaults
+npm install --global @magicblock-labs/hydra-cranker-darwin-arm64
+command -v hydra-cranker
 ```
 
-Each sponsor file must be the signer already recorded in that vault's Scheduler Config and delegated to the same ER as its Executor. The runner checks vault state, config ownership/sponsor, ER delegation, Hydra task owner, 5,700-slot interval, and callback PDA accounts before triggering. It never prints signer contents. Run `npm run crank:vaults:self-check` for offline parsing and task-filter checks.
-
-On macOS, the repo includes a per-user LaunchAgent installer so the process can start at login and restart if it exits. Prepare an absolute-path JSON config, for example:
+Create a private operator keypair file for each ER, fund it on Devnet, and set its file mode to `600`. The binary delegates that keypair to the ER on startup. Configure one process per ER in a JSON file outside Git, for example:
 
 ```json
 {
-  "vaultStates": ["<vault-state-pda>"],
-  "signers": { "<vault-state-pda>": "/absolute/path/to/hydra-sponsor.json" }
+  "binaryPath": "/absolute/path/to/hydra-cranker",
+  "rollups": [
+    {
+      "name": "devnet-er-1",
+      "rpcUrl": "https://<executor-er-rpc>",
+      "baseRpcUrl": "https://api.devnet.solana.com",
+      "keypairPath": "/absolute/path/to/cranker-er-1.json",
+      "metricsPort": 9101
+    }
+  ]
 }
 ```
 
-Then install the agent (installation writes a plist under `~/Library/LaunchAgents` but does not start it):
+The ER URL is the `fqdn` returned by MagicBlock for a delegated vault Executor. If vaults are delegated to different ERs, add one entry and a distinct operator keypair for each. Run the supervised fleet in a terminal with `COLONYOND_HYDRA_CRANKER_CONFIG=/absolute/path/to/crankers.json npm run crank:service`; `npm run crank:service:self-check` validates the config and generated arguments offline. The optional Prometheus port should only be enabled when firewall rules restrict access to trusted monitoring clients.
+
+On macOS, install a per-user LaunchAgent to start at login and restart the fleet if it exits. The installer writes a plist but does not start it:
 
 ```sh
-COLONYOND_CRANKER_CONFIG="$PWD/cranker.json" npm run crank:vaults:install-agent
+COLONYOND_HYDRA_CRANKER_CONFIG="$PWD/crankers.json" npm run crank:service:install-agent
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"
 ```
 
-Use `launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"` to stop it. Logs go to `~/Library/Logs/Coloyond/`. This is a local operator-managed service, not a hosted executor: the Mac must stay awake and connected, and MagicBlock must keep the configured ER/task available.
+Stop it with `launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.coloyond.vault-cranker.plist"`. Logs go to `~/Library/Logs/Coloyond/`. This is operator-managed infrastructure; your Mac must stay awake. For production unattended operation, run the same service on an always-on host with a process supervisor, persistent RPC/WebSocket connectivity, monitoring, and keypair backups. The repo does not deploy infrastructure or install/start the agent automatically.
 
 ## Local Devnet keypair
 
