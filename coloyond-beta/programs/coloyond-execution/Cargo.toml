@@ -21,7 +21,7 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
-anchor-spl = { version = "1.0.2", features = ["token", "associated_token"] }
+anchor-spl = { version = "1.0.2", features = ["token", "associated_token", "metadata"] }
 ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "0fc4604157de51df28693e02e5a1a6a4a08c8a03", features = ["anchor", "crank"] }
 hydra-api = { git = "https://github.com/magicblock-labs/hydra.git", rev = "a6846416d7ce61b846e102a4f9fb8b9828e71ab8", features = ["cpi-native", "ephemeral"] }
 pyth-solana-receiver-sdk = "2.0.0"
