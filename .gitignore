@@ -17,3 +17,17 @@ etf-program-keypair.json
 etf-program-keypair-array.json
 /scratch/
 programs/coloyond-etf/target/
+
+# Native/generated media artifacts
+apps/android/.gradle/
+apps/android/**/build/
+apps/android/local.properties
+apps/android/app/src/main/assets/public/
+apps/android/app/src/main/assets/capacitor.config.json
+apps/android/app/src/main/assets/capacitor.plugins.json
+apps/android/capacitor-cordova-android-plugins/
+*.jks
+*.keystore
+/remotion/out/
+/playwright-report/
+/test-results/

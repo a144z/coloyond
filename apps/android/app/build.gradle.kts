@@ -1,67 +1,50 @@
-plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.compose.compiler)
-}
+plugins { alias(libs.plugins.android.application) }
 
 android {
     namespace = "com.coloyond"
     compileSdk = 37
-
     defaultConfig {
         applicationId = "com.coloyond"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 2
+        versionName = "1.1.0"
     }
-
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            isMinifyEnabled = false
+            // Supply a private release signing configuration for store distribution.
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    buildFeatures {
-        compose = true
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     sourceSets {
-        getByName("main").assets.srcDir(rootProject.file("../../idl"))
+        // The previous Compose prototype is retained as reference, not shipped.
+        getByName("main").java.setSrcDirs(listOf("src/capacitor/java"))
+        getByName("test").java.setSrcDirs(emptyList<String>())
+        getByName("androidTest").java.setSrcDirs(emptyList<String>())
     }
 }
 
 dependencies {
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.mobile.wallet.adapter.clientlib.ktx)
-    implementation(libs.multimult)
-    implementation(libs.web3.solana)
-    // Ruleset 34 lists a fourth coordinate, com.solana:rpc-core. Its pinned
-    // version tracks the older clientlib line, so the scaffold's own
-    // HttpRpcTransport/SolanaRpc stay in-repo instead (ruleset 10, 23).
-    testImplementation(libs.junit)
-    testImplementation(libs.org.json)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation(project(":capacitor-android"))
+    implementation(project(":capacitor-app"))
+    implementation(project(":capacitor-status-bar"))
 }
+
+// A direct Gradle build also packages the current mobile UI, never stale assets.
+val bundleMobileWeb by tasks.registering(Exec::class) {
+    val repository = rootProject.projectDir.resolve("../..")
+    workingDir(repository)
+    inputs.dir(repository.resolve("src"))
+    inputs.dir(repository.resolve("public"))
+    inputs.files(repository.resolve("package.json"), repository.resolve("package-lock.json"),
+        repository.resolve("vite.config.ts"), repository.resolve("capacitor.config.ts"), repository.resolve("index.html"))
+    outputs.dir(projectDir.resolve("src/main/assets/public"))
+    outputs.files(projectDir.resolve("src/main/assets/capacitor.config.json"), projectDir.resolve("src/main/assets/capacitor.plugins.json"))
+    commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm", "run", "android:sync")
+}
+tasks.named("preBuild") { dependsOn(bundleMobileWeb) }

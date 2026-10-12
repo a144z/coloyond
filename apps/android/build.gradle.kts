@@ -1,6 +1,6 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-plugins {
-    alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.compose.compiler) apply false
-    alias(libs.plugins.kotlin.android) apply false
-}
+plugins { alias(libs.plugins.android.application) apply false }
+
+// Keep the shell and Capacitor plugin modules on one Android SDK level.
+extra["compileSdkVersion"] = 37
+extra["targetSdkVersion"] = 37
+extra["minSdkVersion"] = 26

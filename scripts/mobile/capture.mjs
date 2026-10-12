@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], { stdio: 'ignore' });
 process.on('exit', () => server.kill());
 for (let i=0; i<100; i++) { try { await fetch('http://127.0.0.1:5173'); break; } catch { await new Promise(r=>setTimeout(r,100)); } }
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/tmp/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
 const out = new URL('../../remotion/public/screens/', import.meta.url).pathname;
 await mkdir(out, { recursive: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
@@ -24,8 +24,8 @@ if (!await slider.isDisabled()) throw Error('Weight lock does not disable slider
 const before=await page.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue();
 await page.getByRole('slider',{name:'Target slider for tBTC'}).fill('10');
 if (before!==await page.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue()) throw Error('Locked weight changed');
-await page.getByRole('button', {name:/Unlock WSOL weight/}).click();
 await page.screenshot({ path: out+'03-mix.png' });
+await page.getByRole('button', {name:/Unlock WSOL weight/}).click();
 await page.getByRole('button',{name:'Add an executable asset'}).click();
 await page.getByRole('dialog').waitFor();
 await page.screenshot({path:out+'04-assets.png'});
@@ -34,7 +34,7 @@ await page.getByRole('button',{name:'Back',exact:true}).click();
 await page.getByRole('button',{name:'Wallet',exact:true}).click();
 await page.getByRole('button',{name:'Import a seed phrase'}).click();
 await page.getByRole('dialog').waitFor();
-await page.keyboard.press('Escape');
+await page.evaluate(() => window.dispatchEvent(new Event('coloyond:back')));
 if(await page.getByRole('dialog').count()) throw Error('Import sheet did not close');
 await page.getByRole('button',{name:'System',exact:true}).click();
 await page.getByRole('heading',{name:'The working parts.'}).waitFor();

@@ -1,20 +1,11 @@
 {
-  "name": "coloyond",
-  "scripts": {
-    "build": "./gradlew build",
-    "ci": "npm run build",
-    "test": "./gradlew test"
-  },
-  "description": "A minimal native Android template for building a Solana mobile app with Kotlin, Jetpack Compose, and Mobile Wallet Adapter.",
-  "displayName": "Kotlin Compose Minimal example",
-  "keywords": [
-    "android",
-    "jetpack-compose",
-    "kotlin",
-    "mobile-wallet-adapter",
-    "solana"
-  ],
+  "name": "coloyond-android",
   "private": true,
-  "usecase": "Mobile",
-  "version": "1.0.0"
+  "version": "1.1.0",
+  "description": "Gradle Android shell for the shared Coloyond mobile /app product",
+  "scripts": {
+    "build": "./gradlew :app:assembleDebug",
+    "ci": "./gradlew :app:assembleDebug :app:lintDebug",
+    "test": "cd ../.. && npm run test:mobile"
+  }
 }

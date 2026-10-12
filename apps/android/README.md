@@ -1,133 +1,48 @@
-# coloyond Android app
+# Coloyond Android — packaged mobile portfolio desk
 
-Native Kotlin + Jetpack Compose app, started from Solana Mobile's `kotlin-compose-minimal` template. It has two screens, chosen with the chips at the top:
+The installable app now opens the same React mobile product as the website's `/app` route. Capacitor serves the bundled Vite assets locally at `https://localhost/app`; network requests are used for Solana RPC and market data. There is no remote website dependency for the UI.
 
-- **Card probe** (default): the Task 1 device probe. It draws a sample card, exports it as a 1080×1350 PNG, shares the PNG and a strategy file, and shows the last import it received.
-- **Wallet**: a Mobile Wallet Adapter demo for connecting, signing a message and disconnecting on **devnet**.
+The previous Kotlin/Compose prototype remains under `app/src/legacy/java` for reference. The shipped source set is `app/src/capacitor/java`; it uses Capacitor `BridgeActivity` and the App/StatusBar plugins. Previous native unit tests belong to the prototype and are excluded from this product build.
 
-It also has a Symmetry V3 account decoder (`protocols/symmetry/AccountDecoder.kt`). The app opens on the card journey: create, save, share, import and remix strategy cards, and the manual Glider handoff.
+## Build
 
-The application ID is `com.coloyond`. Open this directory (`apps/android`) as the project in Android Studio.
+Install JDK **21** (required by Capacitor 8), Android SDK Platform 37.0 and Build Tools 36.0.0. Export `JAVA_HOME` and `ANDROID_HOME` for your installations. The committed wrapper uses Gradle 9.7.1 and AGP 9.3.2.
 
-## Toolchain
+From the repository root:
 
-- JDK 17, selected by `gradle/gradle-daemon-jvm.properties`.
-- Android SDK Platform 37, Build Tools 36.0.0, and Platform Tools (`adb`). Install them through Android Studio's SDK Manager.
-- Gradle 9.7.1 via the committed wrapper, Android Gradle Plugin 9.3.2, Kotlin/Compose compiler 2.4.10, Compose BOM 2026.08.00.
-- Android 8.0/API 26 or newer to run the APK.
-- Network access for the first Gradle/dependency/SDK download. Node/npm is only needed for the optional scaffold/doctor commands, not for Gradle builds.
+```sh
+npm ci
+npm run typecheck
+npm run android:apk
+```
 
-The Java 17 daemon setting follows the sibling `neonmemoir-android` setup and the [AGP 9.3 compatibility requirements](https://developer.android.com/build/releases/agp-9-3-0-release-notes). Do not replace the wrapper or independently upgrade the pinned versions to solve an environment issue.
+`android:apk` builds the web app, syncs Capacitor and assembles the signed debug APK:
 
-## Build a debug APK
+`apps/android/app/build/outputs/apk/debug/app-debug.apk`
 
-From the repository root on Linux/WSL, with the SDK in its standard location:
+For native lint:
 
 ```sh
 cd apps/android
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-export ANDROID_HOME="$HOME/Android/Sdk"
-./gradlew :app:assembleDebug --console=plain
+./gradlew :app:lintDebug --console=plain
 ```
 
-If these SDK packages are missing and command-line tools are already installed, install the exact packages with:
+Install on Android 8/API 26 or newer:
 
 ```sh
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
-```
-
-Set `JAVA_HOME` to your actual JDK 17 installation if it differs. On macOS the usual setup is `export JAVA_HOME="$(/usr/libexec/java_home -v 17)"` and `export ANDROID_HOME="$HOME/Library/Android/sdk"`. Windows users can open the project in Android Studio or use `gradlew.bat` with their JDK/SDK paths configured.
-
-Alternatively, create a local `apps/android/local.properties` containing `sdk.dir=/absolute/path/to/Android/sdk`. That file is gitignored. Keep machine-specific SDK paths out of committed Gradle files. If `ANDROID_SDK_ROOT` is also set, it must refer to the same SDK as `ANDROID_HOME`.
-
-The debug APK is written to:
-
-```text
-apps/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-It is automatically signed with your local debug key. Build output and signing keys are ignored by Git. A publishing-ready signed release is not configured in this scaffold.
-
-## Checks
-
-From `apps/android`, using the same environment:
-
-```sh
-./gradlew :app:testDebugUnitTest :app:lintDebug --console=plain
-```
-
-The unit tests cover the RPC client, the memo transaction, the Symmetry decoder (against SDK fixtures in `app/src/test/resources/symmetry/`) and the bounded import read. They are not proof of wallet behavior. Instrumented tests require a connected Android device/emulator:
-
-```sh
-./gradlew :app:connectedDebugAndroidTest --console=plain
-```
-
-## Install and run
-
-Start an emulator or connect a phone with USB debugging enabled, then run from `apps/android`:
-
-```sh
-adb devices
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.coloyond/.MainActivity
 ```
 
-With multiple devices, add `-s DEVICE_SERIAL` after `adb`. For Android Studio, select a device and run the `app` configuration.
+The debug APK is installable and automatically signed with the builder's debug key. Store distribution requires a private release signing configuration; keys are never committed.
 
-Install a Mobile Wallet Adapter-compatible wallet, such as Solflare, to exercise the wallet demo. Keep it on devnet. Message signing does not require a funded account. The template's `https://yourdapp.com` connection identity is a placeholder in `MainViewModel.kt`; replace its website and icon with verified app-owned metadata before treating wallet identity verification as complete. The current project has no verified identity host or device/wallet smoke-test result.
+## Mobile behavior
 
-## Scaffold provenance
+- `/app` starts with portfolios and supports create, wallet, system, vault detail and all transaction sheets.
+- Hardware Back pops the app's screen stack; at root it exits the app.
+- Status and navigation surfaces follow the warm paper theme.
+- Wallet connection uses the existing Solana Mobile Wallet Adapter and requires a compatible installed wallet. Device-wallet setup/import is the same devnet-only flow as the web app.
+- Token transactions, automation and prices use the existing implementation. This packaging change does not establish a new on-chain deployment.
+- Browser interaction checks are available as `npm run test:mobile` after `npx playwright install chromium`, or with `CHROME_PATH` set to a local Chrome executable.
 
-The generator was run on 9 October 2026:
-
-```sh
-npx solana-mobile@latest doctor
-npx solana-mobile@latest create coloyond -t kotlin-compose-minimal --skip-git
-```
-
-The generated project was staged under `scratchpad/kotlin-scaffold/coloyond`, then moved here for version control. Generator-installed agent metadata is local tooling and excluded from the app source commit.
-
-## Verified build
-
-On 10 October 2026, Linux/WSL with JDK 17, a clean build on `main` completed:
-
-```sh
-./gradlew clean :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --console=plain
-```
-
-The debug APK was produced, all 16 unit tests passed, and lint reported no errors. The APK was then installed on an Android 15 emulator (`Medium_Phone_API_35`). The card probe checks passed: rendering, PNG export, all three shares, link imports and file imports, both with the app running and with it stopped. The full table is in [the probe report](../../docs/integrations/2026-10-09-symmetry-jupiter-probe.md#device-probes-10-october-2026).
-
-Not yet checked: imports from real sender apps, a completed share to a target app, and wallet signing. These need a physical phone with a wallet installed.
-
-### Run the probe checks yourself
-
-With the app installed and on the Card probe screen:
-
-```sh
-adb shell am start -a android.intent.action.VIEW -d "coloyond://import#abc"   # Last import: link, 3-character payload
-adb shell am start -a android.intent.action.VIEW -d "coloyond://import"       # rejected (link has no payload)
-```
-
-Tap the three share buttons to open the share sheet. The exported PNG is in the app cache: `adb exec-out run-as com.coloyond cat cache/shared/coloyond-card.png > card.png`.
-
-### Emulator on WSL
-
-If the emulator runs on Windows and you build in WSL, use the Windows `adb.exe` for every command. A Linux `adb` server takes port 5037 and the Windows `adb` then fails with "protocol fault". Stop it with `adb kill-server` (Linux `adb`). If the emulator screen stays black, start it with `-gpu swiftshader_indirect`.
-
-## Base infra — Solana Mobile hackathon ruleset pass
-
-The app now carries the base library the demo path will stand on. Each piece cites its ruleset number; the description file lives outside the repo on the author's desktop.
-
-- `di/AppContainer.kt` + `ColoyondApplication.kt` — one hand-wired composition root, no DI framework (10, 23).
-- `config/AppConfig.kt` — dedicated RPC endpoint placeholder, wallet `ConnectionIdentity`, connect/read timeouts, 3-attempt 1s→8s backoff (16, 17, 35).
-- `core/rpc/` — `RpcTransport` seam, `HttpRpcTransport` (`HttpURLConnection`, no new dependency), `SolanaRpc` (getBalance + signature status verification), `withRetry`/`RetryPolicy` (17, 21).
-- `core/storage/` — `PrefsStore` (mock-mode flag; keys live with the wallet/Keystore, never in plaintext prefs) and `PendingIntentStore` (intent saved before sending, checked on Activity reload) (19, 21).
-- `wallet/` — `WalletState` lifecycle; `WalletGateway` seam (20); `MwaWalletGateway` for the Intent-based MWA→Phantom path (33, 35); `MockWalletGateway` for the no-wallet fallback (37, 43); `WalletRepository` enforces connect and sign as separate taps, never fails silently, and verifies transaction signatures on-chain (36, 21, 41).
-- "Sign transaction" builds a devnet Memo-program transaction with a fresh blockhash and asks the wallet to sign and send it. The connected account needs devnet SOL for the fee. The app then polls `getSignatureStatuses` for about 10 seconds.
-- Manifest — `INTERNET` permission (11), `allowBackup=false` (13), `networkSecurityConfig` that permits cleartext only to `localhost`/`127.0.0.1` for the MWA local association (12), `launchMode="singleTop"` (15), and `android:name=".ColoyondApplication"`.
-- Gradle — JitPack repository in `settings.gradle.kts` (4); AndroidX/Jetifier lines in `gradle.properties` (5, no-ops on AGP 9, kept for the checklist).
-- `proguard-rules.pro` — Solana-only keep/dontwarn rules; deliberately no Web3j or BouncyCastle (14, 40).
-
-Deliberate omissions: no `rpc-core` dependency (its pinned version tracks the older clientlib line; the in-repo transport satisfies rule 17 — ruleset 10 wins), no BouncyCastle force (no Etheream-side stack, rule 40), and `compileSdk`/`targetSdk` stay on 37 because the AGP 9.3 scaffold build above already verified them (rule 2 permits 35+ once every dependency is confirmed).
-
-Demo path (41): Connect Wallet against the Mock MWA Wallet (lock-screen PIN set) or real Phantom, then Sign Message, then Sign Transaction. If the device wallet misbehaves on-site, the Demo Mode toggle (43) fakes wallet calls with preset results. The `yourdapp.com` identity host (35) is still a placeholder and must become app-owned metadata before wallet identity verification counts.
+Real-device wallet association, transaction signing and end-to-end rebalance execution need a funded devnet wallet and are separate from build verification.

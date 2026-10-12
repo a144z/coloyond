@@ -30,7 +30,12 @@ export default function App() {
 
   // Android shell: hardware back + pulp status bar (no-op on web)
   useEffect(() => {
-    void wireAndroid();
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void wireAndroid().then((remove) => {
+      if (disposed) remove(); else cleanup = remove;
+    });
+    return () => { disposed = true; cleanup?.(); };
   }, []);
 
   // each navigation starts from the top of the ledger

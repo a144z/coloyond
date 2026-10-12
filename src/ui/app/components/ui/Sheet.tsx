@@ -27,8 +27,10 @@ export function Sheet({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    const onBack = () => onClose();
+    window.addEventListener('coloyond:back', onBack);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('coloyond:back', onBack); };
   }, [open, onClose]);
 
   if (!open) return null;

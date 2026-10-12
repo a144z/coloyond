@@ -68,7 +68,7 @@ export function AppHeader() {
       >
         <StatusSwatch tone={live ? 'petrol' : 'iron'} pulse={live} />
         <WalletIcon size={14} weight="bold" aria-hidden />
-        {connecting ? 'Connecting…' : connected && publicKey ? shortKey(publicKey.toBase58()) : deviceWallet ? shortKey(deviceWallet.publicKey) : 'Connect wallet'}
+        {connecting ? 'Connecting…' : connected && publicKey ? shortKey(publicKey.toBase58()) : deviceWallet ? shortKey(deviceWallet.publicKey) : 'Connect'}
       </button>
     </header>
   );
