@@ -157,51 +157,108 @@
     background: var(--canvas);
     border-color: var(--muted);
   }
-
-  /* Weight lock, the desk pattern (.cr-desk-lock): small mono text button,
-     inverted ink while pressed in. Same rule set as the desktop desk. */
-  .cw-weight-lock {
-    min-height: 34px;
-    padding: 0 10px;
-    border: 1px solid var(--rule);
-    border-radius: 7px;
-    background: var(--field);
-    color: var(--muted);
-    font: 10px/1 monospace;
-    text-transform: uppercase;
-    letter-spacing: 1.1px;
-    cursor: pointer;
-  }
-  .cw-weight-lock[aria-pressed="true"] {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--paper);
-  }
-  .cw-weight-lock:focus-visible {
-    outline: 2px solid var(--blue);
-    outline-offset: 3px;
-  }
 }
 
-/* Unlayered restyle: the platform draws 1px rules and soft corners, so the
-   lacquerboard's 2px rules and hard offset shadows step down. Unlayered rules
-   beat utility layers without fighting them. */
+/* Unlayered restyle: the platform draws 1px rules and the prototype's soft
+   corners, so the lacquerboard's 2px rules and hard offset shadows step
+   down. Unlayered rules beat utility layers without fighting them. */
 .border-2 { border-width: 1px; }
 .border-b-2 { border-bottom-width: 1px; }
 .border-t-2 { border-top-width: 1px; }
 
+/* Standards pass: every surface follows the desktop desk's tiers — panels at
+   14px like .cr-composition, controls at 7px like .cr-primary / .cr-field,
+   and fields carry the desk's soft rule (#bbb5a5) on paper-white. */
 .cw-app section,
-.cw-app button,
-.cw-app input,
-.cw-app select,
-.cw-app textarea,
+.cw-app .cw-rounded,
 .cw-rounded,
-.cw-rounded button {
-  border-radius: 8px;
+.cw-rounded > div {
+  border-radius: 14px;
+}
+
+.cw-app button,
+.cw-app input:not([type="range"]),
+.cw-app select,
+.cw-app textarea {
+  border-radius: 7px;
+}
+
+.cw-app input:not([type="range"]),
+.cw-app select,
+.cw-app textarea {
+  border-color: #bbb5a5;
 }
 
 .cw-app [class*="active:translate-"]:active {
   translate: none;
+}
+
+/* Focus standard, like the prototype: blue outline ring on every control. */
+.cw-app :focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+
+/* Exact-entry weight box: the desk's TargetField sizing, which app.css scopes
+   to .cr-desk; the app uses the same field inside .cw-app. */
+.cw-app .cr-input-suffix input {
+  width: 84px;
+  min-height: 40px;
+  padding: 0 30px 0 10px;
+  border: 1px solid #bbb5a5;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink);
+  font: 14px/1 Arial, Helvetica, sans-serif;
+  text-align: right;
+}
+.cw-app .cr-input-suffix span {
+  top: 11px;
+  right: 10px;
+  font-size: 11px;
+}
+
+/* Composition editor rows: each asset gets a fixed two-line grid — dot, name,
+   exact % and lock on the first line, the split-track slider on its own line
+   underneath. The desk's responsive grid lets the full-width slider cross the
+   readouts at app-column widths; these rules pin the placement instead. */
+.cw-app .cr-desk-allocation .cr-desk-target {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 10px 0;
+}
+.cw-app .cr-desk-allocation .cr-desk-target .cr-pt-dot {
+  grid-row: 1;
+  grid-column: 1;
+}
+.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-target-name {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+}
+.cw-app .cr-desk-allocation .cr-desk-target .cr-input-suffix {
+  grid-row: 1;
+  grid-column: 3;
+}
+.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-lock {
+  grid-row: 1;
+  grid-column: 4;
+}
+.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-slider-input {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
+/* Narrow phones: shrink the exact-% box so the name keeps room to breathe. */
+@media (max-width: 380px) {
+  .cw-app .cr-desk-allocation .cr-desk-target {
+    column-gap: 8px;
+  }
+  .cw-app .cr-input-suffix input {
+    width: 68px;
+    padding: 0 26px 0 8px;
+  }
 }
 
 @keyframes coloyond-appear {

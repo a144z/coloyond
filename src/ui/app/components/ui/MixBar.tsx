@@ -119,7 +119,6 @@ export function MixBar({
     [interactive, onChange],
   );
 
-  let cursorBuild = 0;
   return (
     <div
       ref={barRef}
@@ -130,32 +129,11 @@ export function MixBar({
           .map((s) => `${assetSpec(s.key).symbol} ${Math.min(100, Math.max(0, s.pct)).toFixed(0)}%`)
           .join(', ')}`
       }
-      className={`relative w-full overflow-visible border border-ink bg-pulp-shade ${className}`}
+      className={interactive ? `cr-desk-allocation-bar ${className}` : `relative w-full border border-hairline bg-pulp-shade ${className}`}
       style={{ height, touchAction: 'none' }}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {/* Ghost tickers for asset labels */}
-      {interactive && (
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          {segments.map((s) => {
-            const left = cursorBuild;
-            cursorBuild = Math.min(100, cursorBuild + Math.min(100, Math.max(0, s.pct)));
-            const mid = left + (cursorBuild - left) / 2;
-            if (cursorBuild - left < 8) return null;
-            return (
-              <span
-                key={`ghost-${s.key}`}
-                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-bold text-ink/40 select-none"
-                style={{ left: `${mid}%` }}
-              >
-                {assetSpec(s.key).symbol}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
       {/* Colored segments */}
       {(() => {
         let c = 0;
@@ -201,7 +179,7 @@ export function MixBar({
             return (
               <button
                 key={`handle-${i}`}
-                className="absolute top-1/2 z-10 flex h-[20px] w-[10px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center border border-ink bg-ink transition-[left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-petrol active:bg-petrol"
+                className="cr-desk-allocation-handle"
                 style={{ left: `${leftPct}%` }}
                 role="slider"
                 aria-label={`Drag to move share between ${leftSpec.symbol} and ${rightSpec.symbol}`}
@@ -213,8 +191,8 @@ export function MixBar({
                 onKeyDown={handleKeyDown(i)}
                 tabIndex={0}
               >
-                <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-sm bg-ink px-1 py-0.5 text-[8px] font-bold text-pulp opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ opacity: dragging === i ? 1 : undefined }}
+                <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-ink px-1 py-0.5 text-[8px] font-bold text-pulp"
+                  style={{ opacity: dragging === i ? 1 : 0 }}
                 >
                   {leftSpec.symbol} {leftPctVal.toFixed(0)} / {rightSpec.symbol} {rightPctVal.toFixed(0)}
                 </span>

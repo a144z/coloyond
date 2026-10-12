@@ -84,7 +84,11 @@ Beta's scheduler (`ensureScheduler`) and `wireAndroid()` still start from its `A
 | mono font | `monospace` | " |
 | `shadow-panel/frame/btn` | `none` (flat, like the desks) | — |
 | 2px rules | 1px (`.border-2`/`-b-2`/`-t-2`) | " |
-| sharp edges | 8px radius on `section/button/input/select/textarea` + portal panels | " |
+| asset/composition colors | prototype four-color palette — blue `#1249ed` (dUSD), yellow `#ffd523` (tBTC), violet `#8d25d9` (tETH), coral `#ff513b` (WSOL) | `COMPOSITION_COLORS` / `POSITIONS` (old `/` UI) |
+| corners | panels 14px (like `.cr-composition`), buttons/controls 7px, exact-% field 6px | " |
+| field border | `#bbb5a5` soft rule (like `.cr-field`) instead of the hard ink edge | " |
+| focus ring | `3px var(--blue)`, offset 3px, on every `.cw-app` control | " |
+| hero art | `ReferenceArt` "planes" study (four-color gradients + grain) on Portfolios + Create screens | `src/ui/ReferenceArt.tsx` (reused, not copied) |
 | `@fontsource` Space Grotesk / JetBrains Mono | dropped (Arial/monospace instead) | — |
 
 Layout, screen structure, mix bars, sheets, toasts and the 430px app column are beta's,
@@ -92,12 +96,18 @@ untouched.
 
 ### 2.4 Slider + lock now come from the desk
 
-- `.ledger-range` is re-skinned to mirror `.cr-desk-slider-input`: 1px rule track over `--field`,
-  22px round `--paper` thumb, blue focus ring; a disabled (locked) slider greys its thumb.
-- Beta's 36px icon lock button is replaced by `.cw-weight-lock`, a copy of the desk's
-  `.cr-desk-lock`: small mono uppercase text button (`lock` / `locked`, `aria-pressed`), inverting
-  to ink while pressed. Phosphor's `Lock`/`LockOpen` are no longer used in `WeightSliders`.
-  This applies to `CreateVault` and the vault-detail *Edit weights* sheet, both of which render
+- `.ledger-range` mirrors `.cr-desk-slider-input`: 1px rule track over `--field`, 22px round
+  `--paper` thumb, blue focus ring; a disabled (locked) slider greys its thumb.
+- `WeightSliders` now renders the **desk's own pattern** verbatim — `.cr-desk-allocation` rows
+  (`.cr-desk-targets`/`.cr-desk-target`) with colour dot, symbol + name, split-track slider
+  (`--cr-split-track` gradient), an exact `%` field (desk `TargetField`, `.cr-input-suffix`),
+  and the mono uppercase `.cr-desk-lock` (`lock` / `locked`, `aria-pressed`, inverted while
+  pressed) instead of beta's 36px Phosphor icon button. Slider and exact-% field sync both ways.
+- **No-overlap layout fix**: each asset is a fixed two-line grid — dot · name · exact % · lock on
+  the first line, the full-width slider on its own line underneath — so the wide track can never
+  cross the readouts at app-column widths (the desk's responsive grid does exactly that at
+  ≤720px). A `≤380px` tweak shrinks the `%` box on narrow phones.
+- Applies to `CreateVault` and the vault-detail *Edit weights* sheet, both of which render
   `WeightSliders`.
 
 ---
@@ -131,14 +141,17 @@ clean console.
 - `npx tsc --noEmit` — clean.
 - `npm run build` — clean (only the pre-existing >500 kB chunk-size note).
 - `vite preview` probes with a real browser:
-  - `/app` → `.cw-app` present, h1 “Your mix. A vault that keeps moving.”, 0 console errors
+  - `/app` → `.cw-app` present, live editor renders: 4 colour segments (`rgb(255,81,59)` coral,
+    `rgb(18,73,237)` blue, …), slider rows where the track sits on its own line below the
+    name/%/lock (no overlap at 1280, 390 and 320 px), slider ⇄ `%` field stay in sync, lock
+    pins the slider (`aria-pressed` flips, thumb greys), 0 console errors
   - `/prototype` → `.cr-app` present, h1 “Balance, with room to move.”
   - `/` → landing renders, h1 “Every part has a part to play.”
-- Computed styles on `/app`: font `Arial, Helvetica, sans-serif`, button `border-radius: 8px`,
-  panel `border-top-width: 1px`, frame background `rgb(241, 236, 221)` (paper), panel
-  `box-shadow: none`, `.cw-weight-lock` rule present in the stylesheet.
-- Bundle contains `.flex-col` utilities, `--color-pulp`, `.ledger-range`, `.cw-weight-lock`,
-  `.band-attention` and the 1px rule override — the utilities and the skin are both live.
+- Computed styles on `/app`: font `Arial, Helvetica, sans-serif`, panels `border-radius: 14px`,
+  buttons `7px`, fields `6px` + soft `#bbb5a5` rule, uniform 3px blue `:focus-visible` ring,
+  frame background `rgb(241, 236, 221)` (paper), group shadow `none`.
+- Bundle contains `.flex-col` utilities, `--color-pulp`, `.ledger-range`, `.cr-desk-lock`,
+  `.band-attention`, the four palette hexes and the `ReferenceArt` planes study — all live.
 
 ---
 

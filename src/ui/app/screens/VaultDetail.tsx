@@ -287,7 +287,7 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
         <MixBar
           className="mb-4"
           segments={segmentsOf(vault.assets.filter((id) => (nextTargets[id] ?? 0) > 0).map((assetId) => ({ assetId, pct: nextTargets[assetId] ?? 0 })))}
-          height={20}
+          height={26}
           interactive
           lockedKeys={Object.keys(locked)}
           onChange={(segments) => setShares((previous) => {

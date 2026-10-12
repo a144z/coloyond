@@ -8,8 +8,10 @@ import { NATIVE_MINT } from '@solana/spl-token';
  * program-issued synthetic test asset with a fixed $1 accounting price; it
  * has no real-dollar backing or redemption value.
  *
- * Segment colors come from the lacquerboard palette:
- *   petrol #13343B · brass #C66E22 · ink #14171A · iron #384551
+ * Segment colors come from the composition palette used by the desktop desk
+ * (prototype Portfolio tab, blue · yellow · violet · coral):
+ *   wsol  → coral  #ff513b · dusd → blue #1249ed
+ *   tbtc  → yellow #ffd523 · teth → violet #8d25d9
  */
 
 export interface AssetSpec {
@@ -19,7 +21,7 @@ export interface AssetSpec {
   symbol: string;
   name: string;
   decimals: number;
-  /** Mix-bar segment fill (lacquerboard palette). */
+  /** Mix-bar segment fill (platform composition palette). */
   color: string;
   /** Synthetic test asset issued for the Devnet demo. */
   synthetic: boolean;
@@ -40,7 +42,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
     symbol: 'WSOL',
     name: 'Wrapped SOL',
     decimals: 9,
-    color: '#13343B',
+    color: '#ff513b',
     synthetic: false,
     priceSymbol: 'SOL-USD',
     binanceSymbol: 'SOLUSDT',
@@ -51,7 +53,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
     symbol: 'dUSD',
     name: 'Synthetic Devnet USD',
     decimals: 6,
-    color: '#C66E22',
+    color: '#1249ed',
     synthetic: true,
     priceSymbol: null,
     binanceSymbol: null,
@@ -62,7 +64,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
     symbol: 'tBTC',
     name: 'Test BTC',
     decimals: 8,
-    color: '#14171A',
+    color: '#ffd523',
     synthetic: true,
     priceSymbol: 'BTC-USD',
     binanceSymbol: 'BTCUSDT',
@@ -73,7 +75,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
     symbol: 'tETH',
     name: 'Test ETH',
     decimals: 8,
-    color: '#384551',
+    color: '#8d25d9',
     synthetic: true,
     priceSymbol: 'ETH-USD',
     binanceSymbol: 'ETHUSDT',

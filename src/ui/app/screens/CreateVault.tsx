@@ -13,6 +13,7 @@ import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives.js';
 import { WeightSliders, normalizeShares, type WeightLocks } from '../components/ui/WeightSliders.js';
 import { MixBar, segmentsOf } from '../components/ui/MixBar.js';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet.js';
+import { ReferenceArt } from '../../ReferenceArt.js';
 
 const cadenceLabels: Record<number, string> = {
   60: 'About every 60 seconds · 5,700 ER slots',
@@ -130,6 +131,17 @@ export function CreateVault() {
           : 'Pick the assets and their weights, then invest from your SOL balance. The vault starts with wrapped SOL and rebalances toward your mix on schedule.'}
       />
 
+      <div
+        className="relative mb-4 h-[96px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
+        aria-hidden="true"
+      >
+        <ReferenceArt
+          variant="planes"
+          className="absolute inset-0 h-full w-full opacity-80"
+          title="Composition study · blue, yellow, violet, coral"
+        />
+      </div>
+
       {setupDraft ? (
         <div className="mb-4">
           <Notice tone="brass">
@@ -157,7 +169,7 @@ export function CreateVault() {
           <MixBar
             className="mb-4"
             segments={segmentsOf(selected.map((s) => ({ assetId: s.id, pct: targets[s.id] ?? 0 })))}
-            height={20}
+            height={26}
             interactive
             lockedKeys={Object.keys(locked)}
             onChange={(segments) => setShares((previous) => {
