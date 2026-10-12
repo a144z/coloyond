@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
-import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
+import { PRICE_MAX_AGE_MS, REBALANCE_INTERVAL_SEC } from '../lib/solana/config';
 import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets';
 import { bookStatus, priceOf } from '../lib/solana/price';
 import { fmtSol, fmtUsd, lamportsFromSol, parseAmountOrZero } from '../lib/format';
@@ -8,20 +8,11 @@ import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { Button } from '../components/ui/Button';
 import { LedgerPanel } from '../components/ui/LedgerPanel';
 import { Sheet } from '../components/ui/Sheet';
-import { Field, inputClass, selectClass } from '../components/ui/Field';
+import { Field, inputClass } from '../components/ui/Field';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares, type WeightLocks } from '../components/ui/WeightSliders';
 import { MixBar, segmentsOf } from '../components/ui/MixBar';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
-
-const cadenceLabels: Record<number, string> = {
-  60: 'About every 60 seconds · 5,700 ER slots',
-  120: 'About every 2 minutes · 11,400 ER slots',
-  300: 'About every 5 minutes · 28,500 ER slots',
-  600: 'About every 10 minutes · 57,000 ER slots',
-  1800: 'About every 30 minutes · 171,000 ER slots',
-  3600: 'About every hour · 342,000 ER slots',
-};
 
 /** SOL deposited into the separate Executor PDA for scheduling and Magic Actions. */
 const TASK_SPONSOR_SOL = 0.05;
@@ -44,7 +35,6 @@ export function CreateVault() {
   const [shares, setShares] = useState<Record<AssetId, number>>(defaultShares);
   const [locked, setLocked] = useState<WeightLocks>({});
   const [investmentSol, setInvestmentSol] = useState('0.20');
-  const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -56,7 +46,6 @@ export function CreateVault() {
     setName(draft.name);
     setShares({ ...defaultShares, ...draft.targets });
     setInvestmentSol((draft.deposits.wsol / 1e9).toFixed(9).replace(/0+$/, '').replace(/\.$/, '') || '0');
-    setCadenceSec(draft.cadenceSec);
     setThreshold(draft.thresholdPct);
   }, [setupDraft]);
 
@@ -107,7 +96,7 @@ export function CreateVault() {
         assets,
         targets: assetTargets,
         thresholdPct: threshold,
-        cadenceSec,
+        cadenceSec: REBALANCE_INTERVAL_SEC,
         deposits: { wsol: solDepositLamports },
       });
       if (id) {
@@ -216,19 +205,11 @@ export function CreateVault() {
       </div>
 
       <div className="mt-4">
-        <Field label="Minimum rebalance delay" hint="You configure this on Solana; the cranker pays trigger fees.">
-          <select
-            value={cadenceSec}
-            onChange={(e) => setCadenceSec(Number(e.target.value))}
-            className={selectClass}
-          >
-            {CADENCE_OPTIONS_SEC.map((sec) => (
-              <option key={sec} value={sec}>
-                {cadenceLabels[sec] ?? `Every ${sec} seconds`}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <LedgerPanel stripe="Unified schedule" meta="Every minute">
+          <p className="text-[11px] leading-relaxed text-iron">
+            One shared schedule checks every SPL asset in this portfolio together. The Hydra cranker also services all active portfolios; there is no per-token timing choice.
+          </p>
+        </LedgerPanel>
       </div>
 
       <div className="mt-4">
@@ -276,7 +257,7 @@ export function CreateVault() {
         ) : null}
         <p className="mt-3 text-[11px] leading-relaxed text-iron">
           Setup creates on-chain vault accounts and a share mint, then registers one Hydra task.
-          The selected delay is enforced on Solana; wall-clock cadence depends on ER slots and an active cranker.
+          Every portfolio shares the same one-minute cadence; one callback evaluates its SPL assets together.
           Weight-only edits are on Solana; a 120-second cooldown applies.
         </p>
       </div>
@@ -303,7 +284,7 @@ export function CreateVault() {
               v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a recent display quote',
             },
             { k: 'Executor funding', v: '0.05 SOL from setup · program controlled' },
-            { k: 'Minimum delay', v: `${cadenceSec} seconds · about ${Math.ceil(cadenceSec * 5_700 / 60).toLocaleString()} ER slots` },
+            { k: 'Rebalance schedule', v: 'Shared · about every 60 seconds' },
             { k: 'Deviation threshold', v: `± ${threshold.toFixed(1)}%` },
           ]}
         />
@@ -314,7 +295,7 @@ export function CreateVault() {
             <li>· Creates standard SPL token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus zero-target WSOL for SOL funding'}.</li>
             <li>· Wraps your SOL in your wallet's WSOL account, deposits it, then mints shares using on-chain NAV.</li>
             <li>· Delegates only the Executor PDA. Vault State and asset token accounts stay on Solana.</li>
-            <li>· Requests one Hydra task at the selected delay; execution depends on an active cranker, valid Pyth feeds, and more than 0.1% movement in a Pyth-backed asset.</li>
+            <li>· Registers the shared one-minute Hydra schedule for this portfolio; one callback evaluates all its selected SPL assets together.</li>
           </ul>
         </div>
         <div className="mt-4">
@@ -322,7 +303,7 @@ export function CreateVault() {
         </div>
         <div className="mt-4">
           <Notice tone="petrol" title="How the investment is executed">
-            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}% and an oracle-backed price moves more than 0.1%. The owner pays to configure the minimum delay; a running Hydra cranker pays trigger fees. The vault program checks time, feed identity and verification, slippage and replay protection before moving SPL assets.
+            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}% and an oracle-backed price moves more than 0.1%. All portfolios use the same cadence; a running Hydra cranker pays trigger fees. The vault program checks time, feed identity and verification, slippage and replay protection before moving SPL assets.
           </Notice>
         </div>
       </Sheet>

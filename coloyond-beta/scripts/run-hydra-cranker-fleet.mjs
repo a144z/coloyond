@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const defaultConfigPath = path.join(projectDir, 'target', 'hydra-cranker-fleet.json');
+const defaultOperatorPath = path.join(projectDir, 'target', 'hydra-cranker-devnet.json');
+const recoverySlaMs = 120_000;
 
 export function resolveConfigPath(override) {
   if (override === undefined) return defaultConfigPath;
@@ -38,30 +40,80 @@ export function parseConfig(value) {
     if (signerPaths.has(keypairPath)) throw new Error('Use a distinct operator keypair for each ER process.');
     names.add(name); endpoints.add(rpcUrl); signerPaths.add(keypairPath);
     const wsUrl = entry.wsUrl === undefined ? undefined : requiredWsUrl(entry.wsUrl, `rollups[${index}].wsUrl`);
-    const metricsPort = entry.metricsPort === undefined ? undefined : Number(entry.metricsPort);
-    if (metricsPort !== undefined) {
-      if (!Number.isInteger(metricsPort) || metricsPort < 1 || metricsPort > 65_535) throw new Error(`rollups[${index}].metricsPort must be a valid TCP port.`);
-      if (ports.has(metricsPort)) throw new Error(`Duplicate metrics port: ${metricsPort}.`);
-      ports.add(metricsPort);
-    }
+    const metricsPort = Number(entry.metricsPort);
+    if (!Number.isInteger(metricsPort) || metricsPort < 1 || metricsPort > 65_535) throw new Error(`rollups[${index}].metricsPort must be a valid TCP port; /healthz is required for the two-minute recovery guarantee.`);
+    if (ports.has(metricsPort)) throw new Error(`Duplicate metrics port: ${metricsPort}.`);
+    ports.add(metricsPort);
     return { name, rpcUrl, baseRpcUrl, keypairPath, wsUrl, metricsPort };
   });
   const health = {
-    startupGraceMs: positiveInteger(parsed.startupGraceMs, 30_000, 'startupGraceMs', true),
-    intervalMs: positiveInteger(parsed.healthCheckIntervalMs, 10_000, 'healthCheckIntervalMs'),
-    timeoutMs: positiveInteger(parsed.healthCheckTimeoutMs, 3_000, 'healthCheckTimeoutMs'),
-    unhealthyThreshold: positiveInteger(parsed.unhealthyThreshold, 3, 'unhealthyThreshold'),
+    startupGraceMs: positiveInteger(parsed.startupGraceMs, 10_000, 'startupGraceMs', true),
+    intervalMs: positiveInteger(parsed.healthCheckIntervalMs, 5_000, 'healthCheckIntervalMs'),
+    timeoutMs: positiveInteger(parsed.healthCheckTimeoutMs, 2_000, 'healthCheckTimeoutMs'),
+    unhealthyThreshold: positiveInteger(parsed.unhealthyThreshold, 2, 'unhealthyThreshold'),
     healthyResetMs: positiveInteger(parsed.healthyResetMs, 60_000, 'healthyResetMs'),
-    terminationGraceMs: positiveInteger(parsed.terminationGraceMs, 5_000, 'terminationGraceMs'),
+    terminationGraceMs: positiveInteger(parsed.terminationGraceMs, 3_000, 'terminationGraceMs'),
     restartMinMs: positiveInteger(parsed.restartMinMs, 1_000, 'restartMinMs'),
-    restartMaxMs: positiveInteger(parsed.restartMaxMs, 30_000, 'restartMaxMs'),
+    restartMaxMs: positiveInteger(parsed.restartMaxMs, 5_000, 'restartMaxMs'),
   };
   if (health.restartMaxMs < health.restartMinMs) throw new Error('restartMaxMs must be at least restartMinMs.');
+  const recoveryBoundMs = health.startupGraceMs
+    + health.unhealthyThreshold * (health.intervalMs + health.timeoutMs)
+    + health.terminationGraceMs
+    + health.restartMaxMs;
+  if (recoveryBoundMs >= recoverySlaMs) throw new Error(`Health and restart settings exceed the strict two-minute recovery limit (${recoveryBoundMs}ms).`);
   return {
     binaryPath: parsed.binaryPath,
     rollups,
     health,
+    recoveryBoundMs,
   };
+}
+
+async function readRuntimeConfig() {
+  const configuredPath = process.env.COLONYOND_HYDRA_CRANKER_CONFIG;
+  const configPath = resolveConfigPath(configuredPath);
+  if (configuredPath || await access(configPath).then(() => true, () => false)) {
+    return parseConfig(await readFile(configPath, 'utf8'));
+  }
+  const binaryPath = await findCrankerBinary();
+  const keypairPath = path.resolve(process.env.COLONYOND_CRANKER_SIGNER ?? defaultOperatorPath);
+  await access(keypairPath, constants.R_OK).catch(() => {
+    throw new Error(`Hydra operator keypair not found at ${keypairPath}. Generate and fund a dedicated Devnet operator keypair first, then set COLONYOND_CRANKER_SIGNER if it is stored elsewhere.`);
+  });
+  const rpcUrl = process.env.COLONYOND_HYDRA_ER_RPC ?? process.env.ER_RPC_URL ?? 'https://devnet.magicblock.app/';
+  const baseRpcUrl = process.env.COLONYOND_BASE_RPC ?? process.env.RPC_URL ?? 'https://api.devnet.solana.com';
+  log('using_devnet_defaults', { binaryPath, keypairPath, rpcUrl, baseRpcUrl, note: 'Set COLONYOND_HYDRA_ER_RPC to the ER endpoint hosting your portfolio Executors.' });
+  return defaultDevnetConfig({ binaryPath, keypairPath, rpcUrl, baseRpcUrl });
+}
+
+export function defaultDevnetConfig({ binaryPath, keypairPath, rpcUrl, baseRpcUrl }) {
+  return parseConfig(JSON.stringify({
+    binaryPath,
+    startupGraceMs: 10_000,
+    healthCheckIntervalMs: 5_000,
+    healthCheckTimeoutMs: 2_000,
+    unhealthyThreshold: 2,
+    healthyResetMs: 30_000,
+    terminationGraceMs: 3_000,
+    restartMinMs: 1_000,
+    restartMaxMs: 5_000,
+    rollups: [{ name: 'devnet-er', rpcUrl, baseRpcUrl, keypairPath, metricsPort: 9154 }],
+  }));
+}
+
+async function findCrankerBinary() {
+  const home = process.env.HOME ?? '';
+  const candidates = [process.env.COLONYOND_HYDRA_CRANKER_BIN,
+    ...String(process.env.PATH ?? '').split(path.delimiter).map((dir) => path.join(dir, 'hydra-cranker')),
+    path.join(projectDir, 'node_modules', '.bin', 'hydra-cranker'), path.join(projectDir, 'target', 'hydra-cranker'),
+    path.join(home, '.local', 'bin', 'hydra-cranker'), path.join(home, '.cargo', 'bin', 'hydra-cranker'),
+    '/opt/homebrew/bin/hydra-cranker', '/usr/local/bin/hydra-cranker'];
+  for (const candidate of candidates.filter(Boolean)) {
+    const absolute = path.resolve(candidate);
+    if (await access(absolute, constants.X_OK).then(() => true, () => false)) return absolute;
+  }
+  throw new Error('MagicBlock hydra-cranker was not found. Install the official binary and ensure it is on PATH, or set COLONYOND_HYDRA_CRANKER_BIN.');
 }
 
 export function crankerArgs(rollup) {
@@ -271,24 +323,30 @@ function selfCheck() {
   for (const required of ['--keypair', '/keys/a.json', '--rpc-url', '--base-rpc-url', '--ephemeral', '--prometheus-port', '9101']) {
     if (!args.includes(required)) throw new Error(`Missing cranker argument in service self-check: ${required}`);
   }
-  if (config.health.unhealthyThreshold !== 3) throw new Error('Health defaults self-check failed.');
+  if (config.health.unhealthyThreshold !== 2 || config.recoveryBoundMs >= recoverySlaMs) throw new Error('Two-minute recovery SLA self-check failed.');
   let duplicateRejected = false;
   try {
     parseConfig(JSON.stringify({ binaryPath: '/bin/hydra-cranker', rollups: [
-      { name: 'a', rpcUrl: 'https://er.example', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/same.json' },
-      { name: 'b', rpcUrl: 'https://er2.example', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/same.json' },
+      { name: 'a', rpcUrl: 'https://er.example', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/same.json', metricsPort: 9101 },
+      { name: 'b', rpcUrl: 'https://er2.example', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/same.json', metricsPort: 9102 },
     ] }));
   } catch { duplicateRejected = true; }
   if (!duplicateRejected) throw new Error('Duplicate operator-key self-check failed.');
+  let slowRecoveryRejected = false;
+  try {
+    parseConfig(JSON.stringify({ binaryPath: '/bin/hydra-cranker', startupGraceMs: 60_000, restartMaxMs: 60_000,
+      rollups: [{ name: 'slow', rpcUrl: 'https://er.example', baseRpcUrl: 'https://api.devnet.solana.com', keypairPath: '/keys/slow.json', metricsPort: 9103 }] }));
+  } catch { slowRecoveryRejected = true; }
+  if (!slowRecoveryRejected) throw new Error('Recovery SLA config rejection self-check failed.');
   console.log('Official Hydra cranker fleet self-check passed.');
 }
 
 async function main() {
   if (process.argv.includes('--self-check')) { selfCheck(); return; }
-  const config = parseConfig(await readFile(resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG), 'utf8'));
+  const config = await readRuntimeConfig();
   await access(config.binaryPath, constants.X_OK);
   for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
-  log('service_starting', { rollups: config.rollups.map(({ name, rpcUrl, metricsPort }) => ({ name, rpcUrl, metricsPort })) });
+  log('service_starting', { recoveryBoundMs: config.recoveryBoundMs, rollups: config.rollups.map(({ name, rpcUrl, metricsPort }) => ({ name, rpcUrl, metricsPort })) });
   const shutdown = new AbortController();
   const handlers = new Map();
   for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -304,10 +362,10 @@ async function main() {
 }
 
 if (process.argv.includes('--validate-config')) {
-  const config = parseConfig(await readFile(resolveConfigPath(process.env.COLONYOND_HYDRA_CRANKER_CONFIG), 'utf8'));
+  const config = await readRuntimeConfig();
   await access(config.binaryPath, constants.X_OK);
   for (const rollup of config.rollups) await access(rollup.keypairPath, constants.R_OK);
-  log('config_validated', { rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
+  log('config_validated', { recoveryBoundMs: config.recoveryBoundMs, rollups: config.rollups.map(({ name, rpcUrl }) => ({ name, rpcUrl })) });
 } else if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   await main();
 }

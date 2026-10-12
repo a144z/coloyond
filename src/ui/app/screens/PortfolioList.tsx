@@ -64,8 +64,7 @@ export function PortfolioList() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-iron">
-        Each vault enforces its owner-configured minimum delay and price-movement guard on Solana.
-        Wall-clock timing depends on an active permissionless cranker; opening the app only refreshes state.
+        Each portfolio has one task that checks all its SPL assets together. Portfolios share a one-minute cadence and price-movement guard. Opening the app only refreshes state.
       </p>
     </Screen>
   );

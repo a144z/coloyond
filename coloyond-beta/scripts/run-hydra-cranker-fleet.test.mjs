@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import test from 'node:test';
-import { parseConfig, runFleet } from './run-hydra-cranker-fleet.mjs';
+import { defaultDevnetConfig, parseConfig, runFleet } from './run-hydra-cranker-fleet.mjs';
 
 async function withHealthServer(handler, run) {
   const server = createServer((request, response) => handler(request, response));
@@ -141,15 +141,14 @@ test('health request timeout counts as unhealthy and triggers recovery', async (
   });
 });
 
-test('shutdown stops a child even when health monitoring is not configured', async () => {
-  const fleet = fakeChildren();
-  const controller = new AbortController();
-  const running = runFleet(makeConfig(undefined), { signal: controller.signal, spawnImpl: fleet.spawnImpl, logFn: logger().logFn });
-  await waitFor(() => fleet.children.length === 1, 'initial child');
-  controller.abort();
-  await running;
-  assert.equal(fleet.children[0].signalCode, 'SIGTERM');
-  assert.equal(fleet.active, 0);
+test('the strict recovery limit requires a health endpoint and rejects recovery windows over two minutes', () => {
+  assert.throws(() => makeConfig(undefined), /\/healthz is required/);
+  assert.throws(() => makeConfig(9101, { startupGraceMs: 60_000, restartMaxMs: 60_000 }), /two-minute recovery limit/);
+  assert.ok(makeConfig(9101).recoveryBoundMs < 120_000);
+  const defaults = defaultDevnetConfig({ binaryPath: '/bin/hydra-cranker', keypairPath: '/keys/operator.json', rpcUrl: 'https://er.example', baseRpcUrl: 'https://api.devnet.solana.com' });
+  assert.equal(defaults.rollups.length, 1);
+  assert.equal(defaults.rollups[0].metricsPort, 9154);
+  assert.equal(defaults.recoveryBoundMs, 32_000);
 });
 
 test('health and restart timing config rejects invalid values', () => {

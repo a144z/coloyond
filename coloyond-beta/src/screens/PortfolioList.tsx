@@ -45,7 +45,7 @@ export function PortfolioList() {
               <p className="font-display text-[19px] font-bold tracking-[-0.01em]">No portfolios yet.</p>
               <p className="mx-auto mt-2 max-w-[34ch] text-[12px] leading-relaxed text-iron">
                 Create a Vault State PDA, standard SPL asset accounts, a transferable share mint,
-                and a permissionless Hydra task with an owner-configured minimum delay.
+                and a permissionless Hydra task on the shared one-minute cadence.
               </p>
             </div>
           </LedgerPanel>
@@ -53,7 +53,7 @@ export function PortfolioList() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-iron">
-        Each vault enforces its owner-configured minimum delay and price-movement guard on Solana.
+        One task checks all SPL assets in each portfolio together. Every portfolio shares the same cadence and price-movement guard.
         Wall-clock timing depends on an active permissionless cranker; opening the app only refreshes state.
       </p>
     </Screen>

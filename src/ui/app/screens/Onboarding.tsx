@@ -63,13 +63,14 @@ export function Onboarding() {
               { k: 'Tokens', v: 'WSOL · dUSD (synthetic) · tBTC · tETH' },
               { k: 'Price feed', v: 'Coinbase spot · Binance fallback' },
               { k: 'Counterparty', v: 'Program-owned devnet test market' },
-              { k: 'Scheduler', v: 'Permissionless Hydra · owner-configured delay' },
+              { k: 'Scheduler', v: 'Permissionless Hydra · shared one-minute cadence' },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
             Balances come from Solana devnet. dUSD is capped synthetic test money with a fixed $1
-            display price; it has no real-dollar backing or redemption value. Scheduled execution
-            needs an active Hydra cranker, so slot cadence does not guarantee exact wall-clock timing.
+            display price; it has no real-dollar backing or redemption value. One Hydra task per
+            portfolio checks all its SPL assets together; an active cranker is needed, and ER slots
+            do not guarantee exact wall-clock timing.
           </p>
         </LedgerPanel>
       </div>

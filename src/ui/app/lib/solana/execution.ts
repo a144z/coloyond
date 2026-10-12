@@ -28,7 +28,7 @@ import {
   magicFeeVaultPdaFromValidator,
 } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { ASSETS, mintOf, mintToAssetMap, type AssetId } from './assets.js';
-import { EXECUTION_PROGRAM_ID, ROUTER_RPC_URL } from './config.js';
+import { EXECUTION_PROGRAM_ID, REBALANCE_INTERVAL_SEC, ROUTER_RPC_URL } from './config.js';
 import { connection } from './connection.js';
 import { wrapSolInstructions } from './wallet.js';
 import { signSendConfirm, type OwnerSigner, type TxResult } from './tx.js';
@@ -38,7 +38,7 @@ export const EXECUTION_PROGRAM = new PublicKey(EXECUTION_PROGRAM_ID);
 export const HYDRA_EPHEMERAL_PROGRAM = new PublicKey('eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf');
 export const MARKET_AUTHORITY_SEED = Buffer.from('market-authority');
 export const REBALANCE_INTERVAL_SLOTS = 5_700;
-export const TARGET_REBALANCE_SECONDS = 60;
+export const TARGET_REBALANCE_SECONDS = REBALANCE_INTERVAL_SEC;
 const VAULT_SEED = Buffer.from('vault');
 const VAULT_AUTHORITY_SEED = Buffer.from('vault-authority');
 const SHARE_MINT_SEED = Buffer.from('share-mint');
@@ -800,8 +800,8 @@ function setCrankPolicyInstruction(owner: OwnerSigner, stateAddress: PublicKey, 
 export async function scheduleVault(
   owner: OwnerSigner,
   stateAddress: PublicKey,
-  minIntervalSeconds = TARGET_REBALANCE_SECONDS,
 ): Promise<TxResult> {
+  const minIntervalSeconds = TARGET_REBALANCE_SECONDS;
   const state = await readVaultState(stateAddress);
   if (!state.active) throw new Error('Resume the portfolio on Solana before scheduling it.');
   const intervalSlots = slotsForCadence(minIntervalSeconds);

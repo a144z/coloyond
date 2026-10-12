@@ -186,7 +186,7 @@ export function WalletScreen() {
             Choose an allocation and deposit SOL. The app wraps it as WSOL and mints transferable vault shares; the Hydra task can trade the vault's standard SPL assets toward those weights.
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-iron">
-            This build does not execute an instant wallet swap. Portfolio cranks use the owner-configured delay and need more than 0.1% movement in a Pyth-backed asset. dUSD is synthetic Devnet USD with a fixed $1 display price.
+            This build does not execute an instant wallet swap. Portfolio cranks share a one-minute cadence and need more than 0.1% movement in a Pyth-backed asset. dUSD is synthetic Devnet USD with a fixed $1 display price.
           </p>
           <Button variant="primary" full onClick={() => pushScreen({ id: 'create' })}>
             Create portfolio →

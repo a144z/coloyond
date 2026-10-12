@@ -230,7 +230,7 @@ interface ColoyondState {
   withdrawVault: (vaultId: string, fraction: number) => Promise<void>;
   pauseVault: (vaultId: string) => void;
   resumeVault: (vaultId: string) => void;
-  updateCadence: (vaultId: string, cadenceSec: number) => Promise<void>;
+  updateUnifiedCadence: (vaultId: string) => Promise<void>;
   editWeights: (vaultId: string, targets: Record<string, number>) => Promise<void>;
   patchVault: (vaultId: string, patch: Partial<VaultConfig>) => void;
 }
@@ -518,7 +518,7 @@ export const useStore = create<ColoyondState>()(
         }
         const id = draft.id;
         const chainId = BigInt(draft.chainId);
-        const setupInput = draft.input;
+        const setupInput = { ...draft.input, cadenceSec: REBALANCE_INTERVAL_SEC };
         const stateAddress = new PublicKey(draft.stateAddress);
         const captured: {
           addresses: ReturnType<typeof vaultAddressesForState> | null;
@@ -542,7 +542,7 @@ export const useStore = create<ColoyondState>()(
           ['initialize', 'Create Vault State, Authority and share mint'],
           ['accounts', 'Create standard SPL token accounts'],
           ['deposit', 'Wrap SOL and deposit into the vault'],
-          ['schedule', `Register the ${setupInput.cadenceSec}-second MagicBlock task`],
+          ['schedule', 'Register the shared 60-second Hydra task'],
         ] as const;
         const initialSteps: FlowStepRuntime[] = setupStepLabels.map(([key, label]) => {
           const result = draft!.completed[key as keyof VaultSetupDraft['completed']];
@@ -591,13 +591,13 @@ export const useStore = create<ColoyondState>()(
             },
           },
           {
-            label: `Register the ${setupInput.cadenceSec}-second MagicBlock task`,
+            label: 'Register the shared 60-second Hydra task',
             run: async () => {
               if (!captured.addresses) throw new Error('Vault State was not initialized.');
-              const result = await scheduleVault(wallet, captured.addresses.state, setupInput.cadenceSec);
+              const result = await scheduleVault(wallet, captured.addresses.state);
               captured.schedule = result;
               markComplete('schedule', result);
-              return { sig: result.sig, note: `${Math.ceil(setupInput.cadenceSec * 5_700 / 60)}-slot interval verified; Hydra cranker required` };
+              return { sig: result.sig, note: 'Shared one-minute interval verified; Hydra cranker required' };
             },
           },
         ], initialSteps);
@@ -780,39 +780,39 @@ export const useStore = create<ColoyondState>()(
         try {
           const stateAddress = new PublicKey(cfg.publicKey);
           await setVaultActive(wallet, stateAddress, true);
-          const result = await scheduleVault(wallet, stateAddress, cfg.cadenceSec);
-          get().patchVault(vaultId, { status: 'active', nextCheckAt: null });
+          const result = await scheduleVault(wallet, stateAddress);
+          get().patchVault(vaultId, { status: 'active', cadenceSec: REBALANCE_INTERVAL_SEC, nextCheckAt: null });
           const ownerKey = wallet.publicKey.toBase58();
           const draft = get().vaultSetupDrafts[ownerKey];
           if (draft?.stateAddress === stateAddress.toBase58()) {
             set((st) => ({ vaultSetupDrafts: Object.fromEntries(Object.entries(st.vaultSetupDrafts).filter(([key]) => key !== ownerKey)) }));
           }
-          get().log({ vaultId, kind: 'owner', summary: 'MagicBlock task registered again', detail: `${cfg.cadenceSec}-second minimum interval`, sig: result.sig, slot: result.slot });
+          get().log({ vaultId, kind: 'owner', summary: 'Shared Hydra schedule registered again', detail: 'One-minute cadence; all portfolio assets are checked together.', sig: result.sig, slot: result.slot });
         } catch (err) {
           try { await setVaultActive(wallet, new PublicKey(cfg.publicKey), false); } catch { /* leave paused locally */ }
           get().toast('error', 'Resume failed', err instanceof Error ? err.message : 'Unable to register the MagicBlock task.');
         }
       },
 
-      updateCadence: async (vaultId, cadenceSec) => {
+      updateUnifiedCadence: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!cfg || cfg.legacy || cfg.status !== 'active') return;
         const wallet = activeWalletSigner();
         if (!wallet) return;
         try {
-          const result = await scheduleVault(wallet, new PublicKey(cfg.publicKey), cadenceSec);
-          get().patchVault(vaultId, { cadenceSec, nextCheckAt: null });
+          const result = await scheduleVault(wallet, new PublicKey(cfg.publicKey));
+          get().patchVault(vaultId, { cadenceSec: REBALANCE_INTERVAL_SEC, nextCheckAt: null });
           get().log({
             vaultId,
             kind: 'owner',
-            summary: `Minimum rebalance delay set to ${cadenceSec} seconds`,
-            detail: 'Updated on Solana and registered the Hydra task at the matching interval; the cranker pays trigger fees.',
+            summary: 'Portfolio moved to the shared Hydra schedule',
+            detail: 'Registered the one-minute interval on Solana; every SPL asset in the portfolio is checked together.',
             sig: result.sig,
             slot: result.slot,
           });
-          get().toast('ok', 'Crank interval updated', 'The operator pays trigger fees; this owner-signed update sets the vault delay.');
+          get().toast('ok', 'Shared schedule applied', 'This portfolio now uses the same one-minute cadence as the others.');
         } catch (err) {
-          get().toast('error', 'Interval update failed', err instanceof Error ? err.message : 'Unable to update the on-chain crank policy.');
+          get().toast('error', 'Schedule update failed', err instanceof Error ? err.message : 'Unable to apply the shared on-chain cadence.');
         }
       },
 

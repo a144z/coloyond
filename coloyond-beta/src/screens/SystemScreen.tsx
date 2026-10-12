@@ -151,16 +151,16 @@ export function SystemScreen() {
           <KeyValue
             rows={[
               { k: 'Execution', v: 'ER calculation → Magic Action → Solana vault program' },
-              { k: 'Interval', v: 'Owner-configured per vault · 60 seconds to 24 hours' },
+              { k: 'Interval', v: 'Shared across portfolios · about every 60 seconds' },
               { k: 'Dashboard sync', v: 'every 10 seconds while open' },
               { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed · ${legacy} legacy` },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            One Hydra task is registered per active portfolio. Only its Executor PDA is delegated;
-            Vault State and SPL token accounts stay on Solana. Wall-clock timing depends on an
-            active permissionless Hydra cranker. The ER task skips early runs unless a Pyth-backed
-            asset moves more than 0.1%; the vault program rechecks the guards before moving assets.
+            Each portfolio keeps one state-bound Hydra task; that task evaluates all of its SPL
+            assets together. One running cranker services all tasks on its ER. Only the Executor
+            PDA is delegated; Vault State and SPL accounts stay on Solana. Runs can safely skip
+            when the Pyth movement, drift, or liquidity guards are not met.
           </p>
         </LedgerPanel>
       </div>
