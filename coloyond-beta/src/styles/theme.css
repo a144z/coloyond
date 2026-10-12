@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "@fontsource/space-grotesk/400.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
+
+/*
+  coloyond lacquerboard system.
+  Source of truth: design-reference/flash-ui-monumental-stencil-lacquerboard.html
+  (pulp / lacquer / ledger palette, Space Grotesk + JetBrains Mono, sharp edges,
+  2px ink rules, offset hard shadows) and design-reference/mobile-portfolio.html
+  (screen structure, mix bars, 48px hit targets).
+  One theme, locked: light pulp. One radius system: all sharp (0).
+*/
+
+@theme {
+  --color-pulp: #ede6d6;
+  --color-pulp-shade: #e1dac7;
+  --color-pulp-deep: #ddd5bf;
+  --color-ledger: #faf8f2;
+  --color-ledger-subtle: #f0ede4;
+  --color-ink: #14171a;
+  --color-petrol: #13343b;
+  --color-brass: #c66e22;
+  --color-iron: #384551;
+  --color-danger: #8c3925;
+  --color-hairline: rgb(20 23 26 / 0.16);
+
+  --font-display: "Space Grotesk", "Arial", sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
+
+  --shadow-panel: 4px 4px 0 0 rgb(20 23 26 / 0.12);
+  --shadow-frame: 12px 12px 0 0 rgb(20 23 26 / 0.16);
+  --shadow-btn: 3px 3px 0 0 rgb(20 23 26 / 0.25);
+
+  --ease-lacquer: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--color-pulp);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--color-petrol);
+    color: var(--color-pulp);
+  }
+
+  input,
+  select,
+  button,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* remove number spinners: amounts are decimal keyboards, not spinners */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+@layer components {
+  /* Attention spectrum: the single sanctioned gradient. Live-system signal only. */
+  .band-attention {
+    background: linear-gradient(
+      90deg,
+      #e62e5c 0%,
+      #ea7325 22%,
+      #eccb1a 42%,
+      #14c777 64%,
+      #1a8ee9 84%,
+      #8736e0 100%
+    );
+  }
+
+  /* Unbleached cellulose tooth. Fixed overlay only, never on scrolling content. */
+  .pulp-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Ledger slider: ink thumb over pulp track, from the flash-ui reference. */
+  .ledger-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--color-pulp-shade);
+    border: 1px solid var(--color-ink);
+    outline: none;
+    margin: 10px 0;
+  }
+  .ledger-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 24px;
+    background: var(--color-ink);
+    border: 1px solid var(--color-pulp);
+    cursor: ew-resize;
+  }
+  .ledger-range::-moz-range-thumb {
+    width: 16px;
+    height: 24px;
+    background: var(--color-ink);
+    border: 1px solid var(--color-pulp);
+    border-radius: 0;
+    cursor: ew-resize;
+  }
+
+  .ledger-range:focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
+  /* Ledger slider, frozen: a pinned weight. Petrol thumb over deep lacquer —
+     the value is still real, it just no longer moves. */
+  .ledger-range:disabled {
+    background: var(--color-pulp-deep);
+    cursor: default;
+  }
+  .ledger-range:disabled::-webkit-slider-thumb {
+    background: var(--color-petrol);
+    border-color: var(--color-pulp);
+    cursor: default;
+  }
+  .ledger-range:disabled::-moz-range-thumb {
+    background: var(--color-petrol);
+    border-color: var(--color-pulp);
+    cursor: default;
+  }
+}
+
+@keyframes coloyond-appear {
+  from {
+    opacity: 0.4;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes coloyond-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes coloyond-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
