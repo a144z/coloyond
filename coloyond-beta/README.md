@@ -64,6 +64,7 @@ Useful commands:
 | `COLONYOND_SMOKE_VAULT_STATE=<PDA> COLONYOND_SMOKE_OPERATOR_KEYPAIR=<path> npm run smoke:closed-loop` | Trigger one due Devnet task and verify settlement nonce and SPL balances |
 | `npm run crank:service` | Supervise MagicBlock's official Hydra cranker per configured ER |
 | `npm run crank:service:self-check` | Validate service configuration and command generation offline |
+| `npm run crank:service:test` | Exercise health supervision, restart, and shutdown behavior with local fakes |
 | `npm run crank:service:install-agent` | Install a macOS LaunchAgent for the official cranker service (does not start it) |
 | `npm run crank:service:agent:self-check` | Validate LaunchAgent generation offline |
 
