@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { MicroLabel } from './primitives.js';
 
-/** Screen shell: consistent horizontal padding and bottom breathing room. */
+/** Screen shell: the desk column's gutters and generous bottom breathing room. */
 export function Screen({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`px-5 pb-10 pt-4 ${className}`}>{children}</div>;
+  return <div className={`px-5 pb-12 pt-5 ${className}`}>{children}</div>;
 }
 
 /** Micro label + display title + optional sub copy. */

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { describeTxError, signSendConfirm, type OwnerSigner, type TxResult, type WalletSigner } from './solana/tx.js';
-import { fetchBalances, keypairFromMnemonic, requestAirdrop, buildWrapTx } from './solana/wallet.js';
+import { fetchBalances, keypairFromMnemonic, buildWrapTx } from './solana/wallet.js';
 import { fetchRpcStatus, type RpcStatus } from './solana/connection.js';
 import { fetchPriceBook, type PriceBook } from './solana/price.js';
 import { fetchReserveState, type ReserveState } from './solana/reserve-read.js';
@@ -223,7 +223,6 @@ interface ColoyondState {
   dismissFlow: () => void;
 
   // actions
-  airdrop: () => Promise<void>;
   wrap: (lamports: number) => Promise<void>;
   createVault: (input: CreateVaultInput) => Promise<string | null>;
   fundVault: (vaultId: string, input: FundVaultInput) => Promise<void>;
@@ -450,24 +449,6 @@ export const useStore = create<ColoyondState>()(
       },
 
       dismissFlow: () => set({ flow: null }),
-
-      airdrop: async () => {
-        const kp = activeWalletSigner();
-        if (!kp) return;
-        const ok = await get().runFlow('Devnet faucet', 'AIRDROP · 1 SOL', [
-          {
-            label: 'Request 1 SOL from the devnet faucet',
-            run: async () => {
-              const sig = await requestAirdrop(kp.publicKey);
-              return { sig, note: 'confirmed on devnet' };
-            },
-          },
-        ]);
-        if (ok) {
-          get().toast('ok', 'Faucet delivered 1 SOL');
-          get().refreshBalances();
-        }
-      },
 
       wrap: async (lamports) => {
         const kp = activeWalletSigner();

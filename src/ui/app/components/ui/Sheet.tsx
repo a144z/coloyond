@@ -42,7 +42,7 @@ export function Sheet({
         className="absolute inset-0 cursor-default bg-ink/45"
       />
       <div className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-[430px] flex-col">
-        <div className="cw-rounded max-h-[82dvh] overflow-y-auto border-t-2 border-ink bg-pulp shadow-frame animate-[coloyond-sheet-up_260ms_cubic-bezier(0.16,1,0.3,1)]">
+        <div className="cw-rounded max-h-[82dvh] overflow-y-auto border-t border-panel bg-pulp shadow-frame animate-[coloyond-sheet-up_260ms_cubic-bezier(0.16,1,0.3,1)]">
           <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
             <MicroLabel>{micro}</MicroLabel>
             <button

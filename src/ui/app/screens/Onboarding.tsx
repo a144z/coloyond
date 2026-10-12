@@ -16,7 +16,6 @@ import { Wordmark } from '../components/brand/BrandMark.js';
  */
 export function Onboarding() {
   const createWallet = useStore((s) => s.createWallet);
-  const airdrop = useStore((s) => s.airdrop);
   const [importOpen, setImportOpen] = useState(false);
   const [phrase, setPhrase] = useState('');
   const [creating, setCreating] = useState(false);
@@ -28,10 +27,7 @@ export function Onboarding() {
     if (creating) return;
     setCreating(true);
     try {
-      const mnemonic = generateMnemonicPhrase();
-      createWallet(mnemonic);
-      // fund the fresh key from the devnet faucet right away
-      await airdrop();
+      createWallet(generateMnemonicPhrase());
     } finally {
       setCreating(false);
     }
@@ -39,8 +35,8 @@ export function Onboarding() {
 
   return (
     <Screen className="pb-[max(2.5rem,env(safe-area-inset-bottom))]">
-      <div className="border-2 border-ink bg-ledger-subtle shadow-panel">
-        <div className="flex items-center justify-between gap-3 border-b border-ink bg-ledger-subtle px-4 py-2.5">
+      <div className="overflow-hidden rounded-[18px] border border-panel bg-pulp shadow-panel">
+        <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
           <span className="font-display text-[13px] font-bold tracking-[-0.01em]">Equilibrium Construct 0819</span>
           <MicroLabel>Autonomous counterbalance</MicroLabel>
         </div>

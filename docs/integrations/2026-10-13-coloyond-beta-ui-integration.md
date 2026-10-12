@@ -147,11 +147,12 @@ clean console.
     pins the slider (`aria-pressed` flips, thumb greys), 0 console errors
   - `/prototype` → `.cr-app` present, h1 “Balance, with room to move.”
   - `/` → landing renders, h1 “Every part has a part to play.”
-- Computed styles on `/app`: font `Arial, Helvetica, sans-serif`, panels `border-radius: 14px`,
+- Computed styles on `/app` (first pass): font `Arial, Helvetica, sans-serif`, panels `border-radius: 14px`,
   buttons `7px`, fields `6px` + soft `#bbb5a5` rule, uniform 3px blue `:focus-visible` ring,
-  frame background `rgb(241, 236, 221)` (paper), group shadow `none`.
+  frame background `rgb(241, 236, 221)` (paper), group shadow `none`. The second pass (§8) raises
+  panels to `18px` with the desk's soft shadow and drops the gradients.
 - Bundle contains `.flex-col` utilities, `--color-pulp`, `.ledger-range`, `.cr-desk-lock`,
-  `.band-attention`, the four palette hexes and the `ReferenceArt` planes study — all live.
+  the four palette hexes and the `ReferenceArt` planes study — all live.
 
 ---
 
@@ -226,3 +227,30 @@ npm run dev      # /  landing, /app mobile app, /prototype old desk prototype
 npm run build
 npx vite preview # verify the production bundle
 ```
+
+---
+
+## 8. Second pass (2026-10-13) — follow the platform design end-to-end
+
+`/app` now uses the same tiers as the landing page and the `/prototype` desk, and the two
+non-product controls are gone. Files touched: `styles/app-theme.css`, `components/ui/{Button,
+LedgerPanel,Screen,Field,Sheet}.tsx`, `components/layout/AppFrame.tsx`,
+`screens/{WalletScreen,Onboarding,VaultDetail}.tsx`, `lib/store.ts`.
+
+- **Surfaces.** Panels are paper with a 1px `#c7c1b1` edge, an 18px corner and the desk's soft
+  shadow (`0 12px 28px #33301e08`) — `.cr-strategy-card` / `.cr-desk` values. Fields drop to a
+  `#bbb5a5` 1px rule; sheets/overlays use the lighter popover shadow. Margins grew: screen
+  gutters `px-5` with `pt-5 pb-12`, panel bodies `p-5`, panel heads `px-5 py-3`.
+- **Controls.** Primary is `.cr-primary`: 47px, 7px corner, ink to paper, blue on hover — no
+  border. Secondary/danger are 1px-rule outline buttons. The lacquerboard gradient top edge
+  (`.band-attention`) was removed from the frame, primary button and bottom nav; the active tab
+  is now a 2px ink rule. The header connect control is the desk's pill `.cr-wallet-btn`.
+- **Layout.** Action rows that were 2-column grids with an odd last button became full-width
+  stacks: vault `Deposit / Redeem / Edit weights`, wallet `Wrap SOL`.
+- **Removed.** The devnet faucet button and its store action (`airdrop`) — wallet creation no
+  longer auto-funds; and the "Export seed" button + sheet, so the app never prints the device
+  mnemonic. `WalletScreen`'s owner-key panel now only offers Reset, with copy that no longer
+  promises a viewable phrase. `requestAirdrop` stays in `lib/solana/wallet.ts` (unused by the UI).
+
+> Functional note: with the faucet gone a freshly created device wallet starts at 0 SOL and
+> cannot fund a vault; fund it externally, or connect a wallet that holds devnet SOL.

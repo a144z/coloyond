@@ -9,8 +9,10 @@
   Restyle pass (this integration): the lacquerboard token names stay — screens
   and components keep their utility classes — but the values now reference the
   platform tokens defined in src/ui/app.css (:root). Paper/field surfaces, ink
-  text, blue accent, muted secondary, rule hairlines, Arial display type, flat
-  shadows. See docs/integrations/2026-10-13-coloyond-beta-ui-integration.md.
+  text, blue accent, muted secondary, rule hairlines, Arial display type. Panels
+  take the desk's 18px corner and soft shadow; controls sit at 7px, fields at
+  6px; the gradient attention bands are gone.
+  See docs/integrations/2026-10-13-coloyond-beta-ui-integration.md.
 */
 
 @layer theme, base, components, utilities;
@@ -31,15 +33,17 @@
   --color-iron: var(--muted);
   --color-danger: #8c3925;
   --color-hairline: var(--rule);
+  /* Panel edge + structural rule, straight from the desk (.cr-desk, .cr-sym). */
+  --color-panel: #c7c1b1;
 
   /* Platform typography: the desktop Arial stack + generic monospace. */
   --font-display: Arial, Helvetica, sans-serif;
   --font-mono: monospace;
 
-  /* The desktop system draws flat panels: rules, no offset shadows. */
-  --shadow-panel: none;
-  --shadow-frame: none;
-  --shadow-btn: none;
+  /* Panel tiers, from the desk: .cr-strategy-card / .cr-desk float on a soft
+     shadow; popovers and sheets use the lighter .cr-wallet-pop shadow. */
+  --shadow-panel: 0 12px 28px #33301e08;
+  --shadow-frame: 0 14px 32px rgba(51, 48, 30, 0.12);
 
   --ease-lacquer: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -71,19 +75,6 @@
 }
 
 @layer components {
-  /* Attention spectrum: the single sanctioned gradient. Live-system signal only. */
-  .cw-app .band-attention {
-    background: linear-gradient(
-      90deg,
-      #e62e5c 0%,
-      #ea7325 22%,
-      #eccb1a 42%,
-      #14c777 64%,
-      #1a8ee9 84%,
-      #8736e0 100%
-    );
-  }
-
   /* Unbleached cellulose tooth. Fixed overlay only, never on scrolling content. */
   .cw-app .pulp-grain {
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -167,25 +158,24 @@
 .border-t-2 { border-top-width: 1px; }
 
 /* Standards pass: every surface follows the desktop desk's tiers — panels at
-   14px like .cr-composition, controls at 7px like .cr-primary / .cr-field,
-   and fields carry the desk's soft rule (#bbb5a5) on paper-white. */
+   18px like .cr-strategy-card / .cr-desk, controls at 7px like .cr-primary,
+   fields at 6px like .cr-field, and fields carry the desk's soft rule
+   (#bbb5a5) on paper-white. */
 .cw-app section,
 .cw-app .cw-rounded,
 .cw-rounded,
 .cw-rounded > div {
-  border-radius: 14px;
+  border-radius: 18px;
 }
 
-.cw-app button,
-.cw-app input:not([type="range"]),
-.cw-app select,
-.cw-app textarea {
+.cw-app button {
   border-radius: 7px;
 }
 
 .cw-app input:not([type="range"]),
 .cw-app select,
 .cw-app textarea {
+  border-radius: 6px;
   border-color: #bbb5a5;
 }
 

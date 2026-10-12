@@ -12,14 +12,12 @@ import { Button } from '../ui/Button.js';
 import { MicroLabel, Notice, SignatureLink, StatusSwatch } from '../ui/primitives.js';
 
 /**
- * The app column: a 430px lacquerboard sheet. On desktop it floats as a
- * framed device; on a phone it fills the viewport. The attention band on
- * the top edge signals that the live system is wired in.
+ * The app column: a 430px paper sheet. On desktop it floats as a framed
+ * device on the desk's soft shadow; on a phone it fills the viewport.
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="cw-app relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-pulp md:my-6 md:h-[min(880px,calc(100dvh-3rem))] md:border-2 md:border-ink md:shadow-frame">
-      <div aria-hidden className="band-attention h-[3px] w-full shrink-0" />
+    <div className="cw-app relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-pulp md:my-8 md:h-[min(880px,calc(100dvh-4rem))] md:rounded-[18px] md:border md:border-panel md:shadow-frame">
       {children}
       <div aria-hidden className="pulp-grain pointer-events-none absolute inset-0 z-[80] opacity-[0.05] mix-blend-multiply" />
     </div>
@@ -39,7 +37,7 @@ export function AppHeader() {
   const live = !!rpc && Date.now() - rpc.at < RPC_POLL_MS * 2;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b-2 border-ink bg-pulp px-3">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-pulp px-3">
       {depth > 1 ? (
         <button
           type="button"
@@ -65,7 +63,9 @@ export function AppHeader() {
             setVisible(true);
           }
         }}
-        className="flex h-10 shrink-0 items-center gap-1.5 border-2 border-ink bg-ledger px-2 font-mono text-[10px] font-bold uppercase tracking-[0.04em] hover:bg-pulp-shade"
+        className={`flex h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-ink px-3 font-mono text-[10px] font-bold uppercase tracking-[0.04em] transition-opacity hover:opacity-90 ${
+          connected ? 'bg-transparent text-ink' : 'bg-ink text-pulp'
+        }`}
       >
         <StatusSwatch tone={live ? 'petrol' : 'iron'} pulse={live} />
         <WalletIcon size={14} weight="bold" aria-hidden />
@@ -87,7 +87,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="shrink-0 border-t-2 border-ink bg-ledger pb-[env(safe-area-inset-bottom)]"
+      className="shrink-0 border-t border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
     >
       <div className="grid grid-cols-3">
         {tabs.map(({ id, label, icon: Icon }) => {
@@ -99,10 +99,10 @@ export function BottomNav() {
               onClick={() => setTab(id)}
               aria-current={active ? 'page' : undefined}
               className={`relative flex h-16 flex-col items-center justify-center gap-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] transition-colors ${
-                active ? 'bg-pulp-shade text-ink' : 'text-iron hover:bg-pulp-shade/60'
+                active ? 'text-ink' : 'text-iron hover:bg-pulp-shade/60'
               }`}
             >
-              {active ? <span aria-hidden className="band-attention absolute inset-x-0 top-0 h-[3px]" /> : null}
+              {active ? <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-ink" /> : null}
               <Icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden />
               {label}
             </button>
@@ -128,7 +128,7 @@ export function ToastLayer() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="cw-rounded pointer-events-auto flex animate-[coloyond-appear_200ms_ease-out] items-start gap-2.5 border-2 border-ink bg-ledger px-3.5 py-3 shadow-panel"
+          className="cw-rounded pointer-events-auto flex animate-[coloyond-appear_200ms_ease-out] items-start gap-2.5 border border-panel bg-pulp px-3.5 py-3 shadow-panel"
         >
           <span className="mt-1.5">
             <StatusSwatch tone={tones[t.kind]} pulse={t.kind === 'error'} />
@@ -178,8 +178,8 @@ export function ExecutionOverlay() {
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={flow.title}>
       <div className="absolute inset-0 bg-ink/45" aria-hidden />
-      <div className="cw-rounded absolute left-1/2 top-1/2 w-[min(400px,calc(100vw-2rem))] max-h-[min(560px,calc(100dvh-5rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border-2 border-ink bg-ledger shadow-frame animate-[coloyond-appear_220ms_cubic-bezier(0.16,1,0.3,1)]">
-        <div className="flex items-center justify-between gap-3 border-b border-ink bg-ledger-subtle px-4 py-2.5">
+      <div className="cw-rounded absolute left-1/2 top-1/2 w-[min(400px,calc(100vw-2rem))] max-h-[min(560px,calc(100dvh-5rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border border-panel bg-pulp shadow-frame animate-[coloyond-appear_220ms_cubic-bezier(0.16,1,0.3,1)]">
+        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-pulp px-5 py-3">
           <MicroLabel>{flow.micro}</MicroLabel>
           {dismissible ? (
             <button

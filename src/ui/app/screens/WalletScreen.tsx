@@ -19,7 +19,7 @@ import { Sheet } from '../components/ui/Sheet.js';
 import { Field, inputClass } from '../components/ui/Field.js';
 import { AssetSwatch, KeyValue, MicroLabel, Notice, Skeleton } from '../components/ui/primitives.js';
 
-/** Wallet tab: owner balances, SOL wrapping, the faucet, and seed controls. */
+/** Wallet tab: owner balances, SOL wrapping, and device-key controls. */
 export function WalletScreen() {
   useNow(1000);
 
@@ -27,16 +27,13 @@ export function WalletScreen() {
   const connectedWallet = useStore((s) => s.connectedWallet);
   const balances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
-  const airdrop = useStore((s) => s.airdrop);
   const wrap = useStore((s) => s.wrap);
   const pushScreen = useStore((s) => s.pushScreen);
 
-  const [seedOpen, setSeedOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [wrapOpen, setWrapOpen] = useState(false);
   const [wrapAmount, setWrapAmount] = useState('0.10');
   const [wrapSubmitting, setWrapSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const external = connectedWallet !== null;
   const address = connectedWallet?.publicKey.toBase58() ?? wallet?.publicKey;
@@ -95,11 +92,8 @@ export function WalletScreen() {
                   { k: 'Total value', v: solValue !== null ? fmtUsd(solValue) : '—' },
                 ]}
               />
-              <div className="mt-4 grid grid-cols-2 gap-2.5">
-                <Button variant="secondary" onClick={() => void airdrop()}>
-                  Faucet · 1 SOL
-                </Button>
-                <Button variant="secondary" onClick={() => setWrapOpen(true)}>
+              <div className="mt-4">
+                <Button variant="secondary" full onClick={() => setWrapOpen(true)}>
                   Wrap SOL → WSOL
                 </Button>
               </div>
@@ -133,11 +127,12 @@ export function WalletScreen() {
 
       {!external && wallet ? <div className="mt-4">
         <LedgerPanel stripe="Owner key controls" meta="device-local">
-          <div className="grid grid-cols-2 gap-2.5">
-            <Button variant="secondary" onClick={() => setSeedOpen(true)}>
-              Export seed
-            </Button>
-            <Button variant="danger" onClick={() => setResetOpen(true)}>
+          <p className="text-[12px] leading-relaxed text-iron">
+            The owner key lives in this browser's local storage and signs your portfolio setup and
+            owner actions. Resetting erases it along with every locally saved portfolio.
+          </p>
+          <div className="mt-4">
+            <Button variant="danger" full onClick={() => setResetOpen(true)}>
               Reset app
             </Button>
           </div>
@@ -154,41 +149,6 @@ export function WalletScreen() {
         setSubmitting={setWrapSubmitting}
         solLamports={balances?.solLamports ?? null}
       />
-
-      <Sheet
-        open={seedOpen}
-        onClose={() => setSeedOpen(false)}
-        micro="Export · BIP-39"
-        title="Your seed phrase"
-        footer={
-          <Button
-            variant="secondary"
-            full
-            onClick={async () => {
-              try {
-                if (!wallet) return;
-                await navigator.clipboard.writeText(wallet.mnemonic);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              } catch {
-                setCopied(false);
-              }
-            }}
-          >
-            {copied ? 'Copied to clipboard' : 'Copy seed phrase'}
-          </Button>
-        }
-      >
-        {wallet ? <div className="border-2 border-ink bg-ledger-subtle p-4">
-          <p className="break-words font-mono text-[13px] font-bold leading-[1.9]">{wallet.mnemonic}</p>
-        </div> : null}
-        <div className="mt-4">
-          <Notice tone="danger" title="Anyone with these words owns the funds">
-            Write them down and keep them offline. This demo stores the phrase unencrypted in this
-            browser's local storage — devnet value only.
-          </Notice>
-        </div>
-      </Sheet>
 
       <ResetSheet open={resetOpen} onClose={() => setResetOpen(false)} />
     </Screen>
@@ -295,9 +255,9 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       }
     >
       <Notice tone="danger" title="Save access before resetting">
-        Resetting erases the owner mnemonic and locally saved portfolio data. You need the mnemonic
-        to authorize future deposits, redemptions and weight changes. Older keypair-based portfolios
-        are read-only here; use the previous app version to recover them before resetting.
+        Resetting erases the owner key and every locally saved portfolio from this browser. On-chain
+        vaults keep their assets, but this device can no longer sign for them. Make sure you have your
+        own backup before you reset.
       </Notice>
     </Sheet>
   );

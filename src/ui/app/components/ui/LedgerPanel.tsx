@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 
 /**
- * Ledger panel: ledger-white body, 2px ink rule, hard offset shadow,
- * subtle top stripe with the panel's label. The workhorse container
- * from the flash-ui reference.
+ * Desk panel: paper body, 1px panel edge, 18px corner and the desk's soft
+ * shadow — same tiers as .cr-strategy-card / .cr-desk. The optional head
+ * stripe is a hairline rule with the panel's label.
  */
 export function LedgerPanel({
   stripe,
@@ -19,16 +19,16 @@ export function LedgerPanel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={`border-2 border-ink bg-ledger shadow-panel ${className}`}>
+    <section className={`overflow-hidden rounded-[18px] border border-panel bg-pulp shadow-panel ${className}`}>
       {stripe !== undefined || meta !== undefined ? (
-        <div className="flex items-center justify-between gap-3 border-b border-ink bg-ledger-subtle px-4 py-2.5">
+        <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
           <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em]">{stripe}</span>
           {meta !== undefined ? (
             <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-iron">{meta}</span>
           ) : null}
         </div>
       ) : null}
-      <div className={`p-4 ${bodyClassName}`}>{children}</div>
+      <div className={`p-5 ${bodyClassName}`}>{children}</div>
     </section>
   );
 }

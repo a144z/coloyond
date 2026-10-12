@@ -157,10 +157,10 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
         </LedgerPanel>
       </div>
 
-      {!closed ? <div className="mt-4 grid grid-cols-2 gap-2.5">
-        <Button variant="secondary" onClick={() => setFundOpen(true)}>Deposit assets</Button>
-        <Button variant="secondary" disabled={!bal || BigInt(bal.shareBalanceRaw) === 0n} onClick={() => setRedeemOpen(true)}>Redeem shares</Button>
-        <Button variant="secondary" onClick={() => setWeightsOpen(true)}>Edit target weights</Button>
+      {!closed ? <div className="mt-5 space-y-2.5">
+        <Button variant="primary" full onClick={() => setFundOpen(true)}>Deposit assets</Button>
+        <Button variant="secondary" full disabled={!bal || BigInt(bal.shareBalanceRaw) === 0n} onClick={() => setRedeemOpen(true)}>Redeem shares</Button>
+        <Button variant="secondary" full onClick={() => setWeightsOpen(true)}>Edit target weights</Button>
       </div> : null}
 
       <div className="mt-6">

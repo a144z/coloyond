@@ -11,19 +11,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    'bg-ink text-ledger border-2 border-ink hover:shadow-btn active:shadow-none active:translate-x-[1px] active:translate-y-[1px]',
+    'border-0 bg-ink font-display text-[12px] font-semibold text-pulp hover:bg-petrol active:bg-petrol',
   secondary:
-    'bg-transparent text-ink border-2 border-ink hover:bg-ink/5 active:translate-x-[1px] active:translate-y-[1px]',
+    'border border-ink bg-transparent font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ink hover:bg-ink/5',
   danger:
-    'bg-transparent text-danger border-2 border-danger hover:bg-danger/5 active:translate-x-[1px] active:translate-y-[1px]',
+    'border border-danger bg-transparent font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-danger hover:bg-danger/5',
   ghost:
-    'bg-transparent text-petrol border-0 px-1 underline underline-offset-4 hover:text-ink active:translate-y-[1px]',
+    'border-0 px-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-petrol underline underline-offset-4 hover:text-ink',
 };
 
 /**
- * Ledger button: sharp corners, ink rules, 48px hit target, uppercase mono.
- * The primary variant carries the attention spectrum as a 3px top edge,
- * exactly like the flash-ui reference's btn-attention.
+ * Desk button: 47px hit target like .cr-primary. The primary variant is the
+ * ink block that turns blue on hover; secondary and danger are 1px-rule
+ * outline buttons in the desk's small mono caps.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { variant = 'secondary', full = false, loading = false, leading, className = '', children, disabled, ...rest },
@@ -33,14 +33,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       disabled={disabled || loading}
-      className={`relative inline-flex min-h-12 select-none items-center justify-center gap-2 px-4 font-mono text-[12px] font-bold uppercase tracking-[0.06em] transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 ${
+      className={`relative inline-flex min-h-[47px] select-none items-center justify-center gap-2 px-4 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 ${
         variantClasses[variant]
       } ${full ? 'w-full' : ''} ${className}`}
       {...rest}
     >
-      {variant === 'primary' && (
-        <span aria-hidden className="band-attention absolute inset-x-0 top-0 h-[3px]" />
-      )}
       {loading ? (
         <span
           aria-hidden
