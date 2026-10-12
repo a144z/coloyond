@@ -13,6 +13,9 @@ const errors=[]; page.on('pageerror', e=>errors.push(e.message));
 await page.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:5173') ? route.continue() : route.abort());
 await page.goto('http://127.0.0.1:5173/app');
 await page.getByRole('heading', { name: 'A mix of your own.' }).waitFor();
+const logo=page.locator('.cw-app header img');
+if(await logo.getAttribute('src')!=='/coloyond.jpg') throw Error('Mobile logo does not use supplied artwork');
+await logo.evaluate(image=>image.decode());
 await page.screenshot({ path: out+'01-portfolios.png' });
 await page.getByRole('button', { name: '+ Create portfolio', exact: true }).click();
 await page.getByRole('heading', { name: 'Set the balance.' }).waitFor();
@@ -73,6 +76,10 @@ for(const width of [320,360,430,768,1440]) {
  if(overflow) throw Error(`Horizontal page overflow at ${width}px`);
  await page.getByRole('button',{name:'Back',exact:true}).click();
 }
+await page.goto('http://127.0.0.1:5173/');
+await page.locator('.cr-brand-icon').evaluate(image=>image.decode());
+if(await page.locator('.cr-brand-icon').getAttribute('src')!=='/coloyond.jpg') throw Error('Website logo mismatch');
+if(await page.locator('link[rel=icon]').getAttribute('href')!=='/favicon.png') throw Error('Website favicon mismatch');
 if(errors.length) throw Error(errors.join('\n'));
 console.log('PASS: navigation, weight locks, asset picker, import, deposit, redeem, edit, wrap sheets; 320–1440px layout; no page errors.');
 await browser.close();

@@ -9,7 +9,6 @@ import { Button } from '../components/ui/Button.js';
 import { LedgerPanel } from '../components/ui/LedgerPanel.js';
 import { MixBar, segmentsOf } from '../components/ui/MixBar.js';
 import { Notice, Skeleton, StatusSwatch } from '../components/ui/primitives.js';
-import { ReferenceArt } from '../../ReferenceArt.js';
 
 /** 01 / Your portfolios — the tab-level list of vaults. */
 export function PortfolioList() {
@@ -35,11 +34,7 @@ export function PortfolioList() {
         className="relative mb-4 h-[160px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
         aria-hidden="true"
       >
-        <ReferenceArt
-          variant="planes"
-          className="absolute inset-0 h-full w-full opacity-80"
-          title="Composition study · blue, yellow, violet, coral"
-        />
+        <img src="/coloyond.jpg" className="absolute inset-0 h-full w-full opacity-80 object-contain" alt="" />
       </div>
 
       <Button variant="primary" full onClick={() => pushScreen({ id: 'create' })}>

@@ -72,8 +72,8 @@ function Chapter({index}:{index:number}) {
 function BrandScene({outro=false}:{outro?:boolean}) {
  const frame=useCurrentFrame();const {fps}=useVideoConfig();const p=spring({frame,fps,config:{damping:23,stiffness:85}});
  return <AbsoluteFill style={{alignItems:'center',justifyContent:'center'}}>
-  <div style={{display:'flex',gap:8,marginBottom:45,transform:`rotate(${-12*(1-p)}deg)`}}>{COLORS.map((color,i)=><div key={color} style={{width:75,height:75,borderRadius:16,background:color,transform:`translateY(${(1-spring({frame:frame-i*6,fps,config:{damping:18}}))*140}px) rotate(${(i-1.5)*7*(1-p)}deg)`,opacity:p}}/>)}</div>
-  <div style={{overflow:'hidden'}}><div style={{fontSize:126,fontWeight:700,letterSpacing:-8,transform:`translateY(${(1-p)*160}%)`}}>coloyond <span style={{color:COLORS[3]}}>✳</span></div></div>
+  <Img src={staticFile('coloyond.jpg')} style={{width:160,height:160,objectFit:'cover',borderRadius:28,marginBottom:35,opacity:p,transform:`translateY(${(1-p)*80}px) scale(${.85+p*.15}) rotate(${-8*(1-p)}deg)`}} />
+  <div style={{overflow:'hidden'}}><div style={{fontSize:126,fontWeight:700,letterSpacing:-8,transform:`translateY(${(1-p)*160}%)`}}>Coloyond</div></div>
   <div style={{fontSize:outro?42:33,letterSpacing:-1,marginTop:25,opacity:tween(frame,24,50,0,1)}}>{outro?'Make room for your own mix.':'A mix of your own. In motion.'}</div>
   {outro?<><div style={{marginTop:38,background:INK,color:PAPER,padding:'19px 38px',borderRadius:16,font:'22px monospace',opacity:tween(frame,42,66,0,1)}}>/app → Web + Android</div><div style={{position:'absolute',bottom:85,fontSize:15,color:MUTED}}>Solana devnet · Test assets · Illustrative balances · Transactions require your signature</div></>:<div style={{font:'14px monospace',letterSpacing:4,color:MUTED,marginTop:42,opacity:p}}>YOUR ASSETS. YOUR BALANCE. YOUR NEXT MOVE.</div>}
  </AbsoluteFill>;
@@ -84,7 +84,7 @@ function Showcase() {
   <Audio src={staticFile('audio/coloyond-original-score.wav')} volume={f=>interpolate(f,[0,45,TOTAL-90,TOTAL],[0,.8,.8,0],{extrapolateLeft:'clamp',extrapolateRight:'clamp'})}/>
   <div style={{position:'absolute',width:950,height:950,borderRadius:'50%',background:'radial-gradient(circle,#d8d4ca66,transparent 68%)',right:-250,top:-120,transform:`translateY(${Math.sin(frame/150)*25}px)`}}/>
   <Sequence durationInFrames={INTRO}><BrandScene/></Sequence>
-  {frame>=INTRO&&frame<INTRO+chapters.length*CHAPTER?<><div style={{position:'absolute',top:42,left:115,fontSize:27,fontWeight:700,letterSpacing:-1}}>coloyond <span style={{color:COLORS[3]}}>✳</span></div><div style={{position:'absolute',top:48,left:450,font:'13px monospace',letterSpacing:2,color:MUTED}}>A PORTFOLIO DESK. IN YOUR POCKET.</div></>:null}
+  {frame>=INTRO&&frame<INTRO+chapters.length*CHAPTER?<><div style={{position:'absolute',top:42,left:115,fontSize:27,fontWeight:700,letterSpacing:-1}}><Img src={staticFile('coloyond.jpg')} style={{width:32,height:32,borderRadius:7,marginRight:10,verticalAlign:'middle'}}/>Coloyond</div><div style={{position:'absolute',top:48,left:450,font:'13px monospace',letterSpacing:2,color:MUTED}}>A PORTFOLIO DESK. IN YOUR POCKET.</div></>:null}
   {chapters.map((_,i)=><Sequence key={i} from={INTRO+i*CHAPTER} durationInFrames={CHAPTER}><Chapter index={i}/></Sequence>)}
   <Sequence from={INTRO+chapters.length*CHAPTER} durationInFrames={END}><BrandScene outro/></Sequence>
  </AbsoluteFill>;

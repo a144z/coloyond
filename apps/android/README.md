@@ -46,3 +46,7 @@ The debug APK is installable and automatically signed with the builder's debug k
 - Browser interaction checks are available as `npm run test:mobile` after `npx playwright install chromium`, or with `CHROME_PATH` set to a local Chrome executable.
 
 Real-device wallet association, transaction signing and end-to-end rebalance execution need a funded devnet wallet and are separate from build verification.
+
+## Brand assets
+
+The supplied root `coloyond.jpg` is the canonical artwork for the launcher, web header, favicon, wallet identity and video. Run `python scripts/mobile/brand-assets.py` from the repository root (Pillow required) to regenerate the technical icon sizes. The native full-color drawable preserves the original image; the Android themed icon uses a monochrome mask derived from it.

@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "../Brand.js";
 import type { VaultView } from "../../symmetry/types.js";
 import { useSymmetryDesk, type SymmetryDeskView } from "./useSymmetryDesk.js";
 import { ReferenceArt } from "../ReferenceArt.js";
@@ -140,7 +141,7 @@ export function SymmetryDevnetPage() {
     <div className="cr-app">
       <div className="cr-shell">
         <header className="cr-topbar">
-          <a className="cr-brand" href="/" aria-label="coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <a className="cr-brand" href="/" aria-label="Coloyond home"><WebsiteBrand /></a>
           <div className="cr-topbar-right">
             <span className="cr-demo-label">Protocol comparison · Devnet read only</span>
             <a className="cr-reference-link" href="/">Portfolio <span aria-hidden="true">↗</span></a>

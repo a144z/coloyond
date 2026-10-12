@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "./Brand.js";
 import { useEffect, useState } from "react";
 import { ReferenceArt } from "./ReferenceArt.js";
 import { PortfolioTokens } from "./portfolio/PortfolioTokens.js";
@@ -57,7 +58,7 @@ export function ColoyondApp() {
     <div className="cr-app">
       <div className="cr-shell">
         <header className="cr-topbar">
-          <a className="cr-brand" href="/" aria-label="coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <a className="cr-brand" href="/" aria-label="Coloyond home"><WebsiteBrand /></a>
           <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample portfolio</span><a className="cr-reference-link" href="/etf-devnet/transactions" aria-label="Open real Solana Devnet ETF wallet transaction desk">ETF wallet desk <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/etf-devnet" aria-label="Open real Solana Devnet ETF read page">Real ETF Devnet read <span aria-hidden="true">↗</span></a><a className="cr-reference-link cr-lab-link" href="/rebalancing-lab">Rebalance lab <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/symmetry-devnet">Symmetry Devnet <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a><ConnectButton /></div>
         </header>
 

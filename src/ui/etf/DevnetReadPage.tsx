@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "../Brand.js";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
@@ -190,7 +191,7 @@ export function DevnetReadPage() {
   return (
     <main className="etf-page cr-shell">
       <header className="etf-topbar">
-        <a className="cr-brand" href="/"><span>coloyond</span><sup className="cr-brand-mark">●</sup></a>
+        <a className="cr-brand" href="/"><WebsiteBrand /></a>
         <div className="etf-topbar-actions"><a className="cr-reference-link" href="/etf-devnet/transactions">ETF transaction desk ↗</a><span className="etf-live-label"><i aria-hidden="true" /> Real Devnet · read only</span><ConnectButton /></div>
       </header>
       <section className="etf-hero">

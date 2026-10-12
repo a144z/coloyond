@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "../Brand.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PublicKey, Transaction, type TransactionInstruction } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -439,7 +440,7 @@ export function EtfTransactionsPage() {
 
   return <main className="etf-page cr-shell tx-page">
     <header className="etf-topbar">
-      <a className="cr-brand" href="/"><span>coloyond</span><sup className="cr-brand-mark">●</sup></a>
+      <a className="cr-brand" href="/"><WebsiteBrand /></a>
       <div className="etf-topbar-actions"><a className="cr-reference-link" href="/etf-devnet">Live read surface ↗</a><span className="etf-live-label"><i aria-hidden="true" /> Devnet · wallet console</span><ConnectButton /></div>
     </header>
     <section className="etf-hero tx-hero">

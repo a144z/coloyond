@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "./Brand.js";
 import { useEffect, useState } from "react";
 import { ReferenceArt } from "./ReferenceArt.js";
 import {
@@ -27,7 +28,7 @@ export function LandingPage() {
   const completed = QUESTS.filter((quest) => done.has(quest.id));
   const questXp = completed.reduce((sum, quest) => sum + quest.reward, 0);
   const rank = completed.length >= 4 ? "Builder" : completed.length >= 2 ? "Steward" : "Watch";
-  useEffect(() => { document.title = "coloyond — System and participation"; }, []);
+  useEffect(() => { document.title = "Coloyond — System and participation"; }, []);
   const toggleQuest = (id: string) => setDone((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -45,13 +46,13 @@ export function LandingPage() {
     <div className="cr-app">
       <div className="cr-shell">
         <header className="cr-topbar">
-          <a className="cr-brand" href="/" aria-label="coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <a className="cr-brand" href="/" aria-label="Coloyond home"><WebsiteBrand /></a>
           <div className="cr-topbar-right"><span className="cr-demo-label">Browser prototype · Sample data</span><a className="cr-reference-link" href="/app" aria-label="Open the portfolio desk">Portfolio desk <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/etf-devnet" aria-label="Open real Solana Devnet ETF read page">Real ETF Devnet read <span aria-hidden="true">↗</span></a><a className="cr-reference-link cr-lab-link" href="/rebalancing-lab">Rebalance lab <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/symmetry-devnet">Symmetry Devnet <span aria-hidden="true">↗</span></a><a className="cr-reference-link" href="/reference/index.html">UI reference <span aria-hidden="true">↗</span></a></div>
         </header>
 
         <section className="cr-intro" aria-labelledby="page-title">
           <div className="cr-intro-copy"><p className="cr-eyebrow">coloyond / System / Participation</p><h1 id="page-title">Every part has a part to play.</h1><p className="cr-intro-description">A managed share starts the story. Routing, liquidity, rewards, and expression follow in that order. The portfolio desk itself lives one link away, at /app.</p><div className="cr-intro-meta"><span>Landing</span><span>coloyond</span></div></div>
-          <div className="cr-hero-art"><ReferenceArt variant="planes" title="planes geometric study" /><span className="cr-art-caption">Visual study / Color expresses composition, not risk.</span></div>
+          <div className="cr-hero-art"><img src="/coloyond.jpg" alt="Coloyond geometric allocation artwork" style={{width:"100%",height:"100%",objectFit:"contain"}} /><span className="cr-art-caption">Visual study / Color expresses composition, not risk.</span></div>
         </section>
 
         <main className="cr-main">

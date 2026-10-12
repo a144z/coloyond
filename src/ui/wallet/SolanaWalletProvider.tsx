@@ -23,7 +23,7 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     () => [
       new SolanaMobileWalletAdapter({
         addressSelector: createDefaultAddressSelector(),
-        appIdentity: { name: "coloyond", uri: APP_ORIGIN, icon: `${APP_ORIGIN}/coloyond-icon.svg` },
+        appIdentity: { name: "Coloyond", uri: APP_ORIGIN, icon: `${APP_ORIGIN}/coloyond-icon.png` },
         authorizationResultCache: createDefaultAuthorizationResultCache(),
         cluster: WalletAdapterNetwork.Devnet,
         onWalletNotFound: createDefaultWalletNotFoundHandler(),

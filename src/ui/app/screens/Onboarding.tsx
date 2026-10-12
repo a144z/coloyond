@@ -7,7 +7,6 @@ import { LedgerPanel } from '../components/ui/LedgerPanel.js';
 import { Sheet } from '../components/ui/Sheet.js';
 import { Field, inputClass } from '../components/ui/Field.js';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives.js';
-import { StencilArt } from '../components/brand/StencilArt.js';
 import { Wordmark } from '../components/brand/BrandMark.js';
 
 /**
@@ -37,10 +36,10 @@ export function Onboarding() {
     <Screen className="pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="overflow-hidden rounded-[18px] border border-panel bg-pulp shadow-panel">
         <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
-          <span className="font-display text-[13px] font-bold tracking-[-0.01em]">Equilibrium Construct 0819</span>
+          <span className="font-display text-[13px] font-bold tracking-[-0.01em]">Coloyond / Allocation study</span>
           <MicroLabel>Autonomous counterbalance</MicroLabel>
         </div>
-        <StencilArt className="block w-full" />
+        <img src="/coloyond.jpg" alt="Coloyond allocation artwork" className="block w-full" />
       </div>
 
       <header className="mt-7">

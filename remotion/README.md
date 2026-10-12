@@ -4,7 +4,7 @@
 
 ## Editorial motion
 
-- Three-second brand opening with individually choreographed allocation blocks.
+- Three-second brand opening with the supplied Coloyond artwork and an eased logo reveal.
 - Nine feature chapters with staggered masked type, animated progress rails and feature callouts.
 - A continuous device position between chapters, horizontal screen pushes and vertical sheet entrances.
 - Eased camera moves and screen magnification focused on the relevant controls.

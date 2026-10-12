@@ -518,3 +518,7 @@ a { color: inherit; }
 .cr-desk-slider-input::-moz-range-track { height: 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--cr-split-track, var(--field)); }
 .cr-desk-slider-input::-moz-range-thumb { border: 1px solid var(--ink); border-radius: 50%; background: var(--paper); height: 20px; width: 20px; }
 .cr-desk-slider-input:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+
+/* Canonical artwork lockup across every website route. */
+.cr-brand { align-items: center; gap: 10px; }
+.cr-brand-icon { width: 32px; height: 32px; flex-shrink: 0; object-fit: cover; border-radius: 7px; }

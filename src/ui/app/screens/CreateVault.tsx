@@ -14,7 +14,6 @@ import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives.js';
 import { WeightSliders, normalizeShares, type WeightLocks } from '../components/ui/WeightSliders.js';
 import { MixBar, segmentsOf } from '../components/ui/MixBar.js';
 import { AssetPickerSheet } from '../components/ui/AssetPickerSheet.js';
-import { ReferenceArt } from '../../ReferenceArt.js';
 
 const cadenceLabels: Record<number, string> = {
   60: 'About every 60 seconds · 5,700 ER slots',
@@ -138,11 +137,7 @@ export function CreateVault() {
         className="relative mb-4 h-[96px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
         aria-hidden="true"
       >
-        <ReferenceArt
-          variant="planes"
-          className="absolute inset-0 h-full w-full opacity-80"
-          title="Composition study · blue, yellow, violet, coral"
-        />
+        <img src="/coloyond.jpg" className="absolute inset-0 h-full w-full opacity-80 object-contain" alt="" />
       </div>
 
       {setupDraft ? (

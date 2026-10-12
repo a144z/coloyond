@@ -1,3 +1,4 @@
+import { WebsiteBrand } from "../Brand.js";
 import { lazy, Suspense, useState } from "react";
 import "./AuctionWorkbench.css";
 import "./LocalnetWorkbench.css";
@@ -55,7 +56,7 @@ export function AuctionWorkbench() {
     <div className="cr-app aw-app">
       <div className="cr-shell">
         <header className="cr-topbar aw-topbar">
-          <a className="cr-brand" href="/" aria-label="Return to Coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <a className="cr-brand" href="/" aria-label="Return to Coloyond home"><WebsiteBrand /></a>
           <div className="cr-topbar-right"><span className="cr-demo-label">Localnet SBF workbench</span><a className="cr-reference-link" href="/">Back to app <span aria-hidden="true">↗</span></a></div>
         </header>
         <main className="aw-main"><Suspense fallback={<p className="aw-empty-state">Loading the Localnet workbench…</p>}><LocalnetWorkbench onFixtureMode={() => setMode("fixture")} /></Suspense></main>
@@ -74,7 +75,7 @@ function FixtureWorkbench({ onLocalnetMode }: { onLocalnetMode(): void }) {
     <div className="cr-app aw-app">
       <div className="cr-shell">
         <header className="cr-topbar aw-topbar">
-          <a className="cr-brand" href="/" aria-label="Return to Coloyond home">coloyond<span className="cr-brand-mark" aria-hidden="true">✳</span></a>
+          <a className="cr-brand" href="/" aria-label="Return to Coloyond home"><WebsiteBrand /></a>
           <div className="cr-topbar-right"><span className="cr-demo-label">CP2a browser fixture</span><button className="cr-reference-link aw-mode-top-button" type="button" onClick={onLocalnetMode}>Switch to Localnet SBF <span aria-hidden="true">↗</span></button><a className="cr-reference-link" href="/">Back to app <span aria-hidden="true">↗</span></a></div>
         </header>
 
