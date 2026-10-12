@@ -78,8 +78,16 @@ pub mod coloyond_portfolio {
         asset_in: u8,
         asset_out: u8,
         amount_in: u64,
+        amount_out: u64,
     ) -> Result<()> {
-        instructions::vault::execute_scheduled_rebalance(ctx, generation, asset_in, asset_out, amount_in)
+        instructions::vault::execute_scheduled_rebalance(
+            ctx,
+            generation,
+            asset_in,
+            asset_out,
+            amount_in,
+            amount_out,
+        )
     }
 
     pub fn configure_rebalance<'info>(

@@ -8,6 +8,7 @@ use crate::errors::PortfolioError;
 use crate::pda;
 use crate::state::{
     AutomationControllerV2, PortfolioAdmissionV2, PortfolioVaultV2, RecordedPrice, VaultLifecycleV2,
+    SWAP_MAX_SLIPPAGE_BPS, WEIGHTS_SUM_BPS,
 };
 use super::{
     CloseVault, ConfigureRebalance, CreateVault, ExecuteScheduledRebalance, FundVault, Tick,
@@ -210,6 +211,7 @@ pub fn execute_scheduled_rebalance<'info>(
     asset_in: u8,
     asset_out: u8,
     amount_in: u64,
+    amount_out: u64,
 ) -> Result<()> {
     let mut vault = load(&ctx.accounts.vault.to_account_info())?;
     let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
@@ -228,9 +230,9 @@ pub fn execute_scheduled_rebalance<'info>(
         index_in < vault.mints.len() && index_out < vault.mints.len() && index_in != index_out,
         PortfolioError::WeightLengthMismatch
     );
-    require!(amount_in > 0, PortfolioError::WeightsSumMismatch);
+    require!(amount_in > 0 && amount_out > 0, PortfolioError::WeightsSumMismatch);
     require!(
-        vault.units[index_in] <= u64::MAX - amount_in && amount_in <= vault.units[index_out],
+        vault.units[index_in] <= u64::MAX - amount_in && amount_out <= vault.units[index_out],
         PortfolioError::WeightsSumMismatch
     );
     let admission = load_admission(&ctx.accounts.admission.to_account_info())?;
@@ -254,15 +256,115 @@ pub fn execute_scheduled_rebalance<'info>(
     }
     let mut verified = controller.any_price_moved_enough(&current_prices)?;
     if !verified {
-        let now = Clock::get()?.unix_timestamp;
-        require!(now >= 0, PortfolioError::WrongLifecycle);
-        let elapsed = (now.saturating_sub(vault.last_run_unix_timestamp)) as u64;
+        let now_gate = Clock::get()?.unix_timestamp;
+        require!(now_gate >= 0, PortfolioError::WrongLifecycle);
+        let elapsed = (now_gate.saturating_sub(vault.last_run_unix_timestamp)) as u64;
         verified = elapsed >= controller.interval_seconds;
     }
     require!(verified, PortfolioError::RebalanceThresholdNotMet);
+    let price_in = current_prices[index_in];
+    let price_out = current_prices[index_out];
+    let swap_min_exp = price_in.exponent.min(price_out.exponent);
+    let in_value = u128::from(amount_in)
+        .checked_mul(
+            price_in
+                .to_shared_exponent(swap_min_exp)
+                .ok_or(PortfolioError::OracleRejected)?,
+        )
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    let out_value = u128::from(amount_out)
+        .checked_mul(
+            price_out
+                .to_shared_exponent(swap_min_exp)
+                .ok_or(PortfolioError::OracleRejected)?,
+        )
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    require!(out_value <= in_value, PortfolioError::SwapValueImbalanced);
+    let donation_bps = in_value
+        .checked_sub(out_value)
+        .ok_or(PortfolioError::WeightsSumMismatch)?
+        .checked_mul(WEIGHTS_SUM_BPS as u128)
+        .ok_or(PortfolioError::WeightsSumMismatch)?
+        .checked_div(in_value)
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    require!(donation_bps <= SWAP_MAX_SLIPPAGE_BPS, PortfolioError::SwapValueImbalanced);
+    let basket_min_exp = current_prices.iter().map(| p | p.exponent).min().unwrap_or_else(| | 0);
+    let mut values: Vec<u128> = Vec::new();
+    let mut total_value: u128 = 0;
+    for (slot, price) in current_prices.iter().enumerate() {
+        let scaled = price
+            .to_shared_exponent(basket_min_exp)
+            .ok_or(PortfolioError::OracleRejected)?;
+        let value = u128::from(vault.units[slot])
+            .checked_mul(scaled)
+            .ok_or(PortfolioError::WeightsSumMismatch)?;
+        total_value = total_value
+            .checked_add(value)
+            .ok_or(PortfolioError::WeightsSumMismatch)?;
+        values.push(value);
+    }
+    require!(total_value > 0, PortfolioError::VaultNotEmpty);
+    let weight_out_bps = values[index_out]
+        .checked_mul(WEIGHTS_SUM_BPS as u128)
+        .ok_or(PortfolioError::WeightsSumMismatch)?
+        .checked_div(total_value)
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    let weight_in_bps = values[index_in]
+        .checked_mul(WEIGHTS_SUM_BPS as u128)
+        .ok_or(PortfolioError::WeightsSumMismatch)?
+        .checked_div(total_value)
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    require!(
+        weight_out_bps >= u128::from(vault.target_weights[index_out]),
+        PortfolioError::WrongDirection
+    );
+    require!(
+        weight_in_bps <= u128::from(vault.target_weights[index_in]),
+        PortfolioError::WrongDirection
+    );
+    let authority_bump = pda::authority(ctx.accounts.vault.to_account_info().key).1;
+    let authority_seeds: &[&[u8]] = &[
+        crate::pda::AUTHORITY_SEED,
+        ctx.accounts.vault.to_account_info().key.as_ref(),
+        &[authority_bump],
+    ];
+    let token_program = ctx.accounts.token_program.to_account_info();
+    token::transfer_checked(
+        CpiContext::new_with_signer(
+            token_program.clone(),
+            TransferChecked {
+                from: ctx.accounts.asset_out_custody.to_account_info().clone(),
+                mint: ctx.accounts.asset_out_mint.to_account_info().clone(),
+                to: ctx.accounts.caller_ata_out.to_account_info().clone(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+            &[authority_seeds],
+        ),
+        amount_out,
+        9,
+    )?;
+    token::transfer_checked(
+        CpiContext::new(
+            token_program.clone(),
+            TransferChecked {
+                from: ctx.accounts.caller_ata_in.to_account_info().clone(),
+                mint: ctx.accounts.asset_in_mint.to_account_info().clone(),
+                to: ctx.accounts.asset_in_custody.to_account_info().clone(),
+                authority: ctx.accounts.caller.to_account_info(),
+            },
+        ),
+        amount_in,
+        9,
+    )?;
     let now = Clock::get()?.unix_timestamp;
-    vault.units[index_in] = vault.units[index_in].saturating_add(amount_in);
-    vault.units[index_out] = vault.units[index_out].saturating_sub(amount_in);
+    vault.units[index_in] = vault
+        .units[index_in]
+        .checked_add(amount_in)
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
+    vault.units[index_out] = vault
+        .units[index_out]
+        .checked_sub(amount_out)
+        .ok_or(PortfolioError::WeightsSumMismatch)?;
     vault.last_run_unix_timestamp = now;
     controller.last_prices = current_prices;
     controller.run_nonce = controller

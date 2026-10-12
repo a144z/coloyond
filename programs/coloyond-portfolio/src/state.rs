@@ -94,6 +94,19 @@ pub struct RecordedPrice {
     pub exponent: i32,
 }
 
+impl RecordedPrice {
+    /// Re-scale the mantissa so it lives at `target`, where `target` must be at
+    /// or below `self.exponent` (so the shift is exact). Returns None when the
+    /// exponent gap exceeds the internal 10^18 cap.
+    pub fn to_shared_exponent(&self, target: i32) -> Option<u128> {
+        let diff = u32::try_from(self.exponent.checked_sub(target)?).ok()?;
+        let scale = pow_10(diff)?;
+        u128::from(self.mantissa).checked_mul(scale)
+    }
+}
+
+pub const SWAP_MAX_SLIPPAGE_BPS: u128 = 500;
+
 const MAX_EXPONENT_SPAN: u32 = 18;
 
 fn pow_10(exponent: u32) -> Option<u128> {

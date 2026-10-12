@@ -26,4 +26,6 @@ pub enum PortfolioError {
     RebalanceThresholdNotMet,
     #[msg("Controller's basket size does not match its vault's basket")]
     ControllerBasketMismatch,
+    #[msg("Rebalance swap legs are not value-balanced within the tolerance")]
+    SwapValueImbalanced,
 }

@@ -93,7 +93,13 @@ pub struct ConfigureRebalance<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(generation: u64, asset_in: u8, asset_out: u8, amount_in: u64)]
+#[instruction(
+    generation: u64,
+    asset_in: u8,
+    asset_out: u8,
+    amount_in: u64,
+    amount_out: u64,
+)]
 pub struct ExecuteScheduledRebalance<'info> {
     /// CHECK: identity, PDA, nonce, generation and cadence are validated in the handler.
     #[account(mut)]
@@ -105,11 +111,20 @@ pub struct ExecuteScheduledRebalance<'info> {
     pub authority: UncheckedAccount<'info>,
     /// CHECK: program-wide admission list; every basket mint must still be on it.
     pub admission: UncheckedAccount<'info>,
+    /// The permissionless caller who signs the crank, pays the gas, and acts as the swap counterparty.
+    #[account(mut)]
+    pub caller: Signer<'info>,
     #[account(mut)]
     pub asset_in_custody: UncheckedAccount<'info>,
     #[account(mut)]
     pub asset_out_custody: UncheckedAccount<'info>,
     pub asset_in_mint: UncheckedAccount<'info>,
     pub asset_out_mint: UncheckedAccount<'info>,
+    /// Caller's associated token account for `asset_in`; the vault receives `amount_in` here.
+    #[account(mut)]
+    pub caller_ata_in: UncheckedAccount<'info>,
+    /// Caller's associated token account for `asset_out`; the vault releases `amount_out` here.
+    #[account(mut)]
+    pub caller_ata_out: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
