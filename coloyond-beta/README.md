@@ -7,17 +7,21 @@ burn shares and pay out each underlying asset pro rata.
 
 ## Automated execution
 
-Each active vault registers one Hydra task at 5,700 Ephemeral Rollup slots
-(about 60 seconds). The ER program values the vault, calculates the required
-rebalance legs, and requests one Magic Action. The Solana vault program checks
-the task authority, fresh Pyth prices, slippage, token accounts, liquidity and
-replay nonce before atomically moving the standard SPL assets.
+Each active vault registers one Hydra task at its owner-configured minimum
+interval (60 seconds by default; 5,700 Ephemeral Rollup slots). The ER program
+values the vault, calculates the required rebalance legs, and requests one
+Magic Action. The Solana vault program checks fresh Pyth prices, a strict 0.1%
+move from the last successful settlement, the minimum delay, slippage, token
+accounts, liquidity and replay nonce before atomically moving standard SPL
+assets. The first settlement establishes the price baseline; assets without an
+oracle feed do not trigger the price guard.
 
 The browser reads balances and displays actual settlement signatures; it is not
 the trade executor. A Hydra cranker process must be running for scheduled tasks
 to trigger. The app can use MagicBlock's official `hydra-cranker` binary in
 Ephemeral Rollup mode; it needs an operator key per ER, not each portfolio's
-one-time task-creation signer. Setup is described in
+one-time task-creation signer. The operator pays the ER trigger fee; portfolio
+owners pay to configure or change the policy. Setup is described in
 [`docs/automated-execution-design.md`](docs/automated-execution-design.md).
 
 ## Devnet asset and swap limits
@@ -56,6 +60,8 @@ Useful commands:
 | `npm run bootstrap:devnet-test-usd` | Create the capped synthetic USD market |
 | `npm run bootstrap:standard-rebalance-vault` | Create the standard-SPL Devnet canary |
 | `npm run schedule:standard-vault` | Register or replace one vault’s Hydra task |
+| `npm run smoke:closed-loop:self-check` | Check the closed-loop smoke parser offline |
+| `COLONYOND_SMOKE_VAULT_STATE=<PDA> COLONYOND_SMOKE_OPERATOR_KEYPAIR=<path> npm run smoke:closed-loop` | Trigger one due Devnet task and verify settlement nonce and SPL balances |
 | `npm run crank:service` | Supervise MagicBlock's official Hydra cranker per configured ER |
 | `npm run crank:service:self-check` | Validate service configuration and command generation offline |
 | `npm run crank:service:install-agent` | Install a macOS LaunchAgent for the official cranker service (does not start it) |

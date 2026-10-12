@@ -10,10 +10,13 @@
 
 ## Rebalance flow
 
-1. A per-vault Hydra task invokes `rebalance_ephemeral` on an ER at 5,700-slot intervals, targeting about 60 seconds. Actual wall time depends on ER slot production and a running Hydra cranker.
+1. The owner configures a per-vault minimum interval from 60 seconds to 24 hours in a `CrankPolicy` PDA. The default is 60 seconds. A per-vault Hydra task invokes `rebalance_ephemeral` on an ER at the corresponding slot interval; actual wall time depends on ER slot production and an available Hydra cranker.
 2. The ER instruction reads the standard SPL balances and fresh Pyth prices, values every position in USD, compares actual values with target values, and pairs overweight assets with underweight assets. It can include multiple swap legs in one Magic Action request.
-3. The base-layer vault program independently checks the task's Executor escrow, action age, price freshness, token mints and authorities, available balances and liquidity, quoted output against the configured slippage limit, and replay nonce.
-4. If all checks pass, the base program transfers every leg using the vault Authority PDA and market Authority PDA and increments the nonce in the same atomic transaction. Any failed leg rolls back the whole action.
+3. The `CrankPolicy` stores the last successful execution time and per-mint Pyth price snapshots. A crank requires both the configured delay and a strict price change above 0.1% in at least one oracle-backed asset since the last successful settlement. The first successful settlement establishes the baseline. Assets without Pyth feeds are ignored by this price-movement guard.
+4. The base-layer vault program independently re-reads fresh prices and checks the interval and 0.1% threshold, Magic Action Executor escrow, action age, token mints and authorities, available balances and liquidity, quoted output against the configured slippage limit, and replay nonce.
+5. If all checks pass, the base program transfers every leg using the vault Authority PDA and market Authority PDA and updates the nonce and policy snapshots in the same atomic transaction. Any failed leg rolls back the whole action. A scheduled ER callback returns successfully without requesting an action when its delay or price guard is not met, keeping Hydra's recurring task alive; direct permissionless calls return a custom guard error.
+
+The cranker is permissionless and pays the ER trigger transaction fee. The portfolio owner pays for initial policy setup or interval changes. Automated execution is gasless for the portfolio user, but network execution still has a fee payer; the app does not provide a hosted or subsidized cranker.
 
 ## Devnet market
 
@@ -25,9 +28,21 @@ Vault `H1fupUxEGc781oFLcXDpDAWByLU7zTF1bUYTBiCxRC2h` has one transferable share 
 
 ## Register or replace a task
 
-Set `COLONYOND_VAULT_STATE` to an active portfolio PDA and run `npm run schedule:standard-vault`. The command uses the local Devnet CLI keypair, delegates the Executor and a small system-owned Hydra sponsor to the same ER, records the sponsor in a per-vault Scheduler Config, and creates the Hydra task directly on the ER. It checks the interval from the resulting crank account. It does not delegate or rewrite any portfolio token account.
+Set `COLONYOND_VAULT_STATE` to an active portfolio PDA and run `npm run schedule:standard-vault`. The command uses the local Devnet CLI keypair, delegates the Executor and a small system-owned Hydra sponsor to the same ER, records the sponsor in a per-vault Scheduler Config, sets the owner's minimum delay, and creates the Hydra task directly on the ER. Set `COLONYOND_CRANK_INTERVAL_SECONDS` to a whole number from 60 to 86400 to customize the delay (defaults to 60). It checks the interval and callback accounts from the resulting crank account. It does not delegate or rewrite any portfolio token account.
 
 The scheduled task is one task per portfolio. It will execute only while a Hydra cranker is available on that ER and only when prices are fresh, the vault has a rebalance drift above its threshold, and the synthetic market has enough liquidity. For the single-vault Devnet canary, `npm run crank:standard-vault` runs a scoped local cranker that watches only the configured portfolio task; stop it with Ctrl-C. A long-lived deployment should run a monitored cranker service for its own registered tasks.
+
+### Closed-loop Devnet smoke check
+
+After deploying the updated program, creating or upgrading the canary, and starting a Hydra cranker, run the parser check with `npm run smoke:closed-loop:self-check`. The live check needs an active synthetic vault with funded standard SPL accounts, a due Hydra task, a fresh oracle move above 0.1%, sufficient target drift and synthetic market liquidity. Use an operator keypair already delegated to the vault's ER; the operator pays the trigger fee:
+
+```sh
+COLONYOND_SMOKE_VAULT_STATE=<active-vault-state-pda> \
+COLONYOND_SMOKE_OPERATOR_KEYPAIR=/absolute/path/to/er-operator.json \
+npm run smoke:closed-loop
+```
+
+The check fires one due task and passes only after observing a confirmed base-layer settlement log, a higher vault nonce, and at least one changed vault SPL balance. A timeout means a guard or downstream settlement did not complete. It does not create or fund a vault.
 
 ### Operator-run Hydra service
 

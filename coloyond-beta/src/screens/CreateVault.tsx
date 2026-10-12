@@ -16,6 +16,11 @@ import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
 
 const cadenceLabels: Record<number, string> = {
   60: 'About every 60 seconds · 5,700 ER slots',
+  120: 'About every 2 minutes · 11,400 ER slots',
+  300: 'About every 5 minutes · 28,500 ER slots',
+  600: 'About every 10 minutes · 57,000 ER slots',
+  1800: 'About every 30 minutes · 171,000 ER slots',
+  3600: 'About every hour · 342,000 ER slots',
 };
 
 /** SOL deposited into the separate Executor PDA for scheduling and Magic Actions. */
@@ -178,7 +183,7 @@ export function CreateVault() {
       </div>
 
       <div className="mt-4">
-        <Field label="Rebalance target" hint="Hydra uses ER slots, so wall-clock timing varies.">
+        <Field label="Minimum rebalance delay" hint="You configure this on Solana; the cranker pays trigger fees.">
           <select
             value={cadenceSec}
             onChange={(e) => setCadenceSec(Number(e.target.value))}
@@ -238,7 +243,7 @@ export function CreateVault() {
         ) : null}
         <p className="mt-3 text-[11px] leading-relaxed text-iron">
           Setup creates on-chain vault accounts and a share mint, then registers one Hydra task.
-          Scheduling targets 5,700 ER slots (about 60 seconds) and needs an active Hydra cranker.
+          The selected delay is enforced on Solana; wall-clock cadence depends on ER slots and an active cranker.
           Weight-only edits are on Solana; a 120-second cooldown applies.
         </p>
       </div>
@@ -265,7 +270,7 @@ export function CreateVault() {
               v: estimatedTotalUsd !== null ? fmtUsd(estimatedTotalUsd) : 'Unavailable · waiting for a fresh SOL/USD price',
             },
             { k: 'Executor funding', v: '0.05 SOL from setup · program controlled' },
-            { k: 'Schedule', v: '5,700 ER slots · about 60 seconds' },
+            { k: 'Minimum delay', v: `${cadenceSec} seconds · about ${Math.ceil(cadenceSec * 5_700 / 60).toLocaleString()} ER slots` },
             { k: 'Deviation threshold', v: `± ${threshold.toFixed(1)}%` },
           ]}
         />
@@ -276,7 +281,7 @@ export function CreateVault() {
             <li>· Creates standard SPL token accounts for {selected.length} target assets{selectedIds.includes('wsol') ? '' : ' plus zero-target WSOL for SOL funding'}.</li>
             <li>· Wraps your SOL in your wallet's WSOL account, deposits it, then mints shares using on-chain NAV.</li>
             <li>· Delegates only the Executor PDA. Vault State and asset token accounts stay on Solana.</li>
-            <li>· Requests one Hydra task at 5,700 ER slots; execution depends on an active cranker and fresh prices.</li>
+            <li>· Requests one Hydra task at the selected delay; execution depends on an active cranker, fresh prices, and more than 0.1% movement in a Pyth-backed asset.</li>
           </ul>
         </div>
         <div className="mt-4">
@@ -284,7 +289,7 @@ export function CreateVault() {
         </div>
         <div className="mt-4">
           <Notice tone="petrol" title="How the investment is executed">
-            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}%. The registered interval is 5,700 ER slots (about 60 seconds); actual wall-clock timing depends on an active Hydra cranker. The vault program checks price freshness, slippage and replay protection before moving SPL assets.
+            This is an allocation estimate, not an instant swap quote. The scheduled ER instruction can request a Solana vault action toward {targetLabel} when drift passes {threshold.toFixed(1)}% and an oracle-backed price moves more than 0.1%. The owner pays to configure the minimum delay; a running Hydra cranker pays trigger fees. The vault program checks time, price freshness, slippage and replay protection before moving SPL assets.
           </Notice>
         </div>
       </Sheet>

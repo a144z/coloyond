@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { describeTxError, signSendConfirm, type TxResult } from './solana/tx';
+import { describeTxError, signSendConfirm, type OwnerSigner, type TxResult, type WalletSigner } from './solana/tx';
 import { fetchBalances, keypairFromMnemonic, requestAirdrop, buildWrapTx } from './solana/wallet';
 import { fetchRpcStatus, type RpcStatus } from './solana/connection';
 import { fetchPriceBook, type PriceBook } from './solana/price';
@@ -131,6 +131,15 @@ export function walletKeypair(): Keypair | null {
   return cachedWalletKp;
 }
 
+/** Connected browser wallets take precedence; otherwise use the device wallet. */
+export function activeWalletSigner(): OwnerSigner | null {
+  return useStore.getState().connectedWallet ?? walletKeypair();
+}
+
+function activeWalletId(state: Pick<ColoyondState, 'wallet' | 'connectedWallet'>): string | null {
+  return state.connectedWallet?.publicKey.toBase58() ?? state.wallet?.publicKey ?? null;
+}
+
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -154,6 +163,7 @@ interface ColoyondState {
   logs: LogEntry[];
 
   // runtime
+  connectedWallet: WalletSigner | null;
   activeTab: TabId;
   stack: Screen[];
   walletBalances: Awaited<ReturnType<typeof fetchBalances>> | null;
@@ -179,6 +189,7 @@ interface ColoyondState {
 
   // wallet lifecycle
   createWallet: (mnemonic: string) => void;
+  setConnectedWallet: (wallet: WalletSigner | null) => void;
   resetApp: () => void;
 
   // refreshers
@@ -205,6 +216,7 @@ interface ColoyondState {
   withdrawVault: (vaultId: string, fraction: number) => Promise<void>;
   pauseVault: (vaultId: string) => void;
   resumeVault: (vaultId: string) => void;
+  updateCadence: (vaultId: string, cadenceSec: number) => Promise<void>;
   editWeights: (vaultId: string, targets: Record<string, number>) => Promise<void>;
   patchVault: (vaultId: string, patch: Partial<VaultConfig>) => void;
 }
@@ -218,6 +230,7 @@ export const useStore = create<ColoyondState>()(
       logs: [],
 
       activeTab: 'portfolios',
+      connectedWallet: null,
       stack: [{ id: 'onboarding' }],
       walletBalances: null,
       vaultBalances: {},
@@ -257,6 +270,24 @@ export const useStore = create<ColoyondState>()(
         get().setTab('portfolios');
       },
 
+      setConnectedWallet: (connectedWallet) => {
+        const state = get();
+        const walletId = connectedWallet?.publicKey.toBase58() ?? null;
+        set({
+          connectedWallet,
+          walletBalances: null,
+          vaultBalances: {},
+          vaults: walletId
+            ? state.allVaults[walletId] ?? []
+            : state.wallet?.publicKey
+              ? state.allVaults[state.wallet.publicKey] ?? []
+              : [],
+          stack: [{ id: connectedWallet || state.wallet ? 'portfolios' : 'onboarding' }],
+          activeTab: 'portfolios',
+        });
+        if (connectedWallet) void get().refreshBalances();
+      },
+
       resetApp: () => {
         set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'onboarding' }] });
         useStore.persist.clearStorage();
@@ -290,7 +321,7 @@ export const useStore = create<ColoyondState>()(
       },
 
       refreshBalances: async () => {
-        const kp = walletKeypair();
+        const kp = activeWalletSigner();
         if (!kp) return;
         try {
           const walletBalances = await fetchBalances(kp.publicKey);
@@ -311,7 +342,7 @@ export const useStore = create<ColoyondState>()(
 
       refreshVaultBalances: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
-        const owner = walletKeypair();
+        const owner = activeWalletSigner();
         if (!cfg || cfg.legacy || !owner) return;
         try {
           const [bal, chain] = await Promise.all([
@@ -405,13 +436,13 @@ export const useStore = create<ColoyondState>()(
       dismissFlow: () => set({ flow: null }),
 
       airdrop: async () => {
-        const kp = walletKeypair();
+        const kp = activeWalletSigner();
         if (!kp) return;
         const ok = await get().runFlow('Devnet faucet', 'AIRDROP · 1 SOL', [
           {
             label: 'Request 1 SOL from the devnet faucet',
             run: async () => {
-              const sig = await requestAirdrop(kp);
+              const sig = await requestAirdrop(kp.publicKey);
               return { sig, note: 'confirmed on devnet' };
             },
           },
@@ -423,7 +454,7 @@ export const useStore = create<ColoyondState>()(
       },
 
       wrap: async (lamports) => {
-        const kp = walletKeypair();
+        const kp = activeWalletSigner();
         if (!kp) return;
         const ok = await get().runFlow('Wrap SOL into WSOL', 'WRAP · DEVNET', [
           {
@@ -433,8 +464,8 @@ export const useStore = create<ColoyondState>()(
           {
             label: 'Sign and send to devnet',
             run: async () => {
-              const tx = buildWrapTx(kp, lamports);
-              const r = await signSendConfirm(tx, [kp]);
+              const tx = buildWrapTx(kp.publicKey, lamports);
+              const r = await signSendConfirm(tx, kp);
               return { sig: r.sig, note: `confirmed in slot ${r.slot}` };
             },
           },
@@ -451,7 +482,7 @@ export const useStore = create<ColoyondState>()(
       },
 
       createVault: async (input) => {
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         if (!wallet) return null;
         const id = uid();
         const chainId = BigInt(Date.now()) * 1_000n + BigInt(Math.floor(Math.random() * 1_000));
@@ -490,12 +521,12 @@ export const useStore = create<ColoyondState>()(
             },
           },
           {
-            label: 'Register the approximate 60-second MagicBlock task',
+            label: `Register the ${input.cadenceSec}-second MagicBlock task`,
             run: async () => {
               if (!captured.addresses) throw new Error('Vault State was not initialized.');
-              const result = await scheduleVault(wallet, captured.addresses.state);
+              const result = await scheduleVault(wallet, captured.addresses.state, input.cadenceSec);
               captured.schedule = result;
-              return { sig: result.sig, note: '5,700-slot interval verified; Hydra cranker required' };
+              return { sig: result.sig, note: `${Math.ceil(input.cadenceSec * 5_700 / 60)}-slot interval verified; Hydra cranker required` };
             },
           },
         ]);
@@ -514,7 +545,7 @@ export const useStore = create<ColoyondState>()(
           assets: input.assets,
           targets: input.targets,
           thresholdPct: input.thresholdPct,
-          cadenceSec: REBALANCE_INTERVAL_SEC,
+          cadenceSec: input.cadenceSec,
           status: ok ? 'active' : 'paused',
           blockedReason: null,
           lastCheckAt: null,
@@ -529,7 +560,7 @@ export const useStore = create<ColoyondState>()(
 
         set((st) => {
           const vaults = [cfg, ...st.vaults];
-          const walletId = st.wallet?.publicKey;
+          const walletId = activeWalletId(st);
           return {
             vaults,
             ...(walletId ? { allVaults: { ...st.allVaults, [walletId]: vaults } } : {}),
@@ -559,7 +590,7 @@ export const useStore = create<ColoyondState>()(
       },
 
       fundVault: async (vaultId, input) => {
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!wallet || !cfg || cfg.legacy) return;
 
@@ -597,7 +628,7 @@ export const useStore = create<ColoyondState>()(
       },
 
       withdrawVault: async (vaultId, fraction) => {
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!wallet || !cfg || cfg.legacy) return;
         const bal = get().vaultBalances[vaultId];
@@ -655,7 +686,7 @@ export const useStore = create<ColoyondState>()(
       pauseVault: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!cfg || cfg.legacy) return;
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         if (!wallet) return;
         try {
           const result = await setVaultActive(wallet, new PublicKey(cfg.publicKey), false);
@@ -670,17 +701,39 @@ export const useStore = create<ColoyondState>()(
       resumeVault: async (vaultId) => {
         const cfg = get().vaults.find((v) => v.id === vaultId);
         if (!cfg || cfg.legacy) return;
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         if (!wallet) return;
         try {
           const stateAddress = new PublicKey(cfg.publicKey);
           await setVaultActive(wallet, stateAddress, true);
-          const result = await scheduleVault(wallet, stateAddress);
+          const result = await scheduleVault(wallet, stateAddress, cfg.cadenceSec);
           get().patchVault(vaultId, { status: 'active', nextCheckAt: null });
-          get().log({ vaultId, kind: 'owner', summary: 'MagicBlock task registered again', detail: '5,700-slot interval; approximately 60 seconds', sig: result.sig, slot: result.slot });
+          get().log({ vaultId, kind: 'owner', summary: 'MagicBlock task registered again', detail: `${cfg.cadenceSec}-second minimum interval`, sig: result.sig, slot: result.slot });
         } catch (err) {
           try { await setVaultActive(wallet, new PublicKey(cfg.publicKey), false); } catch { /* leave paused locally */ }
           get().toast('error', 'Resume failed', err instanceof Error ? err.message : 'Unable to register the MagicBlock task.');
+        }
+      },
+
+      updateCadence: async (vaultId, cadenceSec) => {
+        const cfg = get().vaults.find((v) => v.id === vaultId);
+        if (!cfg || cfg.legacy || cfg.status !== 'active') return;
+        const wallet = activeWalletSigner();
+        if (!wallet) return;
+        try {
+          const result = await scheduleVault(wallet, new PublicKey(cfg.publicKey), cadenceSec);
+          get().patchVault(vaultId, { cadenceSec, nextCheckAt: null });
+          get().log({
+            vaultId,
+            kind: 'owner',
+            summary: `Minimum rebalance delay set to ${cadenceSec} seconds`,
+            detail: 'Updated on Solana and registered the Hydra task at the matching interval; the cranker pays trigger fees.',
+            sig: result.sig,
+            slot: result.slot,
+          });
+          get().toast('ok', 'Crank interval updated', 'The operator pays trigger fees; this owner-signed update sets the vault delay.');
+        } catch (err) {
+          get().toast('error', 'Interval update failed', err instanceof Error ? err.message : 'Unable to update the on-chain crank policy.');
         }
       },
 
@@ -691,7 +744,7 @@ export const useStore = create<ColoyondState>()(
           get().toast('error', 'Edit cooldown active', 'Weight edits wait 120 seconds between changes.');
           return;
         }
-        const wallet = walletKeypair();
+        const wallet = activeWalletSigner();
         if (!wallet) return;
         try {
           await updateVaultTargets(wallet, new PublicKey(cfg.publicKey), targets);
@@ -715,7 +768,7 @@ export const useStore = create<ColoyondState>()(
       patchVault: (vaultId, patch) =>
         set((st) => {
           const vaults = st.vaults.map((v) => (v.id === vaultId ? { ...v, ...patch } : v));
-          const walletId = st.wallet?.publicKey;
+          const walletId = activeWalletId(st);
           return {
             vaults,
             ...(walletId ? { allVaults: { ...st.allVaults, [walletId]: vaults } } : {}),
@@ -748,7 +801,7 @@ export const useStore = create<ColoyondState>()(
             const hasPdaCustody = typeof normalized?.shareMint === 'string' && normalized.legacy !== true;
             return {
               ...normalized,
-              cadenceSec: REBALANCE_INTERVAL_SEC,
+              cadenceSec: typeof normalized.cadenceSec === 'number' ? normalized.cadenceSec : REBALANCE_INTERVAL_SEC,
               ...(!hasPdaCustody ? { legacy: true, status: 'legacy' } : {}),
             };
           });

@@ -72,15 +72,15 @@ export function wrapSolInstructions(owner: PublicKey, lamports: number): Transac
 }
 
 /** Standalone wrap: the owner desk's SOL -> WSOL control. */
-export function buildWrapTx(owner: Keypair, lamports: number): Transaction {
-  const tx = new Transaction().add(...wrapSolInstructions(owner.publicKey, lamports));
-  tx.feePayer = owner.publicKey;
+export function buildWrapTx(owner: PublicKey, lamports: number): Transaction {
+  const tx = new Transaction().add(...wrapSolInstructions(owner, lamports));
+  tx.feePayer = owner;
   return tx;
 }
 
 /** Devnet faucet. Throws with a readable message when rate limited. */
-export async function requestAirdrop(owner: Keypair): Promise<string> {
-  const sig = await connection.requestAirdrop(owner.publicKey, FAUCET_LAMPORTS);
+export async function requestAirdrop(owner: PublicKey): Promise<string> {
+  const sig = await connection.requestAirdrop(owner, FAUCET_LAMPORTS);
   await connection.confirmTransaction(sig, 'confirmed');
   return sig;
 }

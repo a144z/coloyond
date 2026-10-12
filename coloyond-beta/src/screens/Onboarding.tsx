@@ -67,7 +67,7 @@ export function Onboarding() {
               { k: 'Tokens', v: 'WSOL · dUSD (synthetic) · tBTC · tETH' },
               { k: 'Price feed', v: 'Coinbase spot · Binance fallback' },
               { k: 'Counterparty', v: 'Program-owned devnet test market' },
-              { k: 'Scheduler', v: 'Hydra · 5,700 ER slots (~60s target)' },
+              { k: 'Scheduler', v: 'Permissionless Hydra · owner-configured delay' },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
@@ -89,6 +89,9 @@ export function Onboarding() {
           Your owner key signs setup and owner actions from this device. On-chain Vault Authority
           PDAs control each portfolio's standard SPL token accounts; only the Executor PDA is
           delegated to MagicBlock.
+        </p>
+        <p className="px-1 text-[11px] leading-relaxed text-iron">
+          Already have a Solana wallet? Connect it with the button in the header; it will sign actions for this session.
         </p>
       </div>
 

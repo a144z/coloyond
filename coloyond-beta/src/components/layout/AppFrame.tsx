@@ -1,7 +1,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, FadersHorizontal, GearSix, Wallet as WalletIcon, X } from '@phosphor-icons/react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore, type TabId } from '../../lib/store';
+import { shortKey } from '../../lib/format';
 import { RPC_POLL_MS } from '../../lib/solana/config';
 import { useNow } from '../../hooks/useNow';
 import { BrandLockup } from '../brand/BrandMark';
@@ -28,6 +31,9 @@ export function AppHeader() {
   const depth = useStore((s) => s.stack.length);
   const popScreen = useStore((s) => s.popScreen);
   const rpc = useStore((s) => s.rpc);
+  const toast = useStore((s) => s.toast);
+  const { connected, connecting, disconnect, publicKey } = useWallet();
+  const { setVisible } = useWalletModal();
   useNow(1000);
 
   const live = !!rpc && Date.now() - rpc.at < RPC_POLL_MS * 2;
@@ -46,13 +52,25 @@ export function AppHeader() {
       ) : (
         <BrandLockup />
       )}
-      <span
-        aria-label={live ? 'devnet RPC live' : 'devnet RPC connecting'}
-        className="flex items-center gap-1.5 border-2 border-ink bg-ledger px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em]"
+      <button
+        type="button"
+        aria-label={connected && publicKey ? `Disconnect wallet ${publicKey.toBase58()}` : 'Connect wallet'}
+        title={connected ? 'Click to disconnect from Solana devnet' : 'Connect a Solana wallet on devnet'}
+        onClick={() => {
+          if (connected) {
+            void disconnect().catch((error: unknown) => {
+              toast('error', 'Wallet disconnect failed', error instanceof Error ? error.message : 'Try again.');
+            });
+          } else {
+            setVisible(true);
+          }
+        }}
+        className="flex h-10 shrink-0 items-center gap-1.5 border-2 border-ink bg-ledger px-2 font-mono text-[10px] font-bold uppercase tracking-[0.04em] hover:bg-pulp-shade"
       >
         <StatusSwatch tone={live ? 'petrol' : 'iron'} pulse={live} />
-        {live ? 'Devnet · Live' : 'Connecting'}
-      </span>
+        <WalletIcon size={14} weight="bold" aria-hidden />
+        {connecting ? 'Connecting…' : connected && publicKey ? shortKey(publicKey.toBase58()) : 'Connect wallet'}
+      </button>
     </header>
   );
 }

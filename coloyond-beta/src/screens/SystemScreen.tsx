@@ -24,6 +24,8 @@ export function SystemScreen() {
   const reserve = useStore((s) => s.reserve);
   const vaults = useStore((s) => s.vaults);
   const logs = useStore((s) => s.logs);
+  const wallet = useStore((s) => s.wallet);
+  const connectedWallet = useStore((s) => s.connectedWallet);
 
   const status = bookStatus(price, PRICE_MAX_AGE_MS);
   const reserveAddress = reserveOwner.toBase58();
@@ -152,7 +154,7 @@ export function SystemScreen() {
           <KeyValue
             rows={[
               { k: 'Execution', v: 'ER calculation → Magic Action → Solana vault program' },
-              { k: 'Interval', v: '5,700 ER slots · about 60 seconds' },
+              { k: 'Interval', v: 'Owner-configured per vault · 60 seconds to 24 hours' },
               { k: 'Dashboard sync', v: 'every 10 seconds while open' },
               { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed · ${legacy} legacy` },
             ]}
@@ -160,19 +162,23 @@ export function SystemScreen() {
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
             One Hydra task is registered per active portfolio. Only its Executor PDA is delegated;
             Vault State and SPL token accounts stay on Solana. Wall-clock timing depends on an
-            active Hydra cranker. The ER task requests the Magic Action; the vault program validates
-            it before moving assets.
+            active permissionless Hydra cranker. The ER task skips early runs unless a Pyth-backed
+            asset moves more than 0.1%; the vault program rechecks the guards before moving assets.
           </p>
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
-        <LedgerPanel stripe="Security" meta="device-local keys">
+        <LedgerPanel stripe="Security" meta={connectedWallet ? 'browser wallet connected' : 'device-local keys'}>
           <ul className="space-y-1.5 text-[12px] leading-relaxed">
             <li className="flex gap-2">
               <StatusSwatch tone="petrol" />
               <span>
-                Owner key: BIP-39 mnemonic derived via SLIP-0010, stored in this browser only.
+                {connectedWallet
+                  ? `Connected owner wallet: ${connectedWallet.publicKey.toBase58()}. Transactions are approved by the wallet.`
+                  : wallet
+                    ? 'Device owner key: BIP-39 mnemonic derived via SLIP-0010, stored in this browser only.'
+                    : 'No owner wallet connected.'}
               </span>
             </li>
             <li className="flex gap-2">
