@@ -2,6 +2,7 @@
 // shape used by etfLiveDesk.test.ts so it slots into the same tsx --test run.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PublicKey } from "@solana/web3.js";
 import {
   enabledOwnerActions,
   rebalanceCooldownElapsed,
@@ -15,6 +16,7 @@ function makeSnapshot(overrides: Partial<PanelSnapshot> & { weights: PanelSnapsh
     nowUnixTimestamp: 0n,
     riskPaused: false,
     poolActive: true,
+    rebalanceExecutable: true,
     ...overrides,
   };
 }
@@ -23,12 +25,13 @@ test("a governance signer with no open proposal sees set + propose + rebalance",
   const snapshot = makeSnapshot({
     isGovernanceSigner: true,
     weights: {
+      pool: PublicKey.default,
       bump: 0,
       targetWeights: [5_000n, 5_000n],
       proposedWeights: null,
       proposedBy: null,
       proposedAtUnixTimestamp: null,
-      rebalanceIntervalSeconds: 0n,
+      rebalanceIntervalSeconds: 5n,
       lastRebalanceUnixTimestamp: 0n,
     },
   });
@@ -39,12 +42,13 @@ test("a governance signer with an open proposal sees propose + accept + decline 
   const snapshot = makeSnapshot({
     isGovernanceSigner: true,
     weights: {
+      pool: PublicKey.default,
       bump: 0,
       targetWeights: [5_000n, 5_000n],
       proposedWeights: [1_000n, 9_000n],
       proposedBy: null,
       proposedAtUnixTimestamp: null,
-      rebalanceIntervalSeconds: 0n,
+      rebalanceIntervalSeconds: 5n,
       lastRebalanceUnixTimestamp: 0n,
     },
   });
@@ -57,6 +61,7 @@ test("a non-governance signer sees only propose and rebalance", () => {
   const snapshot = makeSnapshot({
     isGovernanceSigner: false,
     weights: {
+      pool: PublicKey.default,
       bump: 0,
       targetWeights: [5_000n, 5_000n],
       proposedWeights: null,
@@ -76,4 +81,11 @@ test("validateWeightsCandidate rejects wrong length, negatives and off-sum total
   assert.match(validateWeightsCandidate([-1n, 10_001n], 2) ?? "", /non_negative/);
   assert.match(validateWeightsCandidate([1_000n, 2_000n], 2) ?? "", /sum_to_10_000/);
   assert.equal(validateWeightsCandidate([5_000n, 5_000n], 2), null);
+});
+
+test("a legacy timestamp-only rebalance is never advertised as executable", () => {
+  const snapshot = makeSnapshot({ weights: { pool: PublicKey.default, bump: 0, targetWeights: [5000n,5000n], proposedWeights: null, proposedBy: null, proposedAtUnixTimestamp: null, rebalanceIntervalSeconds: 5n, lastRebalanceUnixTimestamp: 0n }, rebalanceExecutable: false });
+  assert.ok(!enabledOwnerActions(snapshot).includes("rebalance"));
+  assert.equal(rebalanceCooldownElapsed(snapshot, -1n), false);
+  assert.equal(rebalanceCooldownElapsed({ ...snapshot, weights: { ...snapshot.weights, rebalanceIntervalSeconds: 4n } }, 100n), false);
 });

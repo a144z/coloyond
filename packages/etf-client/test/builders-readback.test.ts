@@ -121,7 +121,7 @@ function buildTestDeployment(overrides: { genesisHash?: string; feedOwner?: Publ
   map.set(programId.toBase58(), account(new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"), programBytesData, true));
   map.set(programData.toBase58(), account(new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"), programDataBytes));
 
-  const poolBytes = Buffer.alloc(1_265); poolDiscriminator.copy(poolBytes); poolBytes[8] = 1; poolBytes[9] = poolBump; configHash.copy(poolBytes, 10); u32(configBytes.length).copy(poolBytes, 42); configBytes.copy(poolBytes, 46); addresses.shareMint.toBuffer().copy(poolBytes, 1_201); initializer.toBuffer().copy(poolBytes, 1_233);
+  const poolBytes = Buffer.alloc(1_265); poolDiscriminator.copy(poolBytes); poolBytes[8] = 1; poolBytes[9] = poolBump; configHash.copy(poolBytes, 10); u32(configBytes.length).copy(poolBytes, 42); configBytes.copy(poolBytes, 46); addresses.shareMint.toBuffer().copy(poolBytes, 46 + configBytes.length); initializer.toBuffer().copy(poolBytes, 46 + configBytes.length + 32);
   const stateBytes = Buffer.alloc(300); stateDiscriminator.copy(stateBytes); stateBytes[8] = 1; stateBytes[9] = poolStateBump; pool.toBuffer().copy(stateBytes, 10); (overrides.currentGovernance ?? governance).toBuffer().copy(stateBytes, 42); (overrides.currentGuardian ?? guardian).toBuffer().copy(stateBytes, 74); stateBytes[106] = overrides.lifecycle === "unseeded" ? 0 : overrides.lifecycle === "closed" ? 2 : 1; stateBytes[107] = overrides.riskPaused ? 1 : 0; u64(overrides.sequence ?? 8n).copy(stateBytes, 108);
   let stateOffset = 116;
   if (overrides.lastObservation) {
@@ -185,7 +185,7 @@ test("rejects unconfigured, wrong-genesis, draft-IDL, and mismatched-IDL context
   const testDeployment = buildTestDeployment();
   assert.throws(() => verifyEtfManifest({ ...testDeployment.manifest, status: "draft" }, testDeployment.idl, ETF_DEVNET_GENESIS), /not_accepted/);
   assert.throws(() => verifyEtfManifest(testDeployment.manifest, testDeployment.idl, "wrong-genesis"), /genesis_mismatch/);
-  assert.throws(() => verifyEtfManifest(testDeployment.manifest, idlFixture, ETF_DEVNET_GENESIS), /draft_localnet_idl_rejected/);
+  assert.throws(() => verifyEtfManifest(testDeployment.manifest, { ...idlFixture, address: "H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9" }, ETF_DEVNET_GENESIS), /draft_localnet_idl_rejected/);
   const wrongIdl = { ...testDeployment.idl, address: Keypair.generate().publicKey.toBase58() };
   assert.throws(() => verifyEtfManifest(testDeployment.manifest, wrongIdl, ETF_DEVNET_GENESIS), /idl_program_id_mismatch/);
   const wrongDiscriminator = structuredClone(testDeployment.idl) as { instructions: { name: string; discriminator: number[] }[] };

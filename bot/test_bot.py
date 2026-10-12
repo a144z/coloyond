@@ -74,6 +74,35 @@ class WeightsLogicTests(unittest.TestCase):
         self.assertFalse(should_rebalance(assets, 1_000, 1_050, 60))
         self.assertTrue(should_rebalance(assets, 1_000, 1_100, 60))
 
+class PrecisionAndBoundaryTests(unittest.TestCase):
+    def test_fractional_sol_does_not_disappear(self):
+        self.assertEqual(usd_value_raw(make_asset("SOL", 9, 1, 100_000_000, exponent=-6)), 0)
+        self.assertEqual(usd_value_raw(make_asset("SOL", 9, 500_000_000, 100, exponent=0)), 50_000_000)
+        self.assertEqual(usd_value_raw(make_asset("USDC", 6, 1, 1)), 1)
+
+    def test_empty_pool_is_not_a_trade(self):
+        assets = [make_asset("SOL", 9, 0, 100, 5000), make_asset("USDC", 6, 0, 1, 5000)]
+        self.assertFalse(rebalance_warranted(assets))
+
+    def test_invalid_price_and_decimals_are_rejected(self):
+        for price in [0, -1]:
+            with self.assertRaises(ValueError):
+                usd_value_raw(make_asset("SOL", 9, 1, price))
+        with self.assertRaises(ValueError):
+            usd_value_raw(make_asset("SOL", 10, 1, 100))
+
+    def test_invalid_cooldown_is_blocked(self):
+        self.assertTrue(cooldown_active(0, -1, 5))
+        self.assertTrue(cooldown_active(0, 100, 4))
+        self.assertTrue(cooldown_active(100, 1000, 2**63))
+
+    def test_basket_changes_do_not_use_old_weights(self):
+        assets = [make_asset("SOL", 9, 1_000_000_000, 100, 5000), make_asset("USDC", 6, 100_000_000, 1, 5000)]
+        self.assertFalse(rebalance_warranted(assets))
+        assets[1] = make_asset("USDC", 6, 100_000_000, 1, 4000)
+        with self.assertRaises(ValueError):
+            rebalance_warranted(assets)
+
 
 if __name__ == "__main__":
     unittest.main()

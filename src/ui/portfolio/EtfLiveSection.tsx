@@ -111,7 +111,7 @@ function Inner() {
       {view.phase === "ready" && view.rejected.length > 0 ? <p className="etf-reason">Registry entries still rejected: {view.rejected.map((entry) => `${entry.label}: ${entry.reason}`).join(" · ")}</p> : null}
       {view.verbs !== null ? (
         <dl className="etf-fields">
-          <div><dt>Auto-rebalance (MagicBlock crank)</dt><dd>{view.verbs.schedule !== null ? <small>The verified IDL exposes program entry "{view.verbs.schedule}".</small> : <small><Tag tone="warn">pending in the program</Tag> the verified IDL exposes no schedule entry, so a MagicBlock crank must call poke directly.</small>}</dd></div>
+          <div><dt>Automatic rebalance</dt><dd><small><Tag tone="warn">execution unavailable</Tag> No verified token-moving keeper route is deployed. A poke or scheduler entry alone does not execute a swap.</small></dd></div>
           <div><dt>Edit portfolio targets</dt><dd>{view.verbs.setTargets !== null ? <small>The verified IDL exposes "{view.verbs.setTargets}".</small> : <small><Tag tone="warn">pending in the program</Tag> targets are fixed at initialization, so an edit means a new pool for now.</small>}</dd></div>
           <div><dt>Destroy a pool</dt><dd>{view.verbs.close !== null ? <small>The verified IDL exposes "{view.verbs.close}".</small> : <small><Tag tone="warn">pending in the program</Tag> no close instruction exists yet, so destroying a pool is planned.</small>}</dd></div>
         </dl>

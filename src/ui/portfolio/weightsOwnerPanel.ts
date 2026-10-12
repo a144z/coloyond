@@ -17,6 +17,8 @@ export type PanelSnapshot = Readonly<{
   nowUnixTimestamp: bigint;
   riskPaused: boolean;
   poolActive: boolean;
+  /** Only true after a token-moving implementation has been verified. */
+  rebalanceExecutable?: boolean;
 }>;
 
 /** Returns the subset of owner actions the panel may enable right now, given
@@ -32,7 +34,7 @@ export function enabledOwnerActions(snapshot: PanelSnapshot): readonly OwnerActi
       out.push("accept");
       out.push("decline");
     }
-    if (rebalanceCooldownElapsed(snapshot, snapshot.nowUnixTimestamp)) out.push("rebalance");
+    if (snapshot.rebalanceExecutable === true && rebalanceCooldownElapsed(snapshot, snapshot.nowUnixTimestamp)) out.push("rebalance");
   }
   return out;
 }
@@ -40,6 +42,7 @@ export function enabledOwnerActions(snapshot: PanelSnapshot): readonly OwnerActi
 /** Mirrors the on-chain `EtfWeightsV1::rebalance_eligible` gate. */
 export function rebalanceCooldownElapsed(snapshot: PanelSnapshot, now: bigint): boolean {
   const last = snapshot.weights.lastRebalanceUnixTimestamp;
+  if (now < 0n || snapshot.weights.rebalanceIntervalSeconds < 5n) return false;
   if (last === 0n) return true;
   const interval = snapshot.weights.rebalanceIntervalSeconds;
   return now >= last + interval;

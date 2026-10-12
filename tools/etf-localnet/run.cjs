@@ -17,7 +17,7 @@ const {
 
 const RPC_URL = process.env.COLOYOND_ETF_LOCALNET_RPC_URL || "http://127.0.0.1:18899";
 const PROGRAM_ID = new PublicKey(
-  process.env.COLOYOND_ETF_LOCALNET_PROGRAM_ID || "H3CkHowYVQcxrKXWkyswMW2rqRNzRQYaQr7N8LKXFUt9",
+  process.env.COLOYOND_ETF_LOCALNET_PROGRAM_ID || require("../../idl/coloyond_etf.json").address,
 );
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");

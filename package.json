@@ -7,7 +7,10 @@
     "dev": "vite",
     "dev:cli": "tsx src/main.ts",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:web": "node --import tsx --test packages/etf-client/test/weights.test.ts packages/etf-client/test/builders-readback.test.ts src/ui/portfolio/weightsOwnerPanel.test.ts",
+    "test:bot": "python -m unittest discover -s bot -p \"test_*.py\"",
+    "test": "npm run test:web && npm run test:bot"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
@@ -27,6 +30,7 @@
     "@symmetry-hq/sdk": "^1.0.23",
     "buffer": "^6.0.3",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "@noble/hashes": "1.8.0"
   }
 }

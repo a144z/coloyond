@@ -39,6 +39,8 @@ pub fn init_weights<'info>(
         state.current_governance,
         EtfError::Unauthorized
     );
+    require!(rebalance_interval_seconds >= 5 && rebalance_interval_seconds <= i64::MAX as u64, EtfError::RebalanceCooldownActive);
+    EtfWeightsV1::validate_weights(initial_weights.clone())?;
     let weights = EtfWeightsV1::new(
         *ctx.accounts.pool.key,
         ctx.bumps.weights,
@@ -184,7 +186,7 @@ pub fn rebalance<'info>(
     require!(amount_in > 0, EtfError::SlippageExceeded);
     require!(min_amount_out > 0, EtfError::SlippageExceeded);
     let now = Clock::get()?.unix_timestamp;
-    let mut weights =
+    let weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
     require_keys_eq!(
         weights.pool,
@@ -192,7 +194,8 @@ pub fn rebalance<'info>(
         EtfError::WeightsPoolMismatch
     );
     require!(weights.rebalance_eligible(now), EtfError::RebalanceCooldownActive);
-    weights.mark_rebalanced(now);
-    save_program_account(&ctx.accounts.weights.to_account_info(), &weights)?;
-    Ok(())
+    // No custody or swap router is accepted by this legacy account surface.
+    // A successful timestamp update would falsely attest to a financial rebalance.
+    // Keep it disabled until a token-moving, oracle-checked implementation exists.
+    err!(EtfError::PolicyNotFrozen)
 }
