@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { sha256 } from '@noble/hashes/sha2.js';
 import {
   AccountInfo,
   Keypair,
@@ -31,6 +32,7 @@ import { EXECUTION_PROGRAM_ID, ROUTER_RPC_URL } from './config.js';
 import { connection } from './connection.js';
 import { wrapSolInstructions } from './wallet.js';
 import { signSendConfirm, type OwnerSigner, type TxResult } from './tx.js';
+import { decodeShareMetadata, metadataAddressForMint, resolveMetadataUri, type ShareTokenMetadata } from './explore.js';
 
 export const EXECUTION_PROGRAM = new PublicKey(EXECUTION_PROGRAM_ID);
 export const HYDRA_EPHEMERAL_PROGRAM = new PublicKey('eHyd5BU8QffvHi4GnXwxrK4WpS7pM2x9UGKHBWii7mf');
@@ -44,6 +46,13 @@ const EXECUTOR_SEED = Buffer.from('executor');
 const SCHEDULER_CONFIG_SEED = Buffer.from('scheduler-config');
 const CRANK_POLICY_SEED = Buffer.from('crank-policy');
 const CRANK_SEED = Buffer.from('crank');
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const SHARE_SYMBOL_REGISTRY_SEED = Buffer.from('share-symbol-registry');
+const SHARE_SYMBOL_ASSIGNMENT_SEED = Buffer.from('share-symbol');
+const SHARE_SYMBOL_REGISTRY_DISCRIMINATOR = Buffer.from(sha256(new TextEncoder().encode('account:ShareSymbolRegistry')).slice(0, 8));
+const CREATE_SHARE_METADATA_DISCRIMINATOR = Buffer.from(sha256(new TextEncoder().encode('global:create_share_metadata')).slice(0, 8));
+const UPDATE_SHARE_METADATA_DISCRIMINATOR = Buffer.from(sha256(new TextEncoder().encode('global:update_share_metadata')).slice(0, 8));
+const MAX_SHARE_SYMBOL_SEQUENCE = 99_999_999n;
 const TASK_SPONSOR_INITIAL_LAMPORTS = 5_000_000;
 const INSTRUCTIONS_SYSVAR_ID = new PublicKey('Sysvar1nstructions1111111111111111111111111');
 const router = new ConnectionMagicRouter(ROUTER_RPC_URL, 'confirmed');
@@ -189,13 +198,281 @@ export async function readVaultState(address: PublicKey): Promise<OnChainVaultSt
   return { id, owner, shareMint, active, thresholdBps, maxSlippageBps, lastSettledNonce, assets };
 }
 
+export interface ShareMetadataDocument {
+  name: string;
+  symbol: string;
+  description: string;
+  image: string;
+}
+
+export interface ShareMetadataForm {
+  name: string;
+  description: string;
+  image: string;
+  uri: string;
+}
+
+export interface LoadedShareMetadata {
+  owner: PublicKey;
+  shareMint: PublicKey;
+  metadata: Omit<ShareTokenMetadata, 'description' | 'image'> | null;
+  description: string;
+  image: string;
+  issue: string | null;
+}
+
+export function shareSymbolForSequence(sequence: bigint): string {
+  if (sequence < 1n || sequence > MAX_SHARE_SYMBOL_SEQUENCE) throw new Error('The on-chain share symbol sequence is exhausted or invalid.');
+  return `CB${sequence.toString().padStart(8, '0')}`;
+}
+
+export function deriveShareSymbolRegistryAddress(): PublicKey {
+  return PublicKey.findProgramAddressSync([SHARE_SYMBOL_REGISTRY_SEED], EXECUTION_PROGRAM)[0];
+}
+
+export function deriveShareSymbolAssignmentAddress(stateAddress: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([SHARE_SYMBOL_ASSIGNMENT_SEED, stateAddress.toBuffer()], EXECUTION_PROGRAM)[0];
+}
+
+export function decodeShareSymbolRegistry(data: Uint8Array, accountOwner: PublicKey): bigint {
+  if (!accountOwner.equals(EXECUTION_PROGRAM)) throw new Error('Share symbol registry is owned by an unexpected program.');
+  if (data.length !== 17 || !SHARE_SYMBOL_REGISTRY_DISCRIMINATOR.every((byte, index) => data[index] === byte)) {
+    throw new Error('Share symbol registry account layout is invalid.');
+  }
+  if (data[8] !== 1) throw new Error('Share symbol registry version is unsupported.');
+  const sequence = Buffer.from(data).readBigUInt64LE(9);
+  shareSymbolForSequence(sequence);
+  return sequence;
+}
+
+/** The global registry is lazy-created by the first metadata transaction. */
+export async function readNextShareSymbolSequence(): Promise<bigint> {
+  const address = deriveShareSymbolRegistryAddress();
+  const account = await connection.getAccountInfo(address, 'confirmed');
+  if (!account) return 1n;
+  return decodeShareSymbolRegistry(account.data, account.owner);
+}
+
+/** Return a fetchable HTTPS gateway URL while retaining the canonical URI for on-chain storage. */
+export function metadataHttpsUrl(uri: string): string {
+  const trimmed = uri.trim();
+  if (trimmed.length === 0 || /[\s\u0000-\u001f]/u.test(trimmed)) throw new Error('Metadata URI cannot contain spaces or control characters.');
+  if (!trimmed.startsWith('https://') && !trimmed.startsWith('ipfs://') && !trimmed.startsWith('ar://')) {
+    throw new Error('Metadata and image URLs must use HTTPS, IPFS, or Arweave.');
+  }
+  if (trimmed.startsWith('ipfs://')) {
+    const path = trimmed.slice('ipfs://'.length).replace(/^ipfs\//, '');
+    if (!path || path.startsWith('/') || path.includes('\\')) throw new Error('IPFS metadata URI is invalid.');
+    return new URL(`/ipfs/${path}`, 'https://ipfs.io').href;
+  }
+  if (trimmed.startsWith('ar://')) {
+    const path = trimmed.slice('ar://'.length);
+    if (!path || path.startsWith('/') || path.includes('\\')) throw new Error('Arweave metadata URI is invalid.');
+    return new URL(path, 'https://arweave.net/').href;
+  }
+  const parsed = new URL(trimmed);
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('Metadata and image URLs must use HTTPS, IPFS, or Arweave.');
+  return parsed.href;
+}
+
+export function validateShareMetadataForm(form: ShareMetadataForm, symbol: string): string[] {
+  const errors: string[] = [];
+  if (!form.name.trim()) errors.push('Share-token name is required.');
+  if (form.name.trim() !== form.name) errors.push('Remove leading or trailing whitespace from the share-token name.');
+  if (new TextEncoder().encode(form.name).length > 32) errors.push('Share-token name must be at most 32 UTF-8 bytes.');
+  if (!form.description.trim()) errors.push('Description is required.');
+  if (!form.image.trim()) errors.push('Image URL is required.');
+  else {
+    try { metadataHttpsUrl(form.image); } catch (error) { errors.push(error instanceof Error ? error.message : 'Image URL is invalid.'); }
+  }
+  if (!form.uri.trim()) errors.push('Metadata JSON URI is required.');
+  else {
+    if (new TextEncoder().encode(form.uri).length > 200) errors.push('Metadata URI must be at most 200 UTF-8 bytes.');
+    try { metadataHttpsUrl(form.uri); } catch (error) { errors.push(error instanceof Error ? error.message : 'Metadata URI is invalid.'); }
+  }
+  if (!/^CB\d{8}$/u.test(symbol)) errors.push('Share-token symbol is invalid. Refresh the on-chain sequence.');
+  return errors;
+}
+
+export function buildShareMetadataDocument(form: ShareMetadataForm, symbol: string): ShareMetadataDocument {
+  const errors = validateShareMetadataForm(form, symbol);
+  if (errors.length) throw new Error(errors[0]);
+  return { name: form.name, symbol, description: form.description, image: form.image };
+}
+
+export function shareMetadataDocumentMatches(value: unknown, expected: ShareMetadataDocument): value is ShareMetadataDocument {
+  if (!value || typeof value !== 'object') return false;
+  const document = value as Record<string, unknown>;
+  return document.name === expected.name && document.symbol === expected.symbol &&
+    document.description === expected.description && document.image === expected.image;
+}
+
+async function fetchMetadataDocument(uri: string): Promise<ShareMetadataDocument> {
+  const response = await fetch(metadataHttpsUrl(uri), { signal: AbortSignal.timeout(12_000), headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`Metadata JSON returned HTTP ${response.status}. Check the URI and its pinning/gateway status.`);
+  const text = await response.text();
+  if (new TextEncoder().encode(text).length > 512 * 1024) throw new Error('Metadata JSON exceeds the 512 KB verification limit.');
+  let value: unknown;
+  try { value = JSON.parse(text); } catch { throw new Error('Metadata URI did not return valid JSON.'); }
+  if (!value || typeof value !== 'object') throw new Error('Metadata JSON must be an object.');
+  const document = value as Record<string, unknown>;
+  if (typeof document.name !== 'string' || typeof document.symbol !== 'string' ||
+      typeof document.description !== 'string' || typeof document.image !== 'string') {
+    throw new Error('Metadata JSON must include string name, symbol, description, and image fields.');
+  }
+  return { name: document.name, symbol: document.symbol, description: document.description, image: document.image };
+}
+
+export async function verifyShareMetadataUri(form: ShareMetadataForm, symbol: string): Promise<void> {
+  const errors = validateShareMetadataForm(form, symbol);
+  if (errors.length) throw new Error(errors.join(' '));
+  const expected = buildShareMetadataDocument(form, symbol);
+  const uploaded = await fetchMetadataDocument(form.uri);
+  if (!shareMetadataDocumentMatches(uploaded, expected)) {
+    throw new Error('The JSON at this URI does not exactly match the name, symbol, description, and image shown here. Upload the generated JSON and verify again.');
+  }
+  // Also confirm the image is a safe URL before it is used by wallets and explorers.
+  metadataHttpsUrl(uploaded.image);
+}
+
+export async function loadShareTokenMetadata(stateAddress: PublicKey): Promise<LoadedShareMetadata> {
+  const state = await readVaultState(stateAddress);
+  const address = metadataAddressForMint(state.shareMint);
+  const info = await connection.getAccountInfo(address, 'confirmed');
+  if (!info) return { owner: state.owner, shareMint: state.shareMint, metadata: null, description: '', image: '', issue: null };
+  const metadata = decodeShareMetadata(info.data, info.owner, address, state.shareMint);
+  try {
+    const document = await fetchMetadataDocument(metadata.uri);
+    return { owner: state.owner, shareMint: state.shareMint, metadata, description: document.description, image: document.image, issue: null };
+  } catch (error) {
+    return { owner: state.owner, shareMint: state.shareMint, metadata, description: '', image: '', issue: error instanceof Error ? error.message : 'Metadata JSON could not be read.' };
+  }
+}
+
+export function buildCreateShareMetadataInstruction(
+  stateAddress: PublicKey,
+  owner: PublicKey,
+  expectedSequence: bigint,
+  name: string,
+  uri: string,
+): TransactionInstruction {
+  const addresses = vaultAddressesForState(stateAddress);
+  const metadata = metadataAddressForMint(addresses.shareMint);
+  const [registry] = PublicKey.findProgramAddressSync([SHARE_SYMBOL_REGISTRY_SEED], EXECUTION_PROGRAM);
+  const assignment = deriveShareSymbolAssignmentAddress(stateAddress);
+  return new TransactionInstruction({
+    programId: EXECUTION_PROGRAM,
+    keys: [
+      { pubkey: stateAddress, isSigner: false, isWritable: false },
+      { pubkey: addresses.authority, isSigner: false, isWritable: false },
+      { pubkey: addresses.shareMint, isSigner: false, isWritable: false },
+      { pubkey: metadata, isSigner: false, isWritable: true },
+      { pubkey: registry, isSigner: false, isWritable: true },
+      { pubkey: assignment, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: true, isWritable: true },
+      { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([CREATE_SHARE_METADATA_DISCRIMINATOR, u64(expectedSequence), borshString(name), borshString(uri)]),
+  });
+}
+
+export function buildUpdateShareMetadataInstruction(
+  stateAddress: PublicKey,
+  owner: PublicKey,
+  name: string,
+  uri: string,
+): TransactionInstruction {
+  const addresses = vaultAddressesForState(stateAddress);
+  const metadata = metadataAddressForMint(addresses.shareMint);
+  const assignment = deriveShareSymbolAssignmentAddress(stateAddress);
+  return new TransactionInstruction({
+    programId: EXECUTION_PROGRAM,
+    keys: [
+      { pubkey: stateAddress, isSigner: false, isWritable: false },
+      { pubkey: addresses.authority, isSigner: false, isWritable: false },
+      { pubkey: metadata, isSigner: false, isWritable: true },
+      { pubkey: assignment, isSigner: false, isWritable: false },
+      { pubkey: owner, isSigner: true, isWritable: false },
+      { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([UPDATE_SHARE_METADATA_DISCRIMINATOR, borshString(name), borshString(uri)]),
+  });
+}
+
+async function signMetadataTransaction(tx: Transaction, owner: OwnerSigner): Promise<TxResult> {
+  try {
+    return await signSendConfirm(tx, owner);
+  } catch (error) {
+    const detail = error instanceof Error
+      ? `${error.message} ${Array.isArray((error as Error & { logs?: unknown }).logs) ? ((error as Error & { logs: string[] }).logs).join(' ') : ''}`
+      : String(error);
+    if (/SymbolSequenceMismatch|custom program error:\s*0x177b\b/iu.test(detail)) {
+      throw new Error('Share symbol sequence changed while this JSON was being prepared. Refresh the symbol, regenerate and re-upload the JSON, verify it again, then retry.');
+    }
+    throw error;
+  }
+}
+
+export async function createShareTokenMetadata(
+  owner: OwnerSigner,
+  stateAddress: PublicKey,
+  expectedSequence: bigint,
+  form: ShareMetadataForm,
+): Promise<TxResult | null> {
+  const state = await readVaultState(stateAddress);
+  if (!state.owner.equals(owner.publicKey)) throw new Error('Only the on-chain vault owner can create share metadata.');
+  const symbol = shareSymbolForSequence(expectedSequence);
+  const metadataAddress = metadataAddressForMint(state.shareMint);
+  const existing = await connection.getAccountInfo(metadataAddress, 'confirmed');
+  if (existing) {
+    const current = decodeShareMetadata(existing.data, existing.owner, metadataAddress, state.shareMint);
+    await verifyShareMetadataUri(form, symbol);
+    if (current.name === form.name && current.symbol === symbol && current.uri === form.uri) return null;
+    throw new Error('Metaplex metadata already exists for this mint. Use the update action so its fixed symbol is preserved.');
+  }
+  const actualSequence = await readNextShareSymbolSequence();
+  if (actualSequence !== expectedSequence) {
+    throw new Error(`Share symbol sequence changed to ${shareSymbolForSequence(actualSequence)} while this JSON was being prepared. Regenerate and re-upload the metadata JSON before retrying.`);
+  }
+  await verifyShareMetadataUri(form, symbol);
+  const tx = new Transaction().add(buildCreateShareMetadataInstruction(stateAddress, owner.publicKey, expectedSequence, form.name, form.uri));
+  tx.feePayer = owner.publicKey;
+  return signMetadataTransaction(tx, owner);
+}
+
+export async function updateShareTokenMetadata(
+  owner: OwnerSigner,
+  stateAddress: PublicKey,
+  form: ShareMetadataForm,
+): Promise<TxResult> {
+  const state = await readVaultState(stateAddress);
+  if (!state.owner.equals(owner.publicKey)) throw new Error('Only the on-chain vault owner can update share metadata.');
+  const current = await loadShareTokenMetadata(stateAddress);
+  if (!current.metadata) throw new Error('Share metadata is missing. Use the create/backfill action.');
+  if (!current.metadata.isMutable || current.metadata.updateAuthority !== vaultAddressesForState(stateAddress).authority.toBase58()) {
+    throw new Error('This Metaplex metadata is not mutable by the vault authority PDA.');
+  }
+  await verifyShareMetadataUri(form, current.metadata.symbol);
+  const tx = new Transaction().add(buildUpdateShareMetadataInstruction(stateAddress, owner.publicKey, form.name, form.uri));
+  tx.feePayer = owner.publicKey;
+  return signSendConfirm(tx, owner);
+}
+
 export async function initializeVault(
   owner: OwnerSigner,
   id: bigint,
   assets: AssetId[],
   targets: Record<string, number>,
   thresholdPct: number,
+  metadata: ShareMetadataForm & { expectedSequence: bigint },
 ): Promise<{ addresses: VaultAddresses; result: TxResult }> {
+  const latestSequence = await readNextShareSymbolSequence();
+  if (latestSequence !== metadata.expectedSequence) {
+    throw new Error(`Share symbol sequence changed to ${shareSymbolForSequence(latestSequence)} while this JSON was being prepared. Regenerate and re-upload the metadata JSON before retrying.`);
+  }
+  await verifyShareMetadataUri(metadata, shareSymbolForSequence(metadata.expectedSequence));
   const addresses = deriveVaultAddresses(owner.publicKey, id);
   const weights = targetBasisPoints(assets, targets);
   const assetArgs = Buffer.concat(assets.flatMap((asset, index) => [mintOf(asset).toBuffer(), u16(weights[index])]));
@@ -220,9 +497,9 @@ export async function initializeVault(
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
     ],
     data,
-  }));
+  }), buildCreateShareMetadataInstruction(addresses.state, owner.publicKey, metadata.expectedSequence, metadata.name, metadata.uri));
   tx.feePayer = owner.publicKey;
-  return { addresses, result: await signSendConfirm(tx, owner) };
+  return { addresses, result: await signMetadataTransaction(tx, owner) };
 }
 
 export async function createVaultTokenAccounts(
@@ -743,6 +1020,11 @@ function u16(value: number): Buffer {
 
 function u32(value: number): Buffer {
   const out = Buffer.alloc(4); out.writeUInt32LE(value, 0); return out;
+}
+
+function borshString(value: string): Buffer {
+  const bytes = Buffer.from(value, 'utf8');
+  return Buffer.concat([u32(bytes.length), bytes]);
 }
 
 function u64(value: bigint): Buffer {
