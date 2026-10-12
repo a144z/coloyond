@@ -295,13 +295,10 @@ export function validateShareMetadataForm(form: ShareMetadataForm, symbol: strin
   if (!form.name.trim()) errors.push('Share-token name is required.');
   if (form.name.trim() !== form.name) errors.push('Remove leading or trailing whitespace from the share-token name.');
   if (new TextEncoder().encode(form.name).length > 32) errors.push('Share-token name must be at most 32 UTF-8 bytes.');
-  if (!form.description.trim()) errors.push('Description is required.');
-  if (!form.image.trim()) errors.push('Image URL is required.');
-  else {
+  if (form.image.trim()) {
     try { metadataHttpsUrl(form.image); } catch (error) { errors.push(error instanceof Error ? error.message : 'Image URL is invalid.'); }
   }
-  if (!form.uri.trim()) errors.push('Metadata JSON URI is required.');
-  else {
+  if (form.uri.trim()) {
     if (new TextEncoder().encode(form.uri).length > 200) errors.push('Metadata URI must be at most 200 UTF-8 bytes.');
     try { metadataHttpsUrl(form.uri); } catch (error) { errors.push(error instanceof Error ? error.message : 'Metadata URI is invalid.'); }
   }
@@ -322,7 +319,7 @@ export function shareMetadataDocumentMatches(value: unknown, expected: ShareMeta
   if (!value || typeof value !== 'object') return false;
   const document = value as Record<string, unknown>;
   return document.name === expected.name && document.symbol === expected.symbol &&
-    document.description === expected.description && document.image === expected.image;
+    (document.description ?? '') === expected.description && (document.image ?? '') === expected.image;
 }
 
 async function fetchMetadataDocument(uri: string): Promise<ShareMetadataDocument> {
@@ -346,10 +343,11 @@ async function fetchMetadataDocument(uri: string): Promise<ShareMetadataDocument
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Metadata JSON must be an object.');
   const document = value as Record<string, unknown>;
   if (typeof document.name !== 'string' || typeof document.symbol !== 'string' ||
-      typeof document.description !== 'string' || typeof document.image !== 'string') {
-    throw new Error('Metadata JSON must include string name, symbol, description, and image fields.');
+      (document.description !== undefined && typeof document.description !== 'string') ||
+      (document.image !== undefined && typeof document.image !== 'string')) {
+    throw new Error('Metadata JSON must include string name and symbol fields; optional description and image fields must also be strings.');
   }
-  return { name: document.name, symbol: document.symbol, description: document.description, image: document.image };
+  return { name: document.name, symbol: document.symbol, description: document.description ?? '', image: document.image ?? '' };
 }
 
 async function readLimitedMetadataText(response: Response, limit: number): Promise<string> {
@@ -385,13 +383,14 @@ async function readLimitedMetadataText(response: Response, limit: number): Promi
 export async function verifyShareMetadataUri(form: ShareMetadataForm, symbol: string): Promise<void> {
   const errors = validateShareMetadataForm(form, symbol);
   if (errors.length) throw new Error(errors.join(' '));
+  if (!form.uri.trim()) return;
   const expected = buildShareMetadataDocument(form, symbol);
   const uploaded = await fetchMetadataDocument(form.uri);
   if (!shareMetadataDocumentMatches(uploaded, expected)) {
     throw new Error('The JSON at this URI does not exactly match the name, symbol, description, and image shown here. Upload the generated JSON and verify again.');
   }
   // Also confirm the image is a safe URL before it is used by wallets and explorers.
-  metadataHttpsUrl(uploaded.image);
+  if (uploaded.image) metadataHttpsUrl(uploaded.image);
 }
 
 export async function loadShareTokenMetadata(stateAddress: PublicKey): Promise<LoadedShareMetadata> {
@@ -400,6 +399,7 @@ export async function loadShareTokenMetadata(stateAddress: PublicKey): Promise<L
   const info = await connection.getAccountInfo(address, 'confirmed');
   if (!info) return { owner: state.owner, shareMint: state.shareMint, metadata: null, description: '', image: '', issue: null };
   const metadata = decodeShareMetadata(info.data, info.owner, address, state.shareMint);
+  if (!metadata.uri) return { owner: state.owner, shareMint: state.shareMint, metadata, description: '', image: '', issue: null };
   try {
     const document = await fetchMetadataDocument(metadata.uri);
     return { owner: state.owner, shareMint: state.shareMint, metadata, description: document.description, image: document.image, issue: null };

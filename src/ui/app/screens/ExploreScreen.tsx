@@ -135,7 +135,7 @@ function ExploreCard({ vault, price, onInvest }: { vault: ExploreVault; price: R
         {vault.metadata ? (
           <KeyValue rows={[
             { k: 'Name / symbol', v: `${vault.metadata.name} · ${vault.metadata.symbol}` },
-            { k: 'Metadata URI', v: metadataLink ? <a href={metadataLink} target="_blank" rel="noreferrer" className="break-all text-petrol underline">{vault.metadata.uri}</a> : vault.metadata.uri },
+            { k: 'Metadata URI', v: vault.metadata.uri ? metadataLink ? <a href={metadataLink} target="_blank" rel="noreferrer" className="break-all text-petrol underline">{vault.metadata.uri}</a> : vault.metadata.uri : 'Not set · on-chain name and symbol only' },
             { k: 'Vault Authority PDA', v: <ExplorerLink address={vault.authority} /> },
             { k: 'Metadata update authority', v: <ExplorerLink address={vault.metadata.updateAuthority} /> },
             { k: 'Update policy', v: !vault.metadata.isMutable

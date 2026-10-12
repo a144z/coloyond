@@ -210,7 +210,7 @@ test('validates UTF-8 byte limits and only secure HTTPS/IPFS/Arweave URLs', asyn
   assert.match(validateShareMetadataForm({ ...form, image: `${form.image} ` }, symbol).join(' '), /whitespace/);
   assert.match(validateShareMetadataForm(form, 'CB00000000').join(' '), /symbol is invalid/);
   assert.match(validateShareMetadataForm(form, 'OTHER00001').join(' '), /symbol is invalid/);
-  assert.match(validateShareMetadataForm({ ...form, description: '  ' }, symbol).join(' '), /Description is required/);
+  assert.deepEqual(validateShareMetadataForm({ name: form.name, description: '', image: '', uri: '' }, symbol), []);
   assert.match(validateShareMetadataForm({ ...form, name: ` ${form.name}` }, symbol).join(' '), /leading or trailing whitespace/);
   assert.match(validateShareMetadataForm({ ...form, description: 'x'.repeat(512 * 1024) }, symbol).join(' '), /JSON must be at most 512 KB/);
   assert.throws(() => metadataHttpsUrl('https://user:secret@example.com/image.png'), /HTTPS/);
@@ -218,6 +218,24 @@ test('validates UTF-8 byte limits and only secure HTTPS/IPFS/Arweave URLs', asyn
   assert.throws(() => metadataHttpsUrl('ipfs://\\cid/image.png'), /invalid/);
   assert.throws(() => metadataHttpsUrl('ar://\\host/image.png'), /invalid/);
   await assert.rejects(verifyShareMetadataUri({ ...form, uri: 'http://bad.example/metadata.json' }, symbol), /HTTPS/);
+});
+
+test('allows a Metaplex name and symbol without hosted JSON, image, or description', async () => {
+  const symbol = 'CB00000001';
+  const optionalForm = { name: form.name, description: '', image: '', uri: '' };
+  assert.deepEqual(validateShareMetadataForm(optionalForm, symbol), []);
+  assert.deepEqual(buildShareMetadataDocument(optionalForm, symbol), {
+    name: form.name, symbol, description: '', image: '',
+  });
+  await verifyShareMetadataUri(optionalForm, symbol);
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ name: form.name, symbol }), { status: 200 });
+    await verifyShareMetadataUri({ ...optionalForm, uri: form.uri }, symbol);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('verification fetches the URI and blocks a JSON mismatch before transaction submission', async () => {
@@ -244,7 +262,7 @@ test('verification fetches the URI and blocks a JSON mismatch before transaction
     globalThis.fetch = async () => new Response(JSON.stringify([]), { status: 200 });
     await assert.rejects(verifyShareMetadataUri(form, symbol), /object/);
     globalThis.fetch = async () => new Response(JSON.stringify({ name: 1, symbol, description: form.description, image: form.image }), { status: 200 });
-    await assert.rejects(verifyShareMetadataUri(form, symbol), /string name, symbol/);
+    await assert.rejects(verifyShareMetadataUri(form, symbol), /string name and symbol fields/);
     globalThis.fetch = async () => new Response('unavailable', { status: 503 });
     await assert.rejects(verifyShareMetadataUri(form, symbol), /HTTP 503/);
     globalThis.fetch = async () => new Response('x'.repeat(512 * 1024 + 1), { status: 200 });

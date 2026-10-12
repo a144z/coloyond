@@ -228,8 +228,9 @@ pub mod coloyond_execution {
 
     /// Create Metaplex metadata for the existing standard SPL share mint.
     ///
-    /// `uri` must resolve to a Metaplex JSON document with `image` and
-    /// `description`; the program stores the name, generated symbol, and URI.
+    /// The URI may be empty when a creator does not host off-chain JSON.
+    /// When present, it points to the optional image and description document.
+    /// The program stores the name, generated symbol, and URI.
     /// Metadata remains mutable, but its per-vault authority is this program's
     /// Vault Authority PDA. Owners change only name/URI through
     /// `update_share_metadata`, so the registry-generated symbol stays fixed.
@@ -1696,16 +1697,18 @@ fn validate_share_metadata_fields(name: &str, uri: &str) -> Result<()> {
         !name.trim().is_empty() && name.len() <= MAX_METADATA_NAME_LEN,
         ErrorCode::InvalidMetadata
     );
-    require!(
-        uri.len() <= MAX_METADATA_URI_LEN
-            && (uri.starts_with("https://")
-                || uri.starts_with("ipfs://")
-                || uri.starts_with("ar://"))
-            && !uri
-                .bytes()
-                .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control()),
-        ErrorCode::InvalidMetadataUri
-    );
+    if !uri.is_empty() {
+        require!(
+            uri.len() <= MAX_METADATA_URI_LEN
+                && (uri.starts_with("https://")
+                    || uri.starts_with("ipfs://")
+                    || uri.starts_with("ar://"))
+                && !uri
+                    .bytes()
+                    .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control()),
+            ErrorCode::InvalidMetadataUri
+        );
+    }
     Ok(())
 }
 
@@ -2086,7 +2089,7 @@ pub enum ErrorCode {
     InvalidShareMint,
     #[msg("Share-token metadata name or generated symbol is invalid")]
     InvalidMetadata,
-    #[msg("Metadata URI must be an Arweave/IPFS URI or HTTPS URL of at most 200 bytes")]
+    #[msg("Metadata URI must be empty or an Arweave/IPFS URI or HTTPS URL of at most 200 bytes")]
     InvalidMetadataUri,
     #[msg("Share symbol registry or assignment is invalid or exhausted")]
     InvalidSymbolRegistry,
@@ -2214,6 +2217,7 @@ mod share_metadata_tests {
 
     #[test]
     fn metadata_accepts_supported_storage_schemes_and_rejects_oversized_fields() {
+        assert!(validate_share_metadata_fields("Portfolio Shares", "").is_ok());
         assert!(validate_share_metadata_fields("Portfolio Shares", "ipfs://bafybeigdyr").is_ok());
         assert!(validate_share_metadata_fields("Portfolio Shares", "ar://metadata-id").is_ok());
         assert!(
@@ -2234,19 +2238,27 @@ mod share_metadata_tests {
 
     #[test]
     fn metadata_validation_enforces_utf8_byte_and_uri_policy_boundaries() {
-        assert!(validate_share_metadata_fields(&"n".repeat(MAX_METADATA_NAME_LEN), "ipfs://cid").is_ok());
+        assert!(
+            validate_share_metadata_fields(&"n".repeat(MAX_METADATA_NAME_LEN), "ipfs://cid")
+                .is_ok()
+        );
         assert!(validate_share_metadata_fields(&"😀".repeat(8), "ipfs://cid").is_ok());
         assert!(validate_share_metadata_fields(&"😀".repeat(9), "ipfs://cid").is_err());
 
         let uri_prefix = "https://x.io/";
-        let uri_at_limit = format!("{uri_prefix}{}", "a".repeat(MAX_METADATA_URI_LEN - uri_prefix.len()));
+        let uri_at_limit = format!(
+            "{uri_prefix}{}",
+            "a".repeat(MAX_METADATA_URI_LEN - uri_prefix.len())
+        );
         let uri_over_limit = format!("{uri_at_limit}a");
         assert_eq!(uri_at_limit.len(), MAX_METADATA_URI_LEN);
         assert!(validate_share_metadata_fields("Portfolio Shares", &uri_at_limit).is_ok());
         assert!(validate_share_metadata_fields("Portfolio Shares", &uri_over_limit).is_err());
         assert!(validate_share_metadata_fields("Portfolio Shares", "ipfs://bad uri").is_err());
         assert!(validate_share_metadata_fields("Portfolio Shares", "ar://bad\nuri").is_err());
-        assert!(validate_share_metadata_fields("Portfolio Shares", "ftp://example.com/meta").is_err());
+        assert!(
+            validate_share_metadata_fields("Portfolio Shares", "ftp://example.com/meta").is_err()
+        );
     }
 }
 

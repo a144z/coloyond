@@ -198,7 +198,7 @@ export function decodeShareMetadata(
   if (primarySale !== 0 && primarySale !== 1) throw new Error('Metadata sale flag is invalid.');
   const mutable = reader.u8();
   if (mutable !== 0 && mutable !== 1) throw new Error('Metadata mutability flag is invalid.');
-  if (!name || !symbol || !uri) throw new Error('Metaplex metadata name, symbol, or URI is empty.');
+  if (!name || !symbol) throw new Error('Metaplex metadata name or symbol is empty.');
   return { updateAuthority, mint, name, symbol, uri, isMutable: mutable === 1 };
 }
 
@@ -269,9 +269,10 @@ export async function discoverExploreVaults(rpc: Connection = connection): Promi
     if (!info) return { ...vault, metadata: null, metadataIssue: 'No Metaplex metadata account is attached to this share mint.' };
     try {
       const onchain = decodeShareMetadata(info.data, info.owner, metadataAddress, candidate.state.shareMint);
+      if (!onchain.uri) return { ...vault, metadata: onchain, metadataIssue: null };
       try {
         const json = await fetchMetadataJson(onchain.uri);
-        const missing = [!json.name && 'name', !json.symbol && 'symbol', !json.description && 'description', !json.image && 'image'].filter(Boolean);
+        const missing = [!json.name && 'name', !json.symbol && 'symbol'].filter(Boolean);
         const mismatched = [
           json.name && json.name !== onchain.name && 'name',
           json.symbol && json.symbol !== onchain.symbol && 'symbol',

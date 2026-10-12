@@ -87,8 +87,8 @@ export function ShareMetadataEditor({
 
   return (
     <div className="space-y-3">
-      <Notice tone="brass" title="Prepare and pin the token JSON">
-        There is no upload provider or credential configured. Upload and pin the image first, then use its public URI above. Download this exact JSON, upload and pin that file with your IPFS/Arweave provider, and paste its public URI below. Pinning supports availability; a URI alone does not guarantee it. No transaction is sent until a GET verifies every field.
+      <Notice tone="brass" title="Optional off-chain token metadata">
+        Share-token name and unique symbol are stored on chain. Description, image, and hosted JSON are optional. Leave the JSON URI blank to skip off-chain metadata; add a public HTTPS, IPFS, or Arweave URI only if you want the description or image displayed by wallets. There is no upload provider configured, so you must upload and pin those files yourself. A supplied URI must be verified before the transaction.
       </Notice>
       <div className="rounded-md border border-hairline bg-pulp-shade px-3 py-2 text-[11px] leading-relaxed text-iron">
         Generated symbol <strong className="font-mono text-ink">{symbol ?? 'Reading…'}</strong>. The creator may update the name and URI through the vault program; the generated symbol stays fixed.
@@ -97,13 +97,13 @@ export function ShareMetadataEditor({
       <Field label="Share-token name · 32 UTF-8 bytes" error={value.name.trim() && new TextEncoder().encode(value.name).length > 32 ? 'At most 32 UTF-8 bytes.' : undefined}>
         <input value={value.name} maxLength={32} disabled={readOnly} onChange={(event) => change({ name: event.target.value })} className={inputClass} placeholder="Balanced portfolio" />
       </Field>
-      <Field label="Description">
+      <Field label="Description · optional">
         <textarea value={value.description} disabled={readOnly} onChange={(event) => change({ description: event.target.value })} className={`${inputClass} min-h-24 py-3`} placeholder="What this portfolio represents" />
       </Field>
-      <Field label="Token image URL" hint="Use an HTTPS, IPFS, or Arweave image URI.">
+      <Field label="Token image URL · optional" hint="Use an HTTPS, IPFS, or Arweave image URI.">
         <input value={value.image} disabled={readOnly} onChange={(event) => change({ image: event.target.value })} className={inputClass} placeholder="ipfs://…" />
       </Field>
-      <Field label="Metadata JSON URI · max 200 UTF-8 bytes" error={value.uri && new TextEncoder().encode(value.uri).length > 200 ? 'At most 200 UTF-8 bytes.' : undefined}>
+      <Field label="Metadata JSON URI · optional · max 200 UTF-8 bytes" error={value.uri && new TextEncoder().encode(value.uri).length > 200 ? 'At most 200 UTF-8 bytes.' : undefined}>
         <input value={value.uri} disabled={readOnly} onChange={(event) => change({ uri: event.target.value })} className={inputClass} placeholder="ipfs://…/metadata.json" />
       </Field>
       {issue ? <Notice tone="danger" title="Metadata could not be verified">{issue}</Notice> : null}
@@ -111,7 +111,7 @@ export function ShareMetadataEditor({
       {errors.length ? <p className="text-[11px] text-danger">{errors[0]}</p> : null}
       <div className="grid grid-cols-2 gap-2">
         <Button full disabled={readOnly || errors.length > 0} onClick={downloadJson}>Download JSON</Button>
-        <Button full variant="secondary" loading={checking} disabled={readOnly || errors.length > 0} onClick={() => void verify()}>{verified ? 'Verify again' : 'Verify uploaded JSON'}</Button>
+        <Button full variant="secondary" loading={checking} disabled={readOnly || errors.length > 0 || !value.uri.trim()} onClick={() => void verify()}>{verified ? 'Verify again' : value.uri.trim() ? 'Verify uploaded JSON' : 'No JSON to verify'}</Button>
       </div>
     </div>
   );
@@ -135,6 +135,7 @@ export function ShareMetadataManager({ stateAddress }: { stateAddress: string })
   const isOwner = !!loaded && loaded.owner.toBase58() === walletKey;
   const symbol = loaded?.metadata?.symbol ?? (sequence === null ? null : shareSymbolForSequence(sequence));
   const metadataExists = !!loaded?.metadata;
+  const verificationRequired = !!form.uri.trim();
   const errors = useMemo(() => symbol ? validateShareMetadataForm(form, symbol) : ['Reading the on-chain share symbol sequence…'], [form, symbol]);
 
   async function openEditor() {
@@ -172,7 +173,7 @@ export function ShareMetadataManager({ stateAddress }: { stateAddress: string })
   }
 
   async function submit() {
-    if (!isOwner || !loaded || !verified || errors.length || working) return;
+    if (!isOwner || !loaded || (verificationRequired && !verified) || errors.length || working) return;
     const signer = activeWalletSigner();
     if (!signer) return;
     setWorking(true);
@@ -204,7 +205,7 @@ export function ShareMetadataManager({ stateAddress }: { stateAddress: string })
         {loading && !loaded ? <p className="text-[12px] text-iron">Reading owner, share mint, metadata, and symbol registry from Solana…</p> : null}
         {loaded && !isOwner ? <Notice tone="brass" title="Owner signature required">Only the creator shown on-chain can manage this metadata. Connect the vault owner wallet to continue.</Notice> : null}
         {loaded && isOwner ? <>
-          <p className="mb-3 text-[11px] leading-relaxed text-iron">The vault’s Authority PDA remains Metaplex update authority. The creator can update the name and URI through the program; the symbol is fixed. {loaded.metadata ? `Current symbol: ${loaded.metadata.symbol}.` : `Next unique symbol: ${symbol ?? 'reading…'}.`}</p>
+          <p className="mb-3 text-[11px] leading-relaxed text-iron">The vault’s Authority PDA remains Metaplex update authority. The creator can update the name and URI through the program; the symbol is fixed. Leave the URI blank to keep only on-chain name and symbol. {loaded.metadata ? `Current symbol: ${loaded.metadata.symbol}.` : `Next unique symbol: ${symbol ?? 'reading…'}.`}</p>
           {issue ? <div className="mb-3"><Notice tone="brass" title="Metadata status">{issue}</Notice></div> : null}
           <ShareMetadataEditor
             value={form}
@@ -215,7 +216,7 @@ export function ShareMetadataManager({ stateAddress }: { stateAddress: string })
             verified={verified}
             onVerifiedChange={(value) => { setVerified(value); if (value) setIssue(null); }}
           />
-          <div className="mt-3"><Button variant="primary" full loading={working} disabled={!verified || errors.length > 0} onClick={() => void submit()}>{metadataExists ? 'Update share metadata on Solana' : 'Create metadata on Solana'}</Button></div>
+          <div className="mt-3"><Button variant="primary" full loading={working} disabled={(verificationRequired && !verified) || errors.length > 0} onClick={() => void submit()}>{metadataExists ? 'Update share metadata on Solana' : 'Create metadata on Solana'}</Button></div>
         </> : null}
       </LedgerPanel>
     </div> : null}

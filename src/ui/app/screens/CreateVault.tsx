@@ -111,7 +111,7 @@ export function CreateVault() {
     else {
       const metadataErrors = validateShareMetadataForm({ name, description: shareDescription, image: shareImage, uri: shareMetadataUri }, symbol);
       if (metadataErrors.length) errs.push(...metadataErrors);
-      if (!shareMetadataVerified) errs.push('Verify the uploaded metadata JSON before creating this portfolio.');
+      if (shareMetadataUri.trim() && !shareMetadataVerified) errs.push('Verify the uploaded metadata JSON before creating this portfolio.');
     }
     if (selected.length < 2) errs.push('Pick at least two assets for the mix.');
     const targetTotal = selected.reduce((sum, s) => sum + (targets[s.id] ?? 0), 0);

@@ -209,6 +209,7 @@ test('verifies canonical Metaplex metadata PDA, token mint and update policy', (
   assert.equal(decoded.symbol, 'PONE');
   assert.equal(decoded.updateAuthority, updateAuthority.toBase58());
   assert.equal(decoded.isMutable, true);
+  assert.equal(decodeShareMetadata(encodeMetadata(mint, updateAuthority, 'Portfolio One', 'PONE', ''), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'), address, mint).uri, '');
   const wrongMint = new PublicKey(EXPLORE_ASSETS[1]!.mint);
   assert.throws(() => decodeShareMetadata(encodeMetadata(wrongMint, updateAuthority, 'Other', 'OTH', 'https://example.com/meta.json'), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'), address, mint), /mint does not match/);
   assert.throws(() => decodeShareMetadata(encodeMetadata(mint, updateAuthority, 'x'.repeat(33), 'PONE', 'ipfs://cid'), new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'), address, mint), /too long/);
@@ -340,6 +341,34 @@ test('discovery displays on-chain metadata when off-chain JSON disagrees and mar
   }
 });
 
+test('discovery accepts on-chain name and symbol without an off-chain metadata URI', async () => {
+  const vault = makeVaultConfigured({ id: 75n });
+  const liveAccounts = discoveryAccounts([vault]);
+  const metadataAddress = metadataAddressForMint(vault.shareMint);
+  liveAccounts.set(metadataAddress.toBase58(), accountInfo(
+    new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
+    encodeMetadata(vault.shareMint, vault.authority, 'Chain Name', 'CB00000075', ''),
+  ));
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  try {
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      throw new Error('must not fetch an empty metadata URI');
+    };
+    const result = await discoverExploreVaults(fakeRpc([{ address: vault.address, data: vault.data }], liveAccounts));
+    assert.equal(result.vaults.length, 1);
+    assert.equal(result.vaults[0]!.metadata?.name, 'Chain Name');
+    assert.equal(result.vaults[0]!.metadata?.symbol, 'CB00000075');
+    assert.equal(result.vaults[0]!.metadata?.description, undefined);
+    assert.equal(result.vaults[0]!.metadata?.image, undefined);
+    assert.equal(result.vaults[0]!.metadataIssue, null);
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('invalid Metaplex accounts never replace or hide the verified Vault State', async () => {
   const vault = makeVaultConfigured({ id: 80n });
   const baseAccounts = discoveryAccounts([vault]);
@@ -381,7 +410,7 @@ test('discovery isolates broken metadata JSON and rejects invalid share mint or 
   }
 
   const cases: { body: unknown; url?: string; issue: RegExp }[] = [
-    { body: { description: 'Only description.' }, issue: /is missing name, symbol, image/ },
+    { body: { description: 'Only description.' }, issue: /is missing name, symbol/ },
     { body: { name: 'Chain Name', symbol: 'CB00000074', description: 'Description', image: 'https://image.example/a.png' }, url: 'http://insecure.example/metadata.json', issue: /redirect did not use HTTPS/ },
     { body: 'x'.repeat(512 * 1024 + 1), issue: /too large/ },
   ];
