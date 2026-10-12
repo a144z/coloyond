@@ -48,6 +48,7 @@ pub const WEIGHTS_SUM_BPS: u64 = 10_000;
 
 #[account]
 pub struct EtfWeightsV1 {
+    pub pool: Pubkey,
     pub bump: u8,
     pub target_weights: Vec<u64>,
     pub proposed_weights: Option<Vec<u64>>,
@@ -111,12 +112,13 @@ impl EtfAssetStateV1 {
 impl EtfWeightsV1 {
     pub const VERSION: u8 = 1;
 
-    pub fn new(bump: u8, target_weights: Vec<u64>, rebalance_interval_seconds: u64) -> Self {
+    pub fn new(pool: Pubkey, bump: u8, target_weights: Vec<u64>, rebalance_interval_seconds: u64) -> Self {
         let weights = match Self::validate_weights(target_weights) {
             Ok(weights) => weights,
             Err(error) => panic!("invalid weights: {error:?}"),
         };
         Self {
+            pool,
             bump,
             target_weights: weights,
             proposed_weights: None,
@@ -260,7 +262,7 @@ mod tests {
 
     #[test]
     fn weights_state_fits_the_bounded_space() {
-        let mut weights = EtfWeightsV1::new(255, vec![2_500, 7_500, 0, 0], 5);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),255, vec![2_500, 7_500, 0, 0], 5);
         weights.proposed_weights = Some(vec![1_000, 2_000, 3_000, 4_000]);
         weights.proposed_by = Some(Pubkey::new_from_array([9; 32]));
         weights.proposed_at_unix_timestamp = Some(1_700_000_000);
@@ -276,18 +278,18 @@ mod tests {
     #[test]
     #[should_panic]
     fn weights_state_rejects_weights_that_miss_the_10_000_sum() {
-        EtfWeightsV1::new(0, vec![4_000, 5_000, 0, 0], 5);
+        EtfWeightsV1::new(Pubkey::default(),0, vec![4_000, 5_000, 0, 0], 5);
     }
 
     #[test]
     #[should_panic]
     fn weights_state_rejects_an_out_of_range_weight_count() {
-        EtfWeightsV1::new(0, vec![2_500, 2_500, 2_500, 2_000, 500], 5);
+        EtfWeightsV1::new(Pubkey::default(),0, vec![2_500, 2_500, 2_500, 2_000, 500], 5);
     }
 
     #[test]
     fn weights_v1_propose_then_accept_swaps_in_the_proposed_weights() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         weights
             .propose(vec![2_500, 7_500, 0, 0], Pubkey::new_from_array([3; 32]), 100)
             .unwrap();
@@ -301,7 +303,7 @@ mod tests {
 
     #[test]
     fn weights_v1_propose_then_decline_leaves_target_unchanged() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         weights
             .propose(vec![9_000, 1_000, 0, 0], Pubkey::new_from_array([4; 32]), 50)
             .unwrap();
@@ -313,7 +315,7 @@ mod tests {
 
     #[test]
     fn weights_v1_rejects_a_second_proposal_while_one_is_open() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         weights
             .propose(vec![6_000, 4_000, 0, 0], Pubkey::new_from_array([5; 32]), 10)
             .unwrap();
@@ -324,14 +326,14 @@ mod tests {
 
     #[test]
     fn weights_v1_rejects_accept_and_decline_without_a_proposal() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         assert!(weights.accept().is_err(), "accept without a proposal must fail");
         assert!(weights.decline().is_err(), "decline without a proposal must fail");
     }
 
     #[test]
     fn weights_v1_set_bypasses_the_proposal_but_refuses_while_one_is_open() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         weights.set(vec![4_000, 6_000, 0, 0]).unwrap();
         assert_eq!(weights.target_weights, vec![4_000, 6_000, 0, 0]);
         weights
@@ -345,7 +347,7 @@ mod tests {
 
     #[test]
     fn weights_v1_rejects_a_set_with_the_wrong_weight_count() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 10);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 10);
         assert!(
             weights.set(vec![3_333, 6_667]).is_err(),
             "set must fail when the weight count mismatches the config"
@@ -354,7 +356,7 @@ mod tests {
 
     #[test]
     fn weights_v1_rebalance_eligibility_respects_the_on_chain_cooldown() {
-        let mut weights = EtfWeightsV1::new(0, vec![5_000, 5_000, 0, 0], 60);
+        let mut weights = EtfWeightsV1::new(Pubkey::default(),0, vec![5_000, 5_000, 0, 0], 60);
         assert!(weights.rebalance_eligible(0), "an un-rebalanced pool is eligible");
         weights.mark_rebalanced(1_000);
         assert!(!weights.rebalance_eligible(1_000), "cooldown at now == last is not eligible");

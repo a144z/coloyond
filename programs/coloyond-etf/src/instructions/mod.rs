@@ -156,7 +156,7 @@ pub struct Poke<'info> {
 #[derive(Accounts)]
 pub struct InitWeights<'info> {
     #[account(mut)]
-    pub funder: Signer<'info>,
+    pub governance: Signer<'info>,
     /// CHECK: account identity and data are verified by the shared validator.
     pub pool: UncheckedAccount<'info>,
     /// CHECK: account identity and data are verified by the shared validator.

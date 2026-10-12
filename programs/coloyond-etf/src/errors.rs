@@ -40,6 +40,8 @@ pub enum EtfError {
     SeedCompositionOutOfRange,
     #[msg("Weight vector length must match the ETF's asset-count bound")]
     WeightsLengthMismatch,
+    #[msg("Weights account is bound to a different ETF than the one being operated on")]
+    WeightsPoolMismatch,
     #[msg("Weight vector must sum to exactly 10_000 basis points")]
     WeightsSumMismatch,
     #[msg("A weights proposal is already open for this ETF")]

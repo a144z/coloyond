@@ -34,14 +34,20 @@ pub fn init_weights<'info>(
         state.lifecycle != PoolLifecycleV1::Closed,
         EtfError::PoolClosed
     );
+    require_keys_eq!(
+        ctx.accounts.governance.key(),
+        state.current_governance,
+        EtfError::Unauthorized
+    );
     let weights = EtfWeightsV1::new(
+        *ctx.accounts.pool.key,
         ctx.bumps.weights,
         initial_weights,
         rebalance_interval_seconds,
     );
     let bump_seed = [ctx.bumps.weights];
     create_pda_account(
-        &ctx.accounts.funder.to_account_info(),
+        &ctx.accounts.governance.to_account_info(),
         &ctx.accounts.weights.to_account_info(),
         &ctx.accounts.system_program.to_account_info(),
         &crate::ID,
@@ -74,6 +80,11 @@ pub fn set_target_weights<'info>(
     );
     let mut weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
+    require_keys_eq!(
+        weights.pool,
+        *ctx.accounts.pool.key,
+        EtfError::WeightsPoolMismatch
+    );
     weights.set(new_weights)?;
     save_program_account(&ctx.accounts.weights.to_account_info(), &weights)
 }
@@ -93,6 +104,11 @@ pub fn propose_target_weights<'info>(
     let now = Clock::get()?.unix_timestamp;
     let mut weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
+    require_keys_eq!(
+        weights.pool,
+        *ctx.accounts.pool.key,
+        EtfError::WeightsPoolMismatch
+    );
     weights.propose(new_weights, ctx.accounts.proposer.key(), now)?;
     save_program_account(&ctx.accounts.weights.to_account_info(), &weights)
 }
@@ -114,6 +130,11 @@ pub fn accept_target_weights(ctx: Context<AcceptTargetWeights>) -> Result<()> {
     require!(!state.risk_paused, EtfError::RiskPaused);
     let mut weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
+    require_keys_eq!(
+        weights.pool,
+        *ctx.accounts.pool.key,
+        EtfError::WeightsPoolMismatch
+    );
     weights.accept()?;
     save_program_account(&ctx.accounts.weights.to_account_info(), &weights)
 }
@@ -134,6 +155,11 @@ pub fn decline_target_weights(ctx: Context<DeclineTargetWeights>) -> Result<()> 
     );
     let mut weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
+    require_keys_eq!(
+        weights.pool,
+        *ctx.accounts.pool.key,
+        EtfError::WeightsPoolMismatch
+    );
     weights.decline()?;
     save_program_account(&ctx.accounts.weights.to_account_info(), &weights)
 }
@@ -160,10 +186,12 @@ pub fn rebalance<'info>(
     let now = Clock::get()?.unix_timestamp;
     let mut weights =
         load_program_account::<EtfWeightsV1>(&ctx.accounts.weights.to_account_info())?;
-    require!(
-        weights.rebalance_eligible(now),
-        EtfError::RebalanceCooldownActive
+    require_keys_eq!(
+        weights.pool,
+        *ctx.accounts.pool.key,
+        EtfError::WeightsPoolMismatch
     );
+    require!(weights.rebalance_eligible(now), EtfError::RebalanceCooldownActive);
     weights.mark_rebalanced(now);
     save_program_account(&ctx.accounts.weights.to_account_info(), &weights)?;
     Ok(())
