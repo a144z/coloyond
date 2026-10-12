@@ -1,0 +1,13 @@
+{
+  "name": "mb-smoke-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.17.3",
+    "@solana/spl-token": "0.4.13",
+    "@solana/web3.js": "1.98.4"
+  }
+}

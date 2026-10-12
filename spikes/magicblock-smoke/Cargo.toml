@@ -1,0 +1,10 @@
+# Standalone workspace: kept out of the root Cargo workspace on purpose.
+[workspace]
+members = ["programs/mb-smoke"]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+opt-level = "z"

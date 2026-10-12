@@ -1,5 +1,7 @@
 # Handoff: finishing the hackathon build
 
+> **Direction (12 October):** the hackathon release is the allocation card with the manual Glider handoff, as described below. The issue #38 MagicBlock execution layer is stopped; see the [MagicBlock smoke test](rebalancing/evidence/magicblock-smoke-20261012.md). Automated execution through Glider's API (#23) is the next roadmap item after the hackathon.
+>
 > **Issue #38 direction (11 October):** new mobile portfolio work follows the [native prototype spec](superpowers/specs/2026-10-11-issue-38-mobile-portfolio-spec.md), [design/code cuts](design/issue-38-mobile-portfolio-design.md), [overnight plan](superpowers/plans/2026-10-11-issue-38-mobile-portfolio-plan.md), and [Claude review record](reviews/2026-10-11-issue-38-claude-opus-5-5-review.md). Those propose a separate owner-vault v2 and MagicBlock execution; they do not claim a deployed or working prototype. The card/Glider instructions below are the historical release path and do not govern issue #38 implementation.
 
 Written 10 October 2026. Start here.
