@@ -4,6 +4,7 @@ use anchor_lang::solana_program::{program::invoke_signed, program_option::COptio
 use anchor_lang::InstructionData;
 use anchor_spl::{
     associated_token::AssociatedToken,
+    metadata::{self, mpl_token_metadata, CreateMetadataAccountsV3, UpdateMetadataAccountsV2},
     token::{self, Mint, Token, TokenAccount, Transfer},
 };
 use ephemeral_rollups_sdk::{
@@ -15,13 +16,15 @@ use ephemeral_rollups_sdk::{
     ActionArgs, ShortAccountMeta,
 };
 use hydra_api::instruction::ephemeral as hydra_ephemeral;
-use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
+use pyth_solana_receiver_sdk::{error::GetPriceError, price_update::PriceUpdateV2};
 
 declare_id!("HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d");
 
 const VAULT_SEED: &[u8] = b"vault";
 const VAULT_AUTHORITY_SEED: &[u8] = b"vault-authority";
 const SHARE_MINT_SEED: &[u8] = b"share-mint";
+const SHARE_SYMBOL_REGISTRY_SEED: &[u8] = b"share-symbol-registry";
+const SHARE_SYMBOL_ASSIGNMENT_SEED: &[u8] = b"share-symbol";
 const EXECUTOR_SEED: &[u8] = b"executor";
 const SCHEDULER_CONFIG_SEED: &[u8] = b"scheduler-config";
 const CRANK_POLICY_SEED: &[u8] = b"crank-policy";
@@ -30,6 +33,11 @@ const CRANK_SEED: &[u8] = b"crank";
 const MARKET_CONFIG_SEED: &[u8] = b"market-config";
 const TASK_SPONSOR_RESERVE_LAMPORTS: u64 = 50_000_000;
 const ACTION_MAX_AGE_SEC: i64 = 90;
+const MAX_METADATA_NAME_LEN: usize = 32;
+const MAX_METADATA_SYMBOL_LEN: usize = 10;
+const MAX_METADATA_URI_LEN: usize = 200;
+const MAX_SHARE_SYMBOL_SEQUENCE: u64 = 99_999_999;
+const SHARE_SYMBOL_PREFIX: &str = "CB";
 const USD_SCALE: u64 = 1_000_000;
 const MAX_DEVNET_USD_SUPPLY_RAW: u64 = 100_000_000_000; // 100,000 tokens at 6 decimals.
 const BPS: u128 = 10_000;
@@ -111,6 +119,23 @@ pub struct VaultState {
     pub last_settled_nonce: u64,
     #[max_len(4)]
     pub assets: Vec<VaultAsset>,
+}
+
+/// Global, lazily created sequence shared by every portfolio share mint.
+#[account]
+#[derive(InitSpace)]
+pub struct ShareSymbolRegistry {
+    pub version: u8,
+    pub next_sequence: u64,
+}
+
+/// Stores the generated symbol sequence so metadata updates can preserve it.
+#[account]
+#[derive(InitSpace)]
+pub struct ShareSymbolAssignment {
+    pub version: u8,
+    pub vault_state: Pubkey,
+    pub sequence: u64,
 }
 
 #[account]
@@ -198,6 +223,120 @@ pub mod coloyond_execution {
             TASK_SPONSOR_RESERVE_LAMPORTS,
         )?;
         msg!("Created vault state, Vault Authority, executor and transferable share mint");
+        Ok(())
+    }
+
+    /// Create Metaplex metadata for the existing standard SPL share mint.
+    ///
+    /// `uri` must resolve to a Metaplex JSON document with `image` and
+    /// `description`; the program stores the name, generated symbol, and URI.
+    /// Metadata remains mutable, but its per-vault authority is this program's
+    /// Vault Authority PDA. Owners change only name/URI through
+    /// `update_share_metadata`, so the registry-generated symbol stays fixed.
+    /// The global sequence is lazy-created here, allowing an owner to backfill
+    /// metadata for a vault initialized before this instruction was added.
+    pub fn create_share_metadata(
+        ctx: Context<CreateShareMetadata>,
+        expected_sequence: u64,
+        name: String,
+        uri: String,
+    ) -> Result<()> {
+        let state = &ctx.accounts.vault_state;
+        validate_vault_address(state, &state.key())?;
+        validate_share_metadata_fields(&name, &uri)?;
+
+        let registry = &mut ctx.accounts.symbol_registry;
+        if registry.version == 0 {
+            registry.version = 1;
+            registry.next_sequence = 1;
+        }
+        require!(registry.version == 1, ErrorCode::InvalidSymbolRegistry);
+        require!(
+            registry.next_sequence == expected_sequence,
+            ErrorCode::SymbolSequenceMismatch
+        );
+        let symbol = share_symbol_for_sequence(expected_sequence)?;
+        registry.next_sequence = expected_sequence
+            .checked_add(1)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let assignment = &mut ctx.accounts.symbol_assignment;
+        assignment.version = 1;
+        assignment.vault_state = state.key();
+        assignment.sequence = expected_sequence;
+
+        let state_key = state.key();
+        let bump = [state.authority_bump];
+        let authority_seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, state_key.as_ref(), &bump];
+        metadata::create_metadata_accounts_v3(
+            CpiContext::new_with_signer(
+                ctx.accounts.metadata_program.key(),
+                CreateMetadataAccountsV3 {
+                    metadata: ctx.accounts.metadata.to_account_info(),
+                    mint: ctx.accounts.share_mint.to_account_info(),
+                    mint_authority: ctx.accounts.vault_authority.to_account_info(),
+                    payer: ctx.accounts.owner.to_account_info(),
+                    update_authority: ctx.accounts.vault_authority.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            mpl_token_metadata::types::DataV2 {
+                name,
+                symbol: symbol.clone(),
+                uri,
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            },
+            true,
+            true,
+            None,
+        )?;
+
+        msg!("Created share metadata with symbol {}", symbol);
+        Ok(())
+    }
+
+    /// Update a portfolio share token's name and URI without accepting a
+    /// symbol, preserving the registry's uniqueness guarantee.
+    pub fn update_share_metadata(
+        ctx: Context<UpdateShareMetadata>,
+        name: String,
+        uri: String,
+    ) -> Result<()> {
+        validate_share_metadata_fields(&name, &uri)?;
+        let assignment = &ctx.accounts.symbol_assignment;
+        require!(assignment.version == 1, ErrorCode::InvalidSymbolRegistry);
+        let symbol = share_symbol_for_sequence(assignment.sequence)?;
+
+        let state_key = ctx.accounts.vault_state.key();
+        let bump = [ctx.accounts.vault_state.authority_bump];
+        let authority_seeds: &[&[u8]] = &[VAULT_AUTHORITY_SEED, state_key.as_ref(), &bump];
+        metadata::update_metadata_accounts_v2(
+            CpiContext::new_with_signer(
+                ctx.accounts.metadata_program.key(),
+                UpdateMetadataAccountsV2 {
+                    metadata: ctx.accounts.metadata.to_account_info(),
+                    update_authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            None,
+            Some(mpl_token_metadata::types::DataV2 {
+                name,
+                symbol,
+                uri,
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            }),
+            None,
+            None,
+        )?;
         Ok(())
     }
 
@@ -1187,6 +1326,80 @@ pub struct InitializeVault<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CreateShareMetadata<'info> {
+    #[account(has_one = owner)]
+    pub vault_state: Account<'info, VaultState>,
+    /// CHECK: PDA is constrained by this vault and signs both metadata authorities.
+    #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        address = vault_state.share_mint,
+        mint::authority = vault_authority,
+        constraint = share_mint.decimals == 9 @ ErrorCode::InvalidShareMint,
+        constraint = share_mint.freeze_authority.is_none() @ ErrorCode::InvalidShareMint
+    )]
+    pub share_mint: Account<'info, Mint>,
+    /// CHECK: canonical Metaplex metadata PDA for the existing share mint.
+    #[account(
+        mut,
+        seeds = [b"metadata", metadata_program.key().as_ref(), share_mint.key().as_ref()],
+        bump,
+        seeds::program = metadata_program.key()
+    )]
+    pub metadata: UncheckedAccount<'info>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + ShareSymbolRegistry::INIT_SPACE,
+        seeds = [SHARE_SYMBOL_REGISTRY_SEED],
+        bump
+    )]
+    pub symbol_registry: Account<'info, ShareSymbolRegistry>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + ShareSymbolAssignment::INIT_SPACE,
+        seeds = [SHARE_SYMBOL_ASSIGNMENT_SEED, vault_state.key().as_ref()],
+        bump
+    )]
+    pub symbol_assignment: Account<'info, ShareSymbolAssignment>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    /// CHECK: constrained to the official Metaplex Token Metadata program.
+    #[account(address = mpl_token_metadata::ID)]
+    pub metadata_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateShareMetadata<'info> {
+    #[account(has_one = owner)]
+    pub vault_state: Account<'info, VaultState>,
+    /// CHECK: only this PDA can update metadata created for its share mint.
+    #[account(seeds = [VAULT_AUTHORITY_SEED, vault_state.key().as_ref()], bump = vault_state.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    /// CHECK: canonical Metaplex metadata PDA for this vault's share mint.
+    #[account(
+        mut,
+        seeds = [b"metadata", metadata_program.key().as_ref(), vault_state.share_mint.as_ref()],
+        bump,
+        seeds::program = metadata_program.key()
+    )]
+    pub metadata: UncheckedAccount<'info>,
+    #[account(
+        has_one = vault_state,
+        seeds = [SHARE_SYMBOL_ASSIGNMENT_SEED, vault_state.key().as_ref()],
+        bump
+    )]
+    pub symbol_assignment: Account<'info, ShareSymbolAssignment>,
+    pub owner: Signer<'info>,
+    /// CHECK: constrained to the official Metaplex Token Metadata program.
+    #[account(address = mpl_token_metadata::ID)]
+    pub metadata_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
 pub struct CreateVaultAssetAccount<'info> {
     #[account(has_one = owner)]
     pub vault_state: Account<'info, VaultState>,
@@ -1465,6 +1678,37 @@ fn validate_config(inputs: &[AssetInput], threshold_bps: u16, max_slippage_bps: 
     Ok(())
 }
 
+fn share_symbol_for_sequence(sequence: u64) -> Result<String> {
+    require!(
+        (1..=MAX_SHARE_SYMBOL_SEQUENCE).contains(&sequence),
+        ErrorCode::InvalidSymbolRegistry
+    );
+    let symbol = format!("{SHARE_SYMBOL_PREFIX}{sequence:08}");
+    require!(
+        symbol.len() <= MAX_METADATA_SYMBOL_LEN,
+        ErrorCode::InvalidSymbolRegistry
+    );
+    Ok(symbol)
+}
+
+fn validate_share_metadata_fields(name: &str, uri: &str) -> Result<()> {
+    require!(
+        !name.trim().is_empty() && name.len() <= MAX_METADATA_NAME_LEN,
+        ErrorCode::InvalidMetadata
+    );
+    require!(
+        uri.len() <= MAX_METADATA_URI_LEN
+            && (uri.starts_with("https://")
+                || uri.starts_with("ipfs://")
+                || uri.starts_with("ar://"))
+            && !uri
+                .bytes()
+                .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control()),
+        ErrorCode::InvalidMetadataUri
+    );
+    Ok(())
+}
+
 struct AssetMeta {
     decimals: u8,
     feed_account: Pubkey,
@@ -1626,13 +1870,16 @@ fn read_asset_price(asset: &VaultAsset, feed: Option<&AccountInfo>) -> Result<u6
     let data = account.try_borrow_data()?;
     let update = PriceUpdateV2::try_deserialize(&mut &data[..])
         .map_err(|_| error!(ErrorCode::InvalidOracle))?;
-    require!(
-        update.verification_level.gte(VerificationLevel::Full),
-        ErrorCode::InvalidOracle
-    );
+    checked_nav_price(&update, &asset.feed_id, &Clock::get()?)
+}
+
+fn checked_nav_price(update: &PriceUpdateV2, feed_id: &[u8; 32], clock: &Clock) -> Result<u64> {
     let price = update
-        .get_price_unchecked(&asset.feed_id)
-        .map_err(|_| error!(ErrorCode::InvalidOracle))?;
+        .get_price_no_older_than(clock, ACTION_MAX_AGE_SEC as u64, feed_id)
+        .map_err(|error| match error {
+            GetPriceError::PriceTooOld => error!(ErrorCode::StalePrice),
+            _ => error!(ErrorCode::InvalidOracle),
+        })?;
     normalize_price(price.price, price.exponent)
 }
 
@@ -1826,8 +2073,18 @@ pub enum ErrorCode {
     InvalidAccounts,
     #[msg("Pyth price account or feed id is invalid")]
     InvalidOracle,
-    #[msg("Legacy error code; Pyth publish time is not checked")]
+    #[msg("Pyth price update is older than the 90-second limit")]
     StalePrice,
+    #[msg("Share mint does not match the expected standard SPL mint policy")]
+    InvalidShareMint,
+    #[msg("Share-token metadata name or generated symbol is invalid")]
+    InvalidMetadata,
+    #[msg("Metadata URI must be an Arweave/IPFS URI or HTTPS URL of at most 200 bytes")]
+    InvalidMetadataUri,
+    #[msg("Share symbol registry or assignment is invalid or exhausted")]
+    InvalidSymbolRegistry,
+    #[msg("Share symbol sequence changed; refresh and retry metadata creation")]
+    SymbolSequenceMismatch,
     #[msg("Price conversion or trade calculation overflowed")]
     MathOverflow,
     #[msg("Requested token amount is invalid")]
@@ -1930,5 +2187,111 @@ mod crank_policy_tests {
             !price_movement_exceeds_threshold(&policy, &[asset(mint, no_feed)], &[1_002_000])
                 .unwrap()
         );
+    }
+}
+
+#[cfg(test)]
+mod share_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn generated_symbols_are_bounded_and_monotonic() {
+        assert_eq!(share_symbol_for_sequence(1).unwrap(), "CB00000001");
+        assert_eq!(
+            share_symbol_for_sequence(MAX_SHARE_SYMBOL_SEQUENCE).unwrap(),
+            "CB99999999"
+        );
+        assert!(share_symbol_for_sequence(0).is_err());
+        assert!(share_symbol_for_sequence(MAX_SHARE_SYMBOL_SEQUENCE + 1).is_err());
+    }
+
+    #[test]
+    fn metadata_accepts_supported_storage_schemes_and_rejects_oversized_fields() {
+        assert!(validate_share_metadata_fields("Portfolio Shares", "ipfs://bafybeigdyr").is_ok());
+        assert!(validate_share_metadata_fields("Portfolio Shares", "ar://metadata-id").is_ok());
+        assert!(
+            validate_share_metadata_fields("Portfolio Shares", "https://arweave.net/id").is_ok()
+        );
+        assert!(validate_share_metadata_fields("", "ipfs://bafybeigdyr").is_err());
+        assert!(validate_share_metadata_fields(&"n".repeat(33), "ipfs://bafybeigdyr").is_err());
+        assert!(
+            validate_share_metadata_fields("Portfolio Shares", "http://example.com/meta.json")
+                .is_err()
+        );
+        assert!(validate_share_metadata_fields(
+            "Portfolio Shares",
+            &format!("ipfs://{}", "x".repeat(194))
+        )
+        .is_err());
+    }
+}
+
+#[cfg(test)]
+mod nav_price_tests {
+    use super::*;
+    use pyth_solana_receiver_sdk::price_update::{PriceFeedMessage, VerificationLevel};
+
+    fn update(
+        feed_id: [u8; 32],
+        publish_time: i64,
+        verification_level: VerificationLevel,
+    ) -> PriceUpdateV2 {
+        PriceUpdateV2 {
+            write_authority: Pubkey::new_unique(),
+            verification_level,
+            price_message: PriceFeedMessage {
+                feed_id,
+                price: 2_000,
+                conf: 1,
+                exponent: -3,
+                ema_price: 2_000,
+                ema_conf: 1,
+                publish_time,
+                prev_publish_time: publish_time.saturating_sub(1),
+            },
+            posted_slot: 0,
+        }
+    }
+
+    #[test]
+    fn nav_price_requires_a_full_verified_matching_feed_no_older_than_90_seconds() {
+        let feed_id = [7; 32];
+        let clock = Clock {
+            unix_timestamp: 1_090,
+            ..Default::default()
+        };
+        assert_eq!(
+            checked_nav_price(
+                &update(feed_id, 1_000, VerificationLevel::Full),
+                &feed_id,
+                &clock
+            )
+            .unwrap(),
+            2_000_000
+        );
+        assert!(checked_nav_price(
+            &update(feed_id, 999, VerificationLevel::Full),
+            &feed_id,
+            &clock
+        )
+        .is_err());
+        assert!(checked_nav_price(
+            &update(
+                feed_id,
+                1_000,
+                VerificationLevel::Partial {
+                    num_signatures: 255
+                }
+            ),
+            &feed_id,
+            &clock
+        )
+        .is_err());
+        assert!(checked_nav_price(
+            &update(feed_id, 1_000, VerificationLevel::Full),
+            &[8; 32],
+            &clock
+        )
+        .is_err());
     }
 }
