@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Coloyond" parent="Theme.Coloyond.Base">
+        <item name="android:navigationBarColor">#EFECE6</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

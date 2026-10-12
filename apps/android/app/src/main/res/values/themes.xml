@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Coloyond" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.Coloyond.Base" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">#EFECE6</item>
-        <item name="android:navigationBarColor">#EFECE6</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:navigationBarColor">#141414</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+    <style name="Theme.Coloyond" parent="Theme.Coloyond.Base" />
 </resources>

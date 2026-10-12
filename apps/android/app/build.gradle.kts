@@ -29,7 +29,7 @@ android {
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation(libs.androidx.appcompat)
     implementation(project(":capacitor-android"))
     implementation(project(":capacitor-app"))
     implementation(project(":capacitor-status-bar"))

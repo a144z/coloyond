@@ -9,10 +9,10 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "android:sync": "npm run build && cap sync android",
-    "android:apk": "npm run android:sync && cd apps/android && ./gradlew :app:assembleDebug --console=plain",
+    "android:apk": "npm run android:sync && cd apps/android && ./gradlew :app:clean :app:assembleDebug --console=plain",
     "test:mobile": "node scripts/mobile/capture.mjs",
-    "video:studio": "remotion studio remotion/index.tsx",
-    "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --codec=h264 --crf=18 --concurrency=2"
+    "video:studio": "remotion studio remotion/index.tsx --public-dir=remotion/public",
+    "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",

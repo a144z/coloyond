@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "description": "Gradle Android shell for the shared Coloyond mobile /app product",
   "scripts": {
-    "build": "./gradlew :app:assembleDebug",
+    "build": "./gradlew :app:clean :app:assembleDebug",
     "ci": "./gradlew :app:assembleDebug :app:lintDebug",
     "test": "cd ../.. && npm run test:mobile"
   }
