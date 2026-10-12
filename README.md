@@ -51,11 +51,11 @@ Generative geometry turns each portfolio into an Orbit, Prism or Stack compositi
   </a>
 </p>
 
-<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Component zooms, clicks and slider drags · Rebalance animation · Narration and captions · Uploaded music with analyzed beat timing</sub></p>
+<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Original 17.2 MiB film · Component zooms, clicks, slider drags and kinetic typography · Uploaded background music</sub></p>
 
-[Read the timed demo transcript](docs/submission/demo-transcript.md) or download [SRT captions](releases/coloyond-mobile-showcase.srt). The final MP4 is exactly **62.000 seconds**. Natural synthetic narration is layered over the original uploaded music.
+**Recovered original:** the music-driven film from commit `a1572c6`, **17.2 MiB** (18,053,642 bytes). Component zooms, visible clicks, left/right slider drags, varied typography and Coloyond geometry use the uploaded music's analyzed timing. The complete, byte-matched source and assets are in [`remotion-original/`](remotion-original/); the original MP4 is also named [`coloyond-original-17mb.mp4`](releases/coloyond-original-17mb.mp4). Its animation timeline is 62 seconds; original AAC/container padding yields 62.058667 seconds. This is the unchanged original export.
 
-The film uses a frame-controlled UI demonstration and the same portfolio-art renderer as `/app`. Portfolio balances in presentation scenes are clearly labeled **illustrative devnet data**.
+The later narrated rebalance work remains in [`remotion/`](remotion/), with its matching export available at tag [`promo-narrated-rebalance-v3`](https://github.com/a144z/coloyond/tree/promo-narrated-rebalance-v3). It is a separate version.
 
 ## The product
 
@@ -140,10 +140,9 @@ The downloadable package is a signed **debug APK** for Android 8/API 26 and newe
 ```sh
 npm run video:studio
 npm run video:render
-npm run video:package # FFmpeg + Python/NumPy/SciPy; final exact-duration MP4
 ```
 
-The film retains the uploaded stereo soundtrack, with spectral analysis driving its beat grid and subtle frequency response. Narration, captions and the fee-free rebalance illustration are layered into the existing motion design. It animates real component values, cursor gestures, sheets and navigation in a deterministic UI presentation. See the [Remotion guide](remotion/README.md) for the storyboard, research, audio analysis and reproduction steps.
+The default video commands now render the recovered original from `remotion-original/`, with the original uploaded music. See its [render guide](remotion-original/README.md). The separate narrated rebalance version remains available through `video:rebalance:studio` / `video:rebalance:render` and its [guide](remotion/README.md).
 
 ## Built, checked, and explicit about scope
 

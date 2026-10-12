@@ -1,3 +1,5 @@
+> This is the separate narrated rebalance source. The recovered 17.2 MiB original and default commands use `remotion-original/`. Its matching narrated export is preserved at tag `promo-narrated-rebalance-v3`.
+
 # Coloyond — your mix, your rhythm
 
 62-second product film, 1920×1080, 30fps. Warm paper, precise typography and the supplied Coloyond prism/rays form the visual language. This revision replaces the screenshot chapters with one persistent, frame-controlled UI demonstration.
@@ -49,10 +51,10 @@ Reviewed primary studio process and product-film case studies, then applied the 
 ```sh
 npm ci
 npm run test:video-camera
-npm run video:studio
-npm run video:render
-npm run video:package # FFmpeg, Python, NumPy and SciPy; exact 62s distribution MP4
-npm run test:video-export # duration, captions, source inventory and artifact hashes
+npm run video:rebalance:studio
+npm run video:rebalance:render
+npm run video:rebalance:package # FFmpeg, Python, NumPy and SciPy; exact 62s distribution MP4
+npm run test:video-rebalance-export # duration, captions, source inventory and artifact hashes
 # Optional: regenerate the checked-in analysis (FFmpeg, Python, NumPy and SciPy required)
 python remotion/analyze_music.py
 # Separate real-app UI verification / captures

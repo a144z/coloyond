@@ -1,3 +1,5 @@
+> Video verification below describes the narrated revision at `promo-narrated-rebalance-v3`. The current default MP4 has been restored byte-for-byte from `a1572c6` (17.2 MiB); see `remotion-original/recovery.json`. APK checks remain current.
+
 # Mobile verification — 13 October 2026
 
 - `npm run typecheck`: passed.
