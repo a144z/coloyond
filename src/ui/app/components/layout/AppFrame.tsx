@@ -87,7 +87,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="grid shrink-0 grid-cols-3 border-t border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
+      className="grid shrink-0 grid-cols-3 border-y border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
     >
       {tabs.map(({ id, label, icon: Icon }) => {
         const active = activeTab === id;
@@ -97,14 +97,14 @@ export function BottomNav() {
             type="button"
             onClick={() => setTab(id)}
             aria-current={active ? 'page' : undefined}
-            className={`cw-nav-item flex h-16 flex-col items-center justify-center gap-1.5 border-t-[3px] px-2 text-[10px] uppercase tracking-[0.08em] transition-colors ${
+            className={`cw-nav-item flex h-[58px] flex-col items-center justify-center gap-[3px] border-t-[3px] px-2 font-display text-[12px] tracking-[-0.4px] transition-colors ${
               active
-                ? 'border-ink text-petrol'
+                ? 'border-ink text-ink'
                 : 'border-t-transparent text-iron hover:bg-pulp-shade/60 hover:text-ink'
             }`}
           >
-            <Icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden />
-            <span className="font-mono font-bold">{label}</span>
+            <Icon size={18} weight={active ? 'fill' : 'regular'} aria-hidden />
+            {label}
           </button>
         );
       })}
