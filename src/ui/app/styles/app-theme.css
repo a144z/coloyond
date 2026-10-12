@@ -1,0 +1,246 @@
+/*
+  coloyond mobile app theme — integrated into this frontend.
+
+  Tailwind utilities come from "tailwindcss/theme" + "tailwindcss/utilities"
+  only: no preflight, so LandingPage, /prototype and every desk page render
+  exactly as before. Class discovery is pinned to this app folder via
+  @source, so generic class names used by the desktop views never collide.
+
+  Restyle pass (this integration): the lacquerboard token names stay — screens
+  and components keep their utility classes — but the values now reference the
+  platform tokens defined in src/ui/app.css (:root). Paper/field surfaces, ink
+  text, blue accent, muted secondary, rule hairlines, Arial display type, flat
+  shadows. See docs/integrations/2026-10-13-coloyond-beta-ui-integration.md.
+*/
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities) source(none);
+@source "../";
+
+@theme {
+  /* Mapped onto the platform palette from src/ui/app.css (:root). */
+  --color-pulp: var(--paper);
+  --color-pulp-shade: var(--canvas);
+  --color-pulp-deep: var(--rule);
+  --color-ledger: var(--field);
+  --color-ledger-subtle: #eae5d7;
+  --color-ink: var(--ink);
+  --color-petrol: var(--blue);
+  --color-brass: var(--violet);
+  --color-iron: var(--muted);
+  --color-danger: #8c3925;
+  --color-hairline: var(--rule);
+
+  /* Platform typography: the desktop Arial stack + generic monospace. */
+  --font-display: Arial, Helvetica, sans-serif;
+  --font-mono: monospace;
+
+  /* The desktop system draws flat panels: rules, no offset shadows. */
+  --shadow-panel: none;
+  --shadow-frame: none;
+  --shadow-btn: none;
+
+  --ease-lacquer: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  /* Everything app-specific is scoped to the app column (.cw-app) or to an
+     app-only class name. The portal layers (toasts, sheets, the execution
+     overlay) live under <body>, so app-only component classes below stay
+     unscoped on purpose. */
+  .cw-app {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  .cw-app input[type="number"]::-webkit-outer-spin-button,
+  .cw-app input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .cw-app input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+@layer components {
+  /* Attention spectrum: the single sanctioned gradient. Live-system signal only. */
+  .cw-app .band-attention {
+    background: linear-gradient(
+      90deg,
+      #e62e5c 0%,
+      #ea7325 22%,
+      #eccb1a 42%,
+      #14c777 64%,
+      #1a8ee9 84%,
+      #8736e0 100%
+    );
+  }
+
+  /* Unbleached cellulose tooth. Fixed overlay only, never on scrolling content. */
+  .cw-app .pulp-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Slidebar, platform skin: mirrors .cr-desk-slider-input from the desktop
+     desk — 1px rule track over the field, round paper thumb, blue focus. */
+  .ledger-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    background: transparent;
+    outline: none;
+    margin: 10px 0;
+    min-height: 32px;
+  }
+  .ledger-range::-webkit-slider-runnable-track {
+    height: 10px;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    background: var(--field);
+  }
+  .ledger-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -6px;
+    border: 1px solid var(--ink);
+    border-radius: 50%;
+    background: var(--paper);
+    cursor: ew-resize;
+  }
+  .ledger-range::-moz-range-track {
+    height: 10px;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    background: var(--field);
+  }
+  .ledger-range::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--ink);
+    border-radius: 50%;
+    background: var(--paper);
+  }
+
+  .ledger-range:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 4px;
+  }
+
+  /* Slidebar, frozen: a pinned weight — the value stays, it just no longer
+     moves. Grey thumb over the canvas track. */
+  .ledger-range:disabled {
+    cursor: default;
+  }
+  .ledger-range:disabled::-webkit-slider-runnable-track {
+    background: var(--canvas);
+  }
+  .ledger-range:disabled::-webkit-slider-thumb {
+    background: var(--canvas);
+    border-color: var(--muted);
+    cursor: default;
+  }
+  .ledger-range:disabled::-moz-range-track {
+    background: var(--canvas);
+  }
+  .ledger-range:disabled::-moz-range-thumb {
+    background: var(--canvas);
+    border-color: var(--muted);
+  }
+
+  /* Weight lock, the desk pattern (.cr-desk-lock): small mono text button,
+     inverted ink while pressed in. Same rule set as the desktop desk. */
+  .cw-weight-lock {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    background: var(--field);
+    color: var(--muted);
+    font: 10px/1 monospace;
+    text-transform: uppercase;
+    letter-spacing: 1.1px;
+    cursor: pointer;
+  }
+  .cw-weight-lock[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+  .cw-weight-lock:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+  }
+}
+
+/* Unlayered restyle: the platform draws 1px rules and soft corners, so the
+   lacquerboard's 2px rules and hard offset shadows step down. Unlayered rules
+   beat utility layers without fighting them. */
+.border-2 { border-width: 1px; }
+.border-b-2 { border-bottom-width: 1px; }
+.border-t-2 { border-top-width: 1px; }
+
+.cw-app section,
+.cw-app button,
+.cw-app input,
+.cw-app select,
+.cw-app textarea,
+.cw-rounded,
+.cw-rounded button {
+  border-radius: 8px;
+}
+
+.cw-app [class*="active:translate-"]:active {
+  translate: none;
+}
+
+@keyframes coloyond-appear {
+  from {
+    opacity: 0.4;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes coloyond-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes coloyond-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-app *,
+  .cw-app *::before,
+  .cw-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
