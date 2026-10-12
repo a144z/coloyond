@@ -87,28 +87,27 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="shrink-0 border-t border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
+      className="grid shrink-0 grid-cols-3 border-t border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="grid grid-cols-3">
-        {tabs.map(({ id, label, icon: Icon }) => {
-          const active = activeTab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              aria-current={active ? 'page' : undefined}
-              className={`relative flex h-16 flex-col items-center justify-center gap-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] transition-colors ${
-                active ? 'text-ink' : 'text-iron hover:bg-pulp-shade/60'
-              }`}
-            >
-              {active ? <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-ink" /> : null}
-              <Icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden />
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      {tabs.map(({ id, label, icon: Icon }) => {
+        const active = activeTab === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            aria-current={active ? 'page' : undefined}
+            className={`cw-nav-item flex h-16 flex-col items-center justify-center gap-1.5 border-t-[3px] px-2 text-[10px] uppercase tracking-[0.08em] transition-colors ${
+              active
+                ? 'border-ink text-petrol'
+                : 'border-t-transparent text-iron hover:bg-pulp-shade/60 hover:text-ink'
+            }`}
+          >
+            <Icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden />
+            <span className="font-mono font-bold">{label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

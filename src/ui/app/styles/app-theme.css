@@ -172,6 +172,13 @@
   border-radius: 7px;
 }
 
+/* The bottom nav tabs carry a 3px state border the way .cr-nav button does, so
+   they must not take the generic control radius: a rounded top border renders
+   as an arc instead of the flat ink marker. */
+.cw-app .cw-nav-item {
+  border-radius: 0;
+}
+
 .cw-app input:not([type="range"]),
 .cw-app select,
 .cw-app textarea {
