@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn weights_must_have_the_same_length_as_the_basket_and_still_sum_to_the_total() {
-        let mut vault = PortfolioVaultV2::new(
+        let vault = PortfolioVaultV2::new(
             0,
             Pubkey::default(),
             0,
@@ -272,5 +272,26 @@ mod tests {
         assert!(vault.assert_weights_match_basket(&vec![6_000, 4_000]).is_ok());
         assert!(vault.assert_weights_match_basket(&vec![5_000, 5_000, 0]).is_err());
         assert!(vault.assert_weights_match_basket(&vec![6_000, 5_000]).is_err());
+    }
+
+    #[test]
+    fn vault_state_round_trips_through_its_anchor_codec() {
+        let mut vault = PortfolioVaultV2::new(
+            255,
+            Pubkey::default(),
+            0,
+            basket(3),
+            vec![4_000, 3_000, 3_000],
+        )
+        .unwrap();
+        vault.units[0] = 100;
+        vault.owner_op_sequence = 3;
+        let mut bytes = vec![0u8; VAULT_SPACE];
+        let mut output: &mut [u8] = &mut bytes;
+        vault.try_serialize(&mut output).unwrap();
+        assert!(
+            output.len() < VAULT_SPACE,
+            "vault state must leave slack inside the reserved space"
+        );
     }
 }
