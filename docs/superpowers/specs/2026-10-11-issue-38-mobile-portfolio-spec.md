@@ -1,3 +1,5 @@
+> **Historical planning record.** Current shipped architecture, feature status and proof are in [submission/README.md](../../submission/README.md). This record may describe the retired Kotlin/Compose or Glider-only path and is not current deployment evidence.
+
 ---
 shaping: true
 issue: 38

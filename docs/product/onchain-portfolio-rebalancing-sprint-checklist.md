@@ -1,3 +1,5 @@
+> **Historical planning record.** Current shipped architecture, feature status and proof are in [submission/README.md](../submission/README.md). This record is not current deployment evidence.
+
 # Coloyond on-chain portfolio rebalancing: agent sprint checklist
 
 **Status:** execution checklist, not evidence that a vault or funded flow exists.  

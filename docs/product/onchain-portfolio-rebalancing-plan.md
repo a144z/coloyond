@@ -1,3 +1,5 @@
+> **Historical planning record.** Current shipped architecture, feature status and proof are in [submission/README.md](../submission/README.md). This record is not current deployment evidence.
+
 # coloyond: fully on-chain portfolio rebalancing plan
 
 **Research cut and independent three-agent recheck:** 10 October 2026 · **Status:** architecture decision and sprint plan with partial implementation evidence below; not production-ready or audited · **Target runtime:** Solana and the Kotlin/Jetpack Compose Android app in `apps/android`.

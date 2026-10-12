@@ -23,6 +23,10 @@
 
 ---
 
+## Submission evidence
+
+[Start with the judge’s proof guide](docs/submission/README.md): current architecture, code paths, timestamped devnet program and successful settlement receipts, build checks, and explicit remaining limits. The shipped APK uses React/Capacitor; Kotlin/Compose and the Glider-only handoff are historical.
+
 ## A portfolio should feel like a composition
 
 Portfolio tools often scatter allocation, custody, automation, and wallet actions across different screens. Coloyond brings those decisions into one compact desk: a visible mix, precise controls, and a clear view of the assets underneath.
