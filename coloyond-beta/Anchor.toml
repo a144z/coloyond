@@ -7,7 +7,7 @@ coloyond_execution = "HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d"
 
 [provider]
 cluster = "devnet"
-wallet = "~/.config/solana/id.json"
+wallet = "~/.config/solana/devnet-id.json"
 
 [workspace]
 members = ["programs/coloyond-execution"]

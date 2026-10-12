@@ -1,23 +1,19 @@
 #!/usr/bin/env node
 /** Deploy the compiled Anchor program to devnet using local-only signers. */
-import { access, chmod, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { Keypair } from '@solana/web3.js';
 
-const upgradePath = 'target/upgrade-authority.json';
+const upgradePath = join(homedir(), '.config/solana/devnet-id.json');
 const programPath = 'target/deploy/coloyond_execution-keypair.json';
 const binaryPath = 'target/deploy/coloyond_execution.so';
+const baseRpc = process.env.SOLANA_RPC_URL ?? 'devnet';
 
 await access(binaryPath);
 await access(programPath);
-try {
-  await access(upgradePath);
-} catch {
-  const upgrade = Keypair.generate();
-  await writeFile(upgradePath, JSON.stringify(Array.from(upgrade.secretKey)), { mode: 0o600 });
-  console.log(`New local upgrade authority: ${upgrade.publicKey.toBase58()}`);
-}
-await chmod(upgradePath, 0o600);
+await access(upgradePath);
 
 const cli = process.env.SOLANA_CLI || 'solana';
 const result = spawnSync(cli, [
@@ -25,7 +21,7 @@ const result = spawnSync(cli, [
   '--program-id', programPath,
   '--keypair', upgradePath,
   '--upgrade-authority', upgradePath,
-  '--url', 'devnet',
+  '--url', baseRpc,
   '--use-rpc',
 ], { stdio: 'inherit' });
 if (result.error) throw result.error;
