@@ -9,8 +9,8 @@ outside this change.
 ## Repository review and access
 
 The private repository was cloned from `a144z/coloyond` using the supplied
-credential without storing it in files or the Git remote. All 19 available PRs
-are closed. Their descriptions, review comments and reviews were retrieved;
+credential without storing it in files or the Git remote. At the initial inventory, all 19 existing PRs
+were closed. Their descriptions, review comments and reviews were retrieved;
 GitHub returned no review comments or reviews. Issue listing returned HTTP 403,
 `Resource not accessible by personal access token`, so issue bodies and issue
 conversation history could not be reviewed. No issue was closed or represented
@@ -113,3 +113,13 @@ failure was a stale draft-IDL fixture assertion, corrected and verified in the
 focused rerun. No weighted math source changed. A shared Cargo build cache
 initially produced an invalid proc-macro metadata error in the portfolio build;
 cleaning that one proc-macro package and rerunning resolved it.
+
+SBF/Localnet attempt: Agave 4.3.0 and `cargo-build-sbf` 4.3.0 were obtained.
+Platform-tools v1.57 extraction did not complete during the validation window.
+While incomplete, SBF `rustc --version` first failed on a missing driver library
+and later exited with a bus error. Native extraction was attempted; no completed
+SBF artifact or validator transaction result is claimed. The host Rust tests
+use the separately installed Rust 1.89.0 and did pass. These toolchain attempts
+do not change the explicit absence of DEX execution or Devnet deployment.
+
+The repair is published as draft PR #43. Main was not merged or deployed.
