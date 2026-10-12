@@ -1,0 +1,24 @@
+# Fresh deployment and live acceptance
+
+The program ABI, PDA layout, and owner model changed. Do not upgrade the historical auction/ETF deployments or reuse their state. This branch's compile-time program identity must be replaced by a newly generated program keypair's **public address** before deploying. No program/deployer private key belongs in Git or the browser.
+
+1. Install Anchor 0.32.1 and an Agave SBF/validator toolchain. Host Rust is pinned in `rust-toolchain.toml`. The validation environment used Agave 4.3.0/platform-tools v1.57 and LiteSVM 1.6.0; record your exact versions and retain the lockfiles.
+2. Generate a new program keypair outside the repository. Use `solana-keygen pubkey` to obtain its public address. Run `node scripts/set-program.mjs <public-address>` to update Rust, Anchor, and the shared client/keeper default together. No secret input is accepted by this script.
+3. Build with `npm run build:program`. Verify source revision and `sha256sum target/deploy/coloyond_vault.so`. Run the SBF bank harness, which loads that exact artifact. The test imports the same configured default program identity.
+4. With your Devnet payer and upgrade authority, deploy the matching artifact/keypair using standard `solana program deploy --url devnet --program-id /secure/path/program-keypair.json target/deploy/coloyond_vault.so`. Estimate account rent and fees with your installed CLI first. Never silently switch to Mainnet.
+5. Read the executable program and ProgramData on Devnet. Record deployment signature, public address, genesis, slot, binary hash, and upgrade-authority public address. Set `VITE_PROGRAM_ID` and `PROGRAM_ID` to the matching address. Check both Pyth feeds from confirmed RPC state. If sponsored feeds are stale, do not widen the freshness policy: run the operator-funded Full Receiver SDK refresh included in the cranker; investigate any guardian/update transaction failure instead of relaxing validation.
+6. In a Devnet wallet, create at least two vaults. Fund WSOL plus explicitly labeled Test USDC; fund a separate operator wallet with inventory and fees. Run the cranker and record two confirmed fills with before/after custody and drift. Test owner weight edits, add/remove token flows, pause, partial/full withdrawals and closure; record signatures. Test a stopped/underfunded cranker and verify funds remain withdrawable.
+7. Verify the browser wallet journey, reload with a pending signature, reconnect/account switching, and actual confirmation/readback. SBF bank harness signatures do not prove this Devnet/browser journey.
+8. After independent review and successful deployment checks, if immutability is the intended policy, revoke upgrade authority with the CLI's explicit finalization mechanism and verify ProgramData authority is null. This is irreversible; retain public evidence. Until then, disclose the deployer trust boundary.
+
+## Oracle update boundary
+
+This MVP consumes Pyth's sponsored Push Feed PDAs in official `PriceUpdateV2` format. It does not fetch an HTTP price and substitute that for an authenticated on-chain price. The live unauthenticated Hermes probe returned HTTP 401. Pyth documents that Hermes now requires an API key following its August 26, 2026 upgrade. Supply a provider-issued `PYTH_API_KEY` in the operator environment; this is a feed-service credential, not a vault authority. No key was supplied in this task, so an authenticated live refresh is not proven.
+
+Sending mode fetches signed Hermes updates and uses the official Receiver SDK `addUpdatePriceFeed(..., 0)` with full VAA verification to refresh sponsored feed PDAs when needed. It journals each update transaction before broadcasting and waits for confirmation before rereading prices. Encoded VAA accounts left after an interrupted update are owned/funded by the operator and can be closed by the next refresh. The operator submits a fill only when chain-clock freshness and confidence pass; the contract repeats these checks.
+
+Official sources: [Pyth Solana push feeds](https://docs.pyth.network/price-feeds/core/push-feeds/solana), [Pyth Receiver integration](https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana), [Anchor token CPI](https://www.anchor-lang.com/docs/tokens/basics/transfer-tokens).
+
+## Economic boundary
+
+There is no external DEX adapter in this MVP. An operator is a real counterparty, not a scheduler pretending to trade. It pays at least the sold asset's upper confidence value in units of the purchased asset's lower confidence value. The vault pays zero keeper/AMM fee. Operators absorb confidence spread, the planning cushion, and network fees; replenishment is their responsibility. Production economics, an incentive mechanism, additional assets, LP-share issuance, and DEX-backed liquidity require separate reviewed extensions.

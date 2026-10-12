@@ -8,7 +8,7 @@ import {
   createDefaultAuthorizationResultCache,
   createDefaultWalletNotFoundHandler,
 } from "@solana-mobile/wallet-adapter-mobile";
-import { DEFAULT_NETWORK, NETWORK_RPC } from "../../symmetry/config.js";
+import { RPC_URL } from "../../shared/config.js";
 
 const APP_ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://coloyond.app";
 
@@ -18,7 +18,7 @@ const APP_ORIGIN = typeof window !== "undefined" ? window.location.origin : "htt
 // Supplying our own SolanaMobileWalletAdapter overrides the built-in default and
 // lets web browsers on Android connect to an installed mobile wallet via MWA.
 export function SolanaWalletProvider({ children }: { children: ReactNode }) {
-  const endpoint = NETWORK_RPC[DEFAULT_NETWORK];
+  const endpoint = RPC_URL;
   const wallets = useMemo(
     () => [
       new SolanaMobileWalletAdapter({

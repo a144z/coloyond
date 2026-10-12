@@ -1,13 +1,11 @@
 [package]
 name = "coloyond-vault"
-version = "0.3.0"
-description = "Coloyond pooled two-asset vault program"
+version = "1.0.0"
 edition = "2021"
-
+publish = false
 [lib]
 crate-type = ["cdylib", "lib"]
 name = "coloyond_vault"
-
 [features]
 default = []
 cpi = ["no-entrypoint"]
@@ -18,15 +16,9 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "anchor-spl/token_
 anchor-debug = []
 custom-heap = []
 custom-panic = []
-
 [dependencies]
-anchor-lang = { version = "=0.32.1", features = ["init-if-needed"] }
+anchor-lang = "=0.32.1"
 anchor-spl = { version = "=0.32.1", default-features = false, features = ["token"] }
-pyth-solana-receiver-sdk = "=1.2.0"
-
+coloyond-etf-oracle = { path = "../../crates/etf-oracle" }
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
-
-[[test]]
-name = "oracle"
-path = "tests/oracle/mod.rs"

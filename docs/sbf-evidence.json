@@ -1,0 +1,222 @@
+{
+  "runtime": "LiteSVM 1.6.0 SBF bank",
+  "synthetic_oracles_and_test_mint": true,
+  "not_devnet_rpc_signatures": true,
+  "program": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+  "artifact_sha256": "631fe3cd39420cddfdad7d54a67ad331008aaa9f1e46ad2b109ac6b30bf6dbf8",
+  "cases": [
+    {
+      "name": "create+ATAs",
+      "details": {
+        "signature": "3E65BJWuBb4QtQSmqAaLMGoMnD7JXyQhbfASGVuP6j95iU6FwA7pQm4tooGD53zGLwPUiY8UBuTxM5wsq6pmZmif"
+      }
+    },
+    {
+      "name": "second isolated vault",
+      "details": {
+        "signature": "5ArUZwa5hFihxW7zED3z9spVFkhUPZjTf9CjHWLmu75wQAmGL7BEr68PsAc9vjiwSUed6FzMbeFpwte5XtB3bWj6"
+      }
+    },
+    {
+      "name": "fund owner balances",
+      "details": {
+        "signature": "4NqMGHyRX216wNraD9Q6Xjv3F75qf2grLU35L4kvJQAvFYJmgxBTbkhsB6qVXa8mUChNskkkYJw5jBfGVfjB4Tiz"
+      }
+    },
+    {
+      "name": "keeper inventory",
+      "details": {
+        "signature": "2mUmduoGrwMMeEHdXNPM2nxPeo3kQkDBmjX2ivaPQ6LLxt5qUYLSumDpg3Kg2ACnKCx4veXWpLDAPDgxugsci26o"
+      }
+    },
+    {
+      "name": "deposit actual SPL tokens",
+      "details": {
+        "signature": "a1qvZHvPZeoVMrzEr6np6rGkofxSqQvCzk7wA7CdrjBdxnpajU4CB7tMK8hQF9zq33qvo7gGzBAfcC7G9URr5JV"
+      }
+    },
+    {
+      "name": "underpayment rejected",
+      "details": {
+        "signature": "3Nb6oHzLtwMTjikBc4LJR1fVES24HTwJVaq4iBmZd1ToEzkA6QHMfTs4t37jM8CkJRpccqjMEWT6a1SpkpKhfw7b",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6010 } }"
+      }
+    },
+    {
+      "name": "oversized fill rejected",
+      "details": {
+        "signature": "2DJHXBiXQRsiHiQFj5ieCts1oqdCAFF2aKshJknYwmV2z5i2dAiuy1n4JpGzxUC8pUL3c8Qpkyz2FvckpMoVZt2",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6014 } }"
+      }
+    },
+    {
+      "name": "wrong feed rejected",
+      "details": {
+        "signature": "AMX4VKSXnWAFYJ2m3gtkJkxLKL4En3NX24E6NF2H5Agvn63vSE4azDzTBkqn3rpy5LeJ6TLxyBs1RCtmGLCpxai",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6000 } }"
+      }
+    },
+    {
+      "name": "stale oracle rejected",
+      "details": {
+        "signature": "2nKkAdX3Mvy327E5VZCGzybaW7c2tCQKc3KDzocq2vQNHip1omEB3ibnwQCkkzL5RqMbZLCWYGzpH2CkUzXfXLWx",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6005 } }"
+      }
+    },
+    {
+      "name": "future oracle rejected",
+      "details": {
+        "signature": "4yYsPJXKrMMQtts6gza6mK44ufhV2nsaRL8sLxykGPbo2xkRSiXvWZJT8mx1rUWrPy98rm1kEhDUB9fpxRa9YUpS",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6007 } }"
+      }
+    },
+    {
+      "name": "wide confidence rejected",
+      "details": {
+        "signature": "44MphYm6bQ8vBq3qyTXfDQy8NHAybfcLrtBQDXr2JHwM2jJrEL9CmjW4i1KQGM6BcL5o4deFZHemFLHzR5i4evTP",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6008 } }"
+      }
+    },
+    {
+      "name": "wrong oracle owner rejected",
+      "details": {
+        "signature": "3HkACDEz9kSKDkNVLRfGWmqeGQZZwTZ3sLCbPv8vjSwyzZ83LE8i7NBfHmGuPGRSYpwFVKkiCuYZ1FDWT5HxbcLG",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6001 } }"
+      }
+    },
+    {
+      "name": "foreign destination rejected",
+      "details": {
+        "signature": "5vgWVjP8zhevazwekwhVc5pfa9R83FCN6o2xuuxzmqaHgrW2c97bp3EzSBYncKwWaTcNftFzKPJD6y2xNj2NtoK",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6000 } }"
+      }
+    },
+    {
+      "name": "cross-vault custody rejected",
+      "details": {
+        "signature": "4sdPX4PHVVjX8Z3dRHFSr4gPJSieeDLnYeFJpR8TB6JxWqhkrG4gyrUyxiN2F83aB5FvZakYPm2h5boBhgF4hEnC",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6003 } }"
+      }
+    },
+    {
+      "name": "first real inventory-backed fill",
+      "details": {
+        "signature": "2PYbj1aP35x1yGd3ZhDr9wcV1q6uZhqxi5mRkEPTJCjYW9wFmv6k31JaVq58Fbx2TJJxfv1pjdn1rNHSLrbZVbNV"
+      }
+    },
+    {
+      "name": "cooldown rejected",
+      "details": {
+        "signature": "DsoX67zuqkjEaYPtYM6HAweeGGZKcLFh3UtfnBjD1tmGmeQhusJPovJzDjwpxP7GWKpFtA8yHBYtkTzqekBCHZC",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6007 } }"
+      }
+    },
+    {
+      "name": "keeper cannot withdraw",
+      "details": {
+        "signature": "28huN513p1dAMLkfuihvT6qMJ3R5wTGqv4ufVtkLaCF2csB6Hd8nZrHYqnWsMqktAQHBJnu8yX6VLyX2BbgDM82N",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 2001 } }"
+      }
+    },
+    {
+      "name": "late post-CPI drift failure rolls payment back",
+      "details": {
+        "signature": "pU5BXX63FHosxUmTFQuR7zmXo9Y9RgrR9vn6uD4XRqmKF8kMoMtB9yEXZzbwEWzgnBFeMVd8CHg3smuS43C7NJX",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6011 } }"
+      }
+    },
+    {
+      "name": "second real fill",
+      "details": {
+        "signature": "5hWaSDuK35afMZpQev1z56kf8vfi7849b3KQujdeoFt1mgKGTcfGpuBXQcBX1uJoyBzTe98DVWZk6N8yYHenxtbT"
+      }
+    },
+    {
+      "name": "owner weight edit",
+      "details": {
+        "signature": "qLHjh59Z8w8qVYZNyauiDTEy7JAdayhnXzRMBkcCcEqEqgdHHN8Sp4eEHwx1An8XeKMasKk3BwasW1K5C42i4Ga"
+      }
+    },
+    {
+      "name": "stale configuration rejected",
+      "details": {
+        "signature": "4dvRRRX6hRXDZYvXRS6CcqutYbDWi2ppnYn6sFdDP3ZyF1AacjqkLkRnPhkPHJW4ZJgGUsEHh2hFhLYmpNiwRxNF",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6004 } }"
+      }
+    },
+    {
+      "name": "pause",
+      "details": {
+        "signature": "SjcTZJjEL1CidmAX3Yap1m5mcfC1yoS6xXsbCMr3VZUaY19R9ZRMQnPUYs3ySbsCyT5tfkaSyScyUrdEy2X77Kp"
+      }
+    },
+    {
+      "name": "paused fills rejected",
+      "details": {
+        "signature": "472pJvekdN5ew7HkJoXhAibpJc47WPoCsjhGdRES8wGZhy9d1t7kAwebNDn1Z7jL3TgX5APQ9eESqoSW483ewowG",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6006 } }"
+      }
+    },
+    {
+      "name": "cannot strand removed token",
+      "details": {
+        "signature": "2NtbpfS5FwSnMQEb2cLgokxwDwpwf3VNqdEqL6N3NYiX13eMntKjTBRuARMKh8GRy1VWSLtd5BmGATGa8rvft3CJ",
+        "error": "TransactionErrorInstructionError { index: 1, error: InstructionErrorCustom { code: 6005 } }"
+      }
+    },
+    {
+      "name": "remove token atomically, withdrawal remains available under pause",
+      "details": {
+        "signature": "3J53zbQrMJanEqkTwtSdJFPTjfhkVY5NmbQ3cgYRpDKwG94sNbfyoPnLNH2Vph4meEP5AEVUkJ883B2brzk8wdww"
+      }
+    },
+    {
+      "name": "add token again and resume",
+      "details": {
+        "signature": "5TDUQcvryw52gX5Enhk4tywrSjStug9yfdNiBmg6F5wjQivAMuV72Yckn4TYHuzNtJhozQMu241wnX7bwWeJAb2v"
+      }
+    },
+    {
+      "name": "fill after remove/re-add uses current basket and revision",
+      "details": {
+        "signature": "4dWoAUy9f4xk9mRKvGeR9oU4AFfuef9qjkKuCR34ADvdLau3QrMEXQCyrZZLbEWB5Jgdg5SRs3zVh1a4vJf2jLAk"
+      }
+    },
+    {
+      "name": "partial withdrawal",
+      "details": {
+        "signature": "2WiJatYBZiZT8uZPbtBfCJ18t3sPdt1ZC9hJqoWW8txBjLvjBwQNua7NJncN6EmY3AXyKU9PKyWUxCKxMuHwtxJL"
+      }
+    },
+    {
+      "name": "full withdrawal and closure",
+      "details": {
+        "signature": "4HjbWikZGYyc5G6xmUtS77QkTxbtY92UfYUqg1cTT4RsNYVjEpfoGqe7Ee8XeZPDJn9TnTUMd31pGU7x9jp2JTbQ"
+      }
+    },
+    {
+      "name": "PASS",
+      "details": {
+        "runtime": "LiteSVM SBF bank",
+        "program": "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6",
+        "syntheticOracleFixtures": true,
+        "independentVaults": true
+      }
+    }
+  ],
+  "post_cpi_rollback_logs": [
+    "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+    "Program ComputeBudget111111111111111111111111111111 success",
+    "Program FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6 invoke [1]",
+    "Program log: Instruction: Rebalance",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 105 of 368957 compute units",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 112 of 366822 compute units",
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+    "Program log: AnchorError thrown in programs/coloyond-vault/src/lib.rs:287. Error Code: NoImprovement. Error Number: 6011. Error Message: Rebalance must strictly reduce portfolio drift.",
+    "Program FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6 consumed 41996 of 399850 compute units",
+    "Program FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6 failed: custom program error: 0x177b"
+  ]
+}

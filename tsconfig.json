@@ -10,5 +10,8 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "packages/etf-client/src"]
+  "include": [
+    "src",
+    "tests"
+  ]
 }

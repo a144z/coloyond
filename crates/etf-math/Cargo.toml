@@ -1,9 +1,0 @@
-[package]
-name = "coloyond-etf-math"
-version = "0.1.0"
-edition = "2021"
-publish = false
-
-[lib]
-name = "coloyond_etf_math"
-path = "src/lib.rs"
