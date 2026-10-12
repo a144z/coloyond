@@ -26,11 +26,12 @@ import {
   buildRedeemMinimums,
 } from './solana/execution.js';
 import { fmtToken } from './format.js';
+import { discoverExploreVaults, investInExploreVault, type ExploreVault } from './solana/explore.js';
 
 /* ---------------- types ---------------- */
 
-export type ScreenId = 'onboarding' | 'wallet' | 'portfolios' | 'create' | 'vault' | 'system';
-export type TabId = 'portfolios' | 'wallet' | 'system';
+export type ScreenId = 'onboarding' | 'wallet' | 'portfolios' | 'explore' | 'create' | 'vault' | 'system';
+export type TabId = 'portfolios' | 'explore' | 'wallet' | 'system';
 
 export interface Screen {
   id: ScreenId;
@@ -173,6 +174,11 @@ interface ColoyondState {
   allVaults: Record<string, VaultConfig[]>;
   vaultSetupDrafts: Record<string, VaultSetupDraft>;
   vaults: VaultConfig[];
+  exploreVaults: ExploreVault[];
+  exploreLoading: boolean;
+  exploreHasLoaded: boolean;
+  exploreError: string | null;
+  exploreRejectedAccounts: number;
   logs: LogEntry[];
 
   // runtime
@@ -212,6 +218,7 @@ interface ColoyondState {
   refreshBalances: () => Promise<void>;
   refreshRpc: () => Promise<void>;
   refreshVaultBalances: (vaultId: string) => Promise<void>;
+  refreshExplore: () => Promise<void>;
 
   // flows
   runFlow: (
@@ -226,6 +233,7 @@ interface ColoyondState {
   wrap: (lamports: number) => Promise<void>;
   createVault: (input: CreateVaultInput) => Promise<string | null>;
   fundVault: (vaultId: string, input: FundVaultInput) => Promise<void>;
+  investExploreVault: (address: string, amountByMint: Readonly<Record<string, bigint>>, minSharesOut: bigint) => Promise<boolean>;
   withdrawVault: (vaultId: string, fraction: number) => Promise<void>;
   pauseVault: (vaultId: string) => void;
   resumeVault: (vaultId: string) => void;
@@ -241,6 +249,11 @@ export const useStore = create<ColoyondState>()(
       allVaults: {},
       vaultSetupDrafts: {},
       vaults: [],
+      exploreVaults: [],
+      exploreLoading: false,
+      exploreHasLoaded: false,
+      exploreError: null,
+      exploreRejectedAccounts: 0,
       logs: [],
 
       activeTab: 'portfolios',
@@ -398,6 +411,27 @@ export const useStore = create<ColoyondState>()(
           }
         } catch {
           // keep last known
+        }
+      },
+
+      refreshExplore: async () => {
+        set({ exploreLoading: true, exploreHasLoaded: false, exploreError: null, exploreVaults: [], exploreRejectedAccounts: 0 });
+        try {
+          const result = await discoverExploreVaults();
+          set({
+            exploreVaults: result.vaults,
+            exploreRejectedAccounts: result.rejectedAccounts,
+            exploreLoading: false,
+            exploreHasLoaded: true,
+          });
+        } catch (error) {
+          set({
+            exploreVaults: [],
+            exploreRejectedAccounts: 0,
+            exploreError: error instanceof Error ? error.message : 'Solana devnet could not be read.',
+            exploreLoading: false,
+            exploreHasLoaded: true,
+          });
         }
       },
 
@@ -680,6 +714,32 @@ export const useStore = create<ColoyondState>()(
           get().refreshBalances();
           get().refreshVaultBalances(vaultId);
         }
+      },
+
+      investExploreVault: async (address, amountByMint, minSharesOut) => {
+        const wallet = activeWalletSigner();
+        if (!wallet) {
+          get().toast('info', 'Connect a wallet to invest', 'Explore is public; deposits require a wallet that can sign on Solana devnet.');
+          return false;
+        }
+        const ok = await get().runFlow('Invest in portfolio', 'EXPLORE · DEVNET', [
+          {
+            label: 'Recheck active Vault State and token accounts',
+            run: async () => ({ note: `${address.slice(0, 8)}… · ${Object.values(amountByMint).filter((amount) => amount > 0n).length} asset amount(s)` }),
+          },
+          {
+            label: 'Sign deposit with minimum shares out',
+            run: async () => {
+              const result = await investInExploreVault(wallet, new PublicKey(address), amountByMint, minSharesOut);
+              return { sig: result.sig, note: `confirmed in slot ${result.slot}` };
+            },
+          },
+        ]);
+        if (ok) {
+          void get().refreshBalances();
+          void get().refreshExplore();
+        }
+        return ok;
       },
 
       withdrawVault: async (vaultId, fraction) => {
