@@ -19,7 +19,7 @@ export function LedgerPanel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={`overflow-hidden rounded-[18px] border border-panel bg-pulp shadow-panel ${className}`}>
+    <section className={`overflow-hidden rounded-[18px] border border-panel bg-ledger shadow-panel ${className}`}>
       {stripe !== undefined || meta !== undefined ? (
         <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
           <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em]">{stripe}</span>

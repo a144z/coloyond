@@ -43,7 +43,7 @@ export function WeightsOwnerPanel({ snapshot, onSubmit }: OwnerPanelProps): Reac
         aria-label="candidate weight for asset zero"
         value={Number(draft[0] ?? 0n)}
         onChange={(event) => {
-          const parsed = BigInt.asIntNBit(16n, BigInt(event.target.value));
+          const parsed = BigInt(event.target.value || '0');
           const next = draft.map((w, i) => (i === 0 ? parsed : w));
           setDraft(next);
         }}

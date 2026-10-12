@@ -24,8 +24,8 @@ export default function App() {
 
   // ER status, balances and live feeds sync while the app is open.
   useEffect(() => {
-    if (wallet || connectedWallet) ensureScheduler();
-    else stopScheduler();
+    ensureScheduler();
+    return stopScheduler;
   }, [wallet, connectedWallet]);
 
   // Android shell: hardware back + pulp status bar (no-op on web)
@@ -47,13 +47,13 @@ export default function App() {
         <div key={`${screen.id}:${screen.vaultId ?? ''}`} className="animate-[coloyond-appear_220ms_ease-out]">
           {screen.id === 'onboarding' ? <Onboarding /> : null}
           {screen.id === 'portfolios' ? <PortfolioList /> : null}
-          {screen.id === 'wallet' ? <WalletScreen /> : null}
+          {screen.id === 'wallet' ? wallet || connectedWallet ? <WalletScreen /> : <Onboarding /> : null}
           {screen.id === 'system' ? <SystemScreen /> : null}
           {screen.id === 'create' ? <CreateVault /> : null}
           {screen.id === 'vault' ? <VaultDetail vaultId={screen.vaultId ?? ''} /> : null}
         </div>
       </main>
-      {(wallet || connectedWallet) && atTabLevel ? <BottomNav /> : null}
+      {atTabLevel ? <BottomNav /> : null}
       <ToastLayer />
       <ExecutionOverlay />
     </AppFrame>

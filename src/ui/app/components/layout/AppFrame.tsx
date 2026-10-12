@@ -17,7 +17,7 @@ import { MicroLabel, Notice, SignatureLink, StatusSwatch } from '../ui/primitive
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="cw-app relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-pulp md:my-8 md:h-[min(880px,calc(100dvh-4rem))] md:rounded-[18px] md:border md:border-panel md:shadow-frame">
+    <div className="cw-app relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-pulp md:my-8 md:h-[min(880px,calc(100dvh-4rem))] md:rounded-[36px] md:border-[8px] md:border-neutral-800 md:shadow-frame">
       {children}
       <div aria-hidden className="pulp-grain pointer-events-none absolute inset-0 z-[80] opacity-[0.05] mix-blend-multiply" />
     </div>
@@ -26,18 +26,19 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
 /** Header: back control when drilled in, brand lockup at tab level, live badge always. */
 export function AppHeader() {
+  const deviceWallet = useStore((s) => s.wallet);
+  const setTab = useStore((s) => s.setTab);
   const depth = useStore((s) => s.stack.length);
   const popScreen = useStore((s) => s.popScreen);
   const rpc = useStore((s) => s.rpc);
-  const toast = useStore((s) => s.toast);
-  const { connected, connecting, disconnect, publicKey } = useWallet();
+  const { connected, connecting, publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   useNow(1000);
 
   const live = !!rpc && Date.now() - rpc.at < RPC_POLL_MS * 2;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-pulp px-3">
+    <header className="cw-app-header flex shrink-0 items-center justify-between gap-2 border-b border-hairline bg-pulp px-5">
       {depth > 1 ? (
         <button
           type="button"
@@ -52,24 +53,22 @@ export function AppHeader() {
       )}
       <button
         type="button"
-        aria-label={connected && publicKey ? `Disconnect wallet ${publicKey.toBase58()}` : 'Connect wallet'}
-        title={connected ? 'Click to disconnect from Solana devnet' : 'Connect a Solana wallet on devnet'}
+        aria-label={connected && publicKey ? `Open wallet ${publicKey.toBase58()}` : deviceWallet ? 'Open device wallet' : 'Connect wallet'}
+        title={connected || deviceWallet ? 'Open wallet controls' : 'Connect a Solana wallet on devnet'}
         onClick={() => {
-          if (connected) {
-            void disconnect().catch((error: unknown) => {
-              toast('error', 'Wallet disconnect failed', error instanceof Error ? error.message : 'Try again.');
-            });
+          if (connected || deviceWallet) {
+            setTab('wallet');
           } else {
             setVisible(true);
           }
         }}
         className={`flex h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-ink px-3 font-mono text-[10px] font-bold uppercase tracking-[0.04em] transition-opacity hover:opacity-90 ${
-          connected ? 'bg-transparent text-ink' : 'bg-ink text-pulp'
+          connected || deviceWallet ? 'bg-pulp-shade text-ink' : 'bg-ink text-pulp'
         }`}
       >
         <StatusSwatch tone={live ? 'petrol' : 'iron'} pulse={live} />
         <WalletIcon size={14} weight="bold" aria-hidden />
-        {connecting ? 'Connecting…' : connected && publicKey ? shortKey(publicKey.toBase58()) : 'Connect wallet'}
+        {connecting ? 'Connecting…' : connected && publicKey ? shortKey(publicKey.toBase58()) : deviceWallet ? shortKey(deviceWallet.publicKey) : 'Connect wallet'}
       </button>
     </header>
   );
@@ -87,7 +86,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="grid shrink-0 grid-cols-3 border-y border-hairline bg-pulp pb-[env(safe-area-inset-bottom)]"
+      className="grid shrink-0 grid-cols-3 gap-2 border-t border-hairline bg-pulp px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
     >
       {tabs.map(({ id, label, icon: Icon }) => {
         const active = activeTab === id;
@@ -127,7 +126,7 @@ export function ToastLayer() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="cw-rounded pointer-events-auto flex animate-[coloyond-appear_200ms_ease-out] items-start gap-2.5 border border-panel bg-pulp px-3.5 py-3 shadow-panel"
+          className="cw-rounded pointer-events-auto flex animate-[coloyond-appear_200ms_ease-out] items-start gap-2.5 border border-panel bg-pulp px-5.5 py-3 shadow-panel"
         >
           <span className="mt-1.5">
             <StatusSwatch tone={tones[t.kind]} pulse={t.kind === 'error'} />

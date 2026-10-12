@@ -7,11 +7,10 @@ export function MixMark({ size = 22, className = '' }: { size?: number; classNam
   return (
     <span
       aria-hidden
-      className={`inline-flex shrink-0 gap-[2px] border-2 border-ink bg-ledger p-[3px] ${className}`}
+      className={`inline-flex shrink-0 gap-[2px] rounded-[5px] bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-500 p-[6px] ${className}`}
       style={{ width: size, height: size }}
     >
-      <span className="w-full bg-petrol" />
-      <span className="w-full bg-brass" />
+      <span className="w-full rounded-[1px] bg-white/90" />
     </span>
   );
 }

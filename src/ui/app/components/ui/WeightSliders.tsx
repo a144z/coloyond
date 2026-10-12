@@ -130,7 +130,7 @@ export function WeightSliders({
           const inputId = `${idBase}-${spec.id}`;
           const shareTrack = `linear-gradient(to right, ${spec.color} 0%, ${spec.color} ${clampPct(pct)}%, var(--field) ${clampPct(pct)}%, var(--field) 100%)`;
           return (
-            <label className="cr-desk-target" key={spec.id}>
+            <div className="cr-desk-target" key={spec.id}>
               <span className="cr-pt-dot" style={{ background: spec.color }} />
               <span className="cr-desk-target-name">
                 <strong>{spec.symbol}</strong>
@@ -174,7 +174,7 @@ export function WeightSliders({
                   {isLocked ? 'locked' : 'lock'}
                 </button>
               ) : null}
-            </label>
+            </div>
           );
         })}
       </div>

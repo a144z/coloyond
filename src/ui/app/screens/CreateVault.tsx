@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore } from '../lib/store.js';
 import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config.js';
 import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets.js';
@@ -31,6 +32,8 @@ const SETUP_FEE_SOL = 0.02;
 const defaultShares: Record<AssetId, number> = { wsol: 60, dusd: 40, tbtc: 0, teth: 0 };
 /** 02 / Create a portfolio — assets, weights, SOL investment, cadence and review. */
 export function CreateVault() {
+  const { setVisible } = useWalletModal();
+  const hasWallet = useStore((s) => !!(s.wallet || s.connectedWallet));
   const walletBalances = useStore((s) => s.walletBalances);
   const price = useStore((s) => s.price);
   const createVault = useStore((s) => s.createVault);
@@ -82,7 +85,7 @@ export function CreateVault() {
     }
     if (investmentSolUnits === null) errs.push('Enter a valid SOL investment amount.');
     else if (lamportsFromSol(investmentSolUnits) <= 0) errs.push('Invest at least 0.000000001 SOL.');
-    if (solAvail === null) errs.push('Waiting for your wallet SOL balance.');
+    if (solAvail === null) errs.push(hasWallet ? 'Waiting for your wallet SOL balance.' : 'Connect a wallet to fund and create this portfolio.');
     if (solAvail !== null && investmentSolUnits !== null) {
       const need = TASK_SPONSOR_SOL + investmentSolUnits + SETUP_FEE_SOL;
       if (lamportsFromSol(need) > solAvail) {
@@ -93,7 +96,7 @@ export function CreateVault() {
     }
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, shares, locked, investmentSol, solAvail]);
+  }, [name, shares, locked, investmentSol, solAvail, hasWallet]);
 
   async function onConfirm() {
     if (submitting || errors.length > 0) return;
@@ -264,6 +267,7 @@ export function CreateVault() {
       </div>
 
       <div className="mt-5">
+        {!hasWallet ? <div className="mb-3"><Button variant="primary" full onClick={() => setVisible(true)}>Connect wallet to continue</Button></div> : null}
         <Button
           variant="primary"
           full

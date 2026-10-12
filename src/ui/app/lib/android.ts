@@ -15,7 +15,7 @@ export async function wireAndroid(): Promise<void> {
 
   try {
     await StatusBar.setStyle({ style: Style.Light });
-    await StatusBar.setBackgroundColor({ color: '#EDE6D6' });
+    await StatusBar.setBackgroundColor({ color: '#EFECE6' });
   } catch {
     // older Android WebView without the status bar plugin — cosmetic only
   }

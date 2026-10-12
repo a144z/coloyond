@@ -21,34 +21,31 @@
 @source "../";
 
 @theme {
-  /* Mapped onto the platform palette from src/ui/app.css (:root). */
-  --color-pulp: var(--paper);
-  --color-pulp-shade: var(--canvas);
-  --color-pulp-deep: var(--rule);
-  --color-ledger: var(--field);
-  --color-ledger-subtle: #eae5d7;
-  --color-ink: var(--ink);
-  --color-petrol: var(--blue);
-  --color-brass: var(--violet);
-  --color-iron: var(--muted);
-  --color-danger: #8c3925;
-  --color-hairline: var(--rule);
-  /* Panel edge + structural rule, straight from the desk (.cr-desk, .cr-sym). */
-  --color-panel: #c7c1b1;
-
-  /* Platform typography: the desktop Arial stack + generic monospace. */
-  --font-display: Arial, Helvetica, sans-serif;
-  --font-mono: monospace;
-
-  /* Panel tiers, from the desk: .cr-strategy-card / .cr-desk float on a soft
-     shadow; popovers and sheets use the lighter .cr-wallet-pop shadow. */
-  --shadow-panel: 0 12px 28px #33301e08;
-  --shadow-frame: 0 14px 32px rgba(51, 48, 30, 0.12);
-
+  --color-pulp: #efece6;
+  --color-pulp-shade: #e8e4dc;
+  --color-pulp-deep: #d3cfb8;
+  --color-ledger: #faf8f5;
+  --color-ledger-subtle: #e8e4dc;
+  --color-ink: #141414;
+  --color-petrol: #2563eb;
+  --color-brass: #7c3aed;
+  --color-iron: #6e6b65;
+  --color-danger: #b42318;
+  --color-hairline: #dcd7cd;
+  --color-panel: #d8d4ca;
+  --font-display: Inter, Arial, Helvetica, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --shadow-panel: 0 2px 6px #14141404;
+  --shadow-frame: 0 24px 70px #00000040;
   --ease-lacquer: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer base {
+  .cw-app button, .cw-rounded button { border: 0 solid transparent; background: transparent; line-height: inherit; }
+  .cw-app h1, .cw-app h2, .cw-app h3, .cw-app h4, .cw-app p,
+  .cw-rounded h1, .cw-rounded h2, .cw-rounded h3, .cw-rounded p { margin: 0; }
+  .cw-app ul, .cw-app ol, .cw-rounded ul, .cw-rounded ol { list-style: none; padding: 0; margin: 0; }
+
   /* Everything app-specific is scoped to the app column (.cw-app) or to an
      app-only class name. The portal layers (toasts, sheets, the execution
      overlay) live under <body>, so app-only component classes below stay
@@ -153,23 +150,22 @@
 /* Unlayered restyle: the platform draws 1px rules and the prototype's soft
    corners, so the lacquerboard's 2px rules and hard offset shadows step
    down. Unlayered rules beat utility layers without fighting them. */
-.border-2 { border-width: 1px; }
-.border-b-2 { border-bottom-width: 1px; }
-.border-t-2 { border-top-width: 1px; }
+.cw-app .border-2 { border-width: 1px; }
+.cw-app .border-b-2 { border-bottom-width: 1px; }
+.cw-app .border-t-2 { border-top-width: 1px; }
 
 /* Standards pass: every surface follows the desktop desk's tiers — panels at
    18px like .cr-strategy-card / .cr-desk, controls at 7px like .cr-primary,
    fields at 6px like .cr-field, and fields carry the desk's soft rule
-   (#bbb5a5) on paper-white. */
+   (#d8d4ca) on paper-white. */
 .cw-app section,
 .cw-app .cw-rounded,
-.cw-rounded,
-.cw-rounded > div {
-  border-radius: 18px;
+.cw-rounded {
+  border-radius: 16px;
 }
 
 .cw-app button {
-  border-radius: 7px;
+  border-radius: 12px;
 }
 
 /* The bottom nav tabs carry a 3px state border the way .cr-nav button does, so
@@ -182,8 +178,8 @@
 .cw-app input:not([type="range"]),
 .cw-app select,
 .cw-app textarea {
-  border-radius: 6px;
-  border-color: #bbb5a5;
+  border-radius: 12px;
+  border-color: #d8d4ca;
 }
 
 .cw-app [class*="active:translate-"]:active {
@@ -198,18 +194,18 @@
 
 /* Exact-entry weight box: the desk's TargetField sizing, which app.css scopes
    to .cr-desk; the app uses the same field inside .cw-app. */
-.cw-app .cr-input-suffix input {
+:is(.cw-app, .cw-rounded) .cr-input-suffix input {
   width: 84px;
   min-height: 40px;
   padding: 0 30px 0 10px;
-  border: 1px solid #bbb5a5;
-  border-radius: 6px;
+  border: 1px solid #d8d4ca;
+  border-radius: 12px;
   background: var(--field);
   color: var(--ink);
   font: 14px/1 Arial, Helvetica, sans-serif;
   text-align: right;
 }
-.cw-app .cr-input-suffix span {
+:is(.cw-app, .cw-rounded) .cr-input-suffix span {
   top: 11px;
   right: 10px;
   font-size: 11px;
@@ -219,40 +215,40 @@
    exact % and lock on the first line, the split-track slider on its own line
    underneath. The desk's responsive grid lets the full-width slider cross the
    readouts at app-column widths; these rules pin the placement instead. */
-.cw-app .cr-desk-allocation .cr-desk-target {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   column-gap: 10px;
   row-gap: 6px;
   padding: 10px 0;
 }
-.cw-app .cr-desk-allocation .cr-desk-target .cr-pt-dot {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target .cr-pt-dot {
   grid-row: 1;
   grid-column: 1;
 }
-.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-target-name {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target .cr-desk-target-name {
   grid-row: 1;
   grid-column: 2;
   min-width: 0;
 }
-.cw-app .cr-desk-allocation .cr-desk-target .cr-input-suffix {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target .cr-input-suffix {
   grid-row: 1;
   grid-column: 3;
 }
-.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-lock {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target .cr-desk-lock {
   grid-row: 1;
   grid-column: 4;
 }
-.cw-app .cr-desk-allocation .cr-desk-target .cr-desk-slider-input {
+:is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target .cr-desk-slider-input {
   grid-row: 2;
   grid-column: 1 / -1;
 }
 
 /* Narrow phones: shrink the exact-% box so the name keeps room to breathe. */
 @media (max-width: 380px) {
-  .cw-app .cr-desk-allocation .cr-desk-target {
+  :is(.cw-app, .cw-rounded) .cr-desk-allocation .cr-desk-target {
     column-gap: 8px;
   }
-  .cw-app .cr-input-suffix input {
+  :is(.cw-app, .cw-rounded) .cr-input-suffix input {
     width: 68px;
     padding: 0 26px 0 8px;
   }
@@ -298,3 +294,41 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Reference portfolio desk: variables stay local, including in portal surfaces. */
+.cw-app, .cw-rounded {
+  --paper: #efece6; --canvas: #e8e4dc; --field: #faf8f5;
+  --ink: #141414; --muted: #6e6b65; --rule: #dcd7cd; --blue: #2563eb;
+  color: #141414; font-family: Inter, Arial, sans-serif;
+}
+body:has(.cw-app) { background: #171717; }
+.cw-app { isolation: isolate; }
+.cw-app button { touch-action: manipulation; }
+.cw-app main { scrollbar-width: none; }
+.cw-app main::-webkit-scrollbar { display: none; }
+.cw-app section { background-color: #faf8f5; }
+.cw-app .cw-nav-item { border-radius: 12px; border-top: 0; height: 54px; font-size: 11px; font-weight: 600; letter-spacing: 0; }
+.cw-app .cw-nav-item[aria-current='page'] { background: #141414; color: #faf8f5; }
+:is(.cw-app, .cw-rounded) .cr-desk-target-name strong { font-size: 13px; letter-spacing: 0; }
+:is(.cw-app, .cw-rounded) .cr-desk-target-name small { font-size: 10px; line-height: 1.5; }
+:is(.cw-app, .cw-rounded) .cr-desk-lock { min-width: 48px; min-height: 36px; background: #efece6; border: 1px solid #d8d4ca; font-size: 10px; text-transform: uppercase; }
+:is(.cw-app, .cw-rounded) .cr-desk-lock[aria-pressed='true'] { background: #141414; color: #faf8f5; }
+:is(.cw-app, .cw-rounded) .cr-input-suffix input { width: 68px; min-height: 36px; padding-right: 23px; background: #efece6; font: 12px ui-monospace, monospace; }
+:is(.cw-app, .cw-rounded) .cr-desk-slider-input { min-height: 36px; touch-action: pan-y; }
+:is(.cw-app, .cw-rounded) .cr-pt-total { font-size: 11px; padding-top: 12px; }
+.cw-app .pulp-grain { display: none; }
+.cw-app .cw-app-header { padding-top: env(safe-area-inset-top, 0px); min-height: calc(64px + env(safe-area-inset-top, 0px)); }
+.cw-rounded button { border-radius: 12px; }
+.cw-rounded input:not([type='range']), .cw-rounded select, .cw-rounded textarea { border-radius: 12px; }
+.cw-rounded { font-family: Inter, Arial, sans-serif; }
+.cw-rounded .cr-desk-target { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; padding: 10px 0; }
+.cw-rounded .cr-desk-target .cr-desk-slider-input { grid-row: 2; grid-column: 1 / -1; }
+@media (max-width: 767px) { .cw-app { max-width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .cw-rounded *, .cw-rounded *::before, .cw-rounded *::after { animation: none !important; transition: none !important; } }
+
+.cw-app .cw-app-header > span { white-space: nowrap; }
+
+.cw-rounded .cr-desk-target .cr-pt-dot { grid-row: 1; grid-column: 1; }
+.cw-rounded .cr-desk-target .cr-desk-target-name { grid-row: 1; grid-column: 2; min-width: 0; }
+.cw-rounded .cr-desk-target .cr-input-suffix { grid-row: 1; grid-column: 3; }
+.cw-rounded .cr-desk-target .cr-desk-lock { grid-row: 1; grid-column: 4; }

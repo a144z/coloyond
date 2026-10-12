@@ -245,7 +245,7 @@ export const useStore = create<ColoyondState>()(
 
       activeTab: 'portfolios',
       connectedWallet: null,
-      stack: [{ id: 'onboarding' }],
+      stack: [{ id: 'portfolios' }],
       walletBalances: null,
       vaultBalances: {},
       price: null,
@@ -296,14 +296,14 @@ export const useStore = create<ColoyondState>()(
             : state.wallet?.publicKey
               ? state.allVaults[state.wallet.publicKey] ?? []
               : [],
-          stack: [{ id: connectedWallet || state.wallet ? 'portfolios' : 'onboarding' }],
+          stack: [{ id: 'portfolios' }],
           activeTab: 'portfolios',
         });
         if (connectedWallet) void get().refreshBalances();
       },
 
       resetApp: () => {
-        set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'onboarding' }] });
+        set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'portfolios' }] });
         useStore.persist.clearStorage();
       },
 

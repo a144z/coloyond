@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useStore } from '../lib/store.js';
 import { priceOf, type PriceBook } from '../lib/solana/price.js';
 import { assetList } from '../lib/solana/assets.js';
@@ -22,6 +23,8 @@ import { AssetSwatch, KeyValue, MicroLabel, Notice, Skeleton } from '../componen
 /** Wallet tab: owner balances, SOL wrapping, and device-key controls. */
 export function WalletScreen() {
   useNow(1000);
+  const { disconnect } = useWallet();
+  const toast = useStore((s) => s.toast);
 
   const wallet = useStore((s) => s.wallet);
   const connectedWallet = useStore((s) => s.connectedWallet);
@@ -74,6 +77,7 @@ export function WalletScreen() {
         </div>
       </LedgerPanel>
 
+      {external ? <div className="mt-3"><Button full variant="secondary" onClick={() => void disconnect().catch((error: unknown) => toast('error', 'Could not disconnect', String(error)))}>Disconnect wallet</Button></div> : null}
       <div className="mt-4">
         <LedgerPanel stripe="Balances" meta={bookMeta}>
           {balances ? (

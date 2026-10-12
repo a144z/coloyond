@@ -32,7 +32,7 @@ export function PortfolioList() {
       />
 
       <div
-        className="relative mb-4 h-[104px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
+        className="relative mb-4 h-[160px] overflow-hidden rounded-lg border border-hairline bg-pulp-shade"
         aria-hidden="true"
       >
         <ReferenceArt
@@ -56,8 +56,7 @@ export function PortfolioList() {
             <div className="py-6 text-center">
               <p className="font-display text-[19px] font-bold tracking-[-0.01em]">No portfolios yet.</p>
               <p className="mx-auto mt-2 max-w-[34ch] text-[12px] leading-relaxed text-iron">
-                Create a Vault State PDA, standard SPL asset accounts, a transferable share mint,
-                and a permissionless Hydra task with an owner-configured minimum delay.
+                Start with the assets you want to hold. Set your balance and let your vault follow the mix.
               </p>
             </div>
           </LedgerPanel>

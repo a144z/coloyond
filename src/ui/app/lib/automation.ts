@@ -25,7 +25,6 @@ async function refreshDashboard(): Promise<void> {
   ticking = true;
   try {
     const store = useStore.getState();
-    if (!store.wallet && !store.connectedWallet) return;
     const now = Date.now();
     if (now - lastPriceFetch >= PRICE_POLL_MS) { lastPriceFetch = now; void store.refreshPrice(); }
     if (now - lastRpcFetch >= RPC_POLL_MS) { lastRpcFetch = now; void store.refreshRpc(); }
