@@ -1,0 +1,24 @@
+# Open issue disposition for the pruned MVP
+
+Reviewed the 23 open issue/PR entries directly through GitHub REST on 12 October 2026. PR #43 was the only open PR; its review-comment, review, and issue-comment lists were empty. The review/comment lists for all 20 historical PRs were also empty. This branch starts from `main` and supersedes that PR's repair-only approach with one new ABI and runtime. No unrelated issue is silently marked solved, and no issue is closed before its acceptance evidence exists.
+
+The current request supersedes the historical Android-card/Glider product direction and asks for an owner-controlled wallet/vault/cranker MVP. This branch therefore intentionally changes architecture: personal vaults, no LP-share liabilities, zero protocol fees, real inventory-funded atomic fills, a single TypeScript cranker, and an immutable bounded Devnet asset registry. Historical acceptance criteria for public ETFs, weighted-AMM shares, Glider, Android and external schedulers do not describe this runtime.
+
+| Issue / PR | Treatment on this branch | Remaining evidence / reason to stay open |
+| --- | --- | --- |
+| #43 false-success rebalancing and decoding | Replaces both fake/no-op programs. Canonical vault has real token CPIs, actual custody readback, strict post-fill drift reduction, one matching codec, and no Python sender. | Superseded after this PR is reviewed/merged; do not merge both incompatible runtimes. |
+| #29 profile/oracle admission | Pins exact WSOL/Test USDC identities, decimals, feed PDAs/IDs/Receiver owner, Full, <=60s age, <=100bps confidence, exponent bounds and price-conversion precision. Test token backing is labeled explicitly. | Live Devnet mint/feed/deployment evidence; production admission is outside this Devnet MVP. |
+| #30 deployment | One program/workspace/identity; synchronized identity script, SBF command, fresh-deployment guide. | Fresh Devnet deployment with artifact hash, authority and signature. No live deployment is inferred from a successful build. |
+| #31 custody and rollback | LiteSVM SBF bank integration covers real funding/fills/exits, account constraints, and post-CPI rollback; shares and old AMM fees are pruned. | New ABI requires fresh acceptance review. Historical public-ETF/share/fee acceptance criteria are not claimed met. |
+| #32 wallet flow and reconciliation | One client for creation/funding/editing/pause/withdraw/close, journals before broadcast, preserves unknown, rejects wallet message mutation and reconciles signatures. | Actual browser-wallet Devnet journey and interruption/device testing. |
+| #33 fee/economics | Removes conflicting dynamic fees. Protocol fee is zero; conservative oracle payment and cranker costs are explicit. | No measured production keeper profitability or external liquidity guarantee. |
+| #34 TukTuk / #36 MagicBlock | Pruned competing scheduler adapters; one permissionless inventory-backed process is the selected MVP executor. | Historical independent-scheduler criteria are superseded by current scope, not proved. |
+| #38 full vault lifecycle | Implements owner-signed creation, isolated vaults, funds, fills, weights, membership changes, pause/resume, withdrawal/closure and state visibility. | MagicBlock/no-running-backend criteria do not match the requested bot MVP; live Devnet signatures and operator evidence remain required. |
+| #9 watchlist tests | Old unrelated watchlist is removed. Canonical allocation/account/oracle/planner tests replace it. | Historical watchlist-specific feature is pruned, not repaired in `main`. |
+| #7, #8, #14–#18, #20, #35 | Android wallet/card/render/import/generation flows are removed from the MVP branch. | Remain recoverable on `main`; native device acceptance is not claimed. |
+| #15 read-only Symmetry facts / #19 purchase | Symmetry/Jupiter comparison, quote adapters and simulated routes are pruned. Durable signature reconciliation remains for actual vault transactions. | Historical protocol/ETF purchase criteria are outside this personal-vault ABI. |
+| #22, #23 Glider / #27 hackathon handoff | External Glider enrollment and old hackathon roadmap are pruned. README now describes the one MVP. | Old product tasks are superseded only if maintainers adopt/merge this direction. |
+
+## Limits that matter
+
+An oracle-priced cranker is a counterparty with its own inventory. It cannot withdraw for free, choose arbitrary custody destinations, call arbitrary programs with vault authority, or change configuration. Pyth and Solana, supported token issuers, program upgrade authority until revoked, and the availability of funded independent fillers remain trust/availability boundaries. The UI exposes stale/missing oracle failures without substituting demo prices. Additional mints, LP-share accounting, external DEX liquidity, or an independently hosted scheduler are extensions, not hidden fallback implementations.

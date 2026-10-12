@@ -1,18 +1,11 @@
 [workspace]
-members = [
-    "programs/coloyond-vault",
-    "crates/etf-math",
-    "crates/etf-oracle",
-    "crates/etf-identity",
-]
+members = ["programs/coloyond-vault", "crates/etf-oracle"]
 resolver = "2"
-
 [profile.release]
 overflow-checks = true
 lto = "fat"
 codegen-units = 1
-
 [profile.release.build-override]
-opt-level = 3
+opt-level = 0
 incremental = false
-codegen-units = 1
+codegen-units = 16

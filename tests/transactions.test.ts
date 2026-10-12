@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Connection,Keypair,Transaction } from '@solana/web3.js';
+import { reconcile,submit,signatureBase58,type Journal,type Pending } from '../src/shared/transactions.js';
+import { createVault } from '../src/shared/instructions.js';
+import { vault,program } from './helpers.js';
+const pending:Pending={signature:'example',blockhash:Keypair.generate().publicKey.toBase58(),lastValidBlockHeight:100,owner:'owner',genesis:'network',program:program.toBase58(),action:'test',createdAt:0};
+function mock(status:unknown,height=50):Connection{return {getSignatureStatuses:async()=>({value:[status]}),getBlockHeight:async()=>height} as unknown as Connection;}
+test('processed and missing live signatures remain unresolved',async()=>{assert.equal(await reconcile(mock(null),pending),'unknown');assert.equal(await reconcile(mock({confirmationStatus:'processed',err:null},101),pending),'unknown');});
+test('only definitive confirmation/failure or verified expiry permits retry',async()=>{assert.equal(await reconcile(mock({confirmationStatus:'confirmed',err:null}),pending),'confirmed');assert.equal(await reconcile(mock({err:{InstructionError:[0,'Error']}}),pending),'failed');assert.equal(await reconcile(mock(null,101),pending),'expired');});
+test('RPC failure never erases a known signed transaction',async()=>{let saved:Pending|null=null;const j:Journal={read:()=>saved,write:p=>{saved=p;},clear:()=>{saved=null;}};const k=Keypair.generate(),v=vault({owner:k.publicKey});const c={getGenesisHash:async()=>'network',getLatestBlockhash:async()=>({blockhash:pending.blockhash,lastValidBlockHeight:100}),sendRawTransaction:async()=>{assert.ok(saved);throw new Error('timeout');}} as unknown as Connection;const p=await submit(c,program,k.publicKey,'create',[createVault(program,k.publicKey,1n,v.assets,5,100)],async tx=>{tx.sign(k);return tx;},j);assert.equal(saved,p);assert.equal(p.signature.length>60,true);await assert.rejects(()=>submit(c,program,k.publicKey,'duplicate',[],async tx=>tx,j),/unresolved/);});
+test('wallet mutation is rejected before journaling or broadcasting',async()=>{let writes=0;const j:Journal={read:()=>null,write:()=>{writes++;},clear:()=>{}};const k=Keypair.generate();const c={getGenesisHash:async()=>'network',getLatestBlockhash:async()=>({blockhash:pending.blockhash,lastValidBlockHeight:100})} as unknown as Connection;await assert.rejects(()=>submit(c,program,k.publicKey,'create',[createVault(program,k.publicKey,1n,vault().assets,5,100)],async tx=>{tx.feePayer=Keypair.generate().publicKey;return tx;},j),/changed/);assert.equal(writes,0);});
+test('base58 preserves zero-leading signatures',()=>{assert.equal(signatureBase58(new Uint8Array([0,0,1])),'112');});

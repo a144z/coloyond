@@ -1,0 +1,14 @@
+# Validation on 12 October 2026
+
+- `npm run check`: strict TypeScript, 20 unit/integration client tests, and production web bundle pass.
+- `cargo test --workspace --locked`: 21 Rust tests pass, including the official Receiver SDK oracle parser and conservative payment math.
+- `cargo fmt --all -- --check` and `git diff --check`: pass.
+- Agave 4.3.0/platform-tools v1.57 compiled the SBF shared object (405,136 bytes). The build wrapper's post-processing failed because its cached LLVM `llvm-readobj` executable was missing; this is not reported as a successful `cargo build-sbf` wrapper run. The compiled ELF was copied without alteration for bank execution. SHA-256: `631fe3cd39420cddfdad7d54a67ad331008aaa9f1e46ad2b109ac6b30bf6dbf8`.
+- `npm run test:sbf`: the compiled program executes successfully in LiteSVM 1.6.0 with real SPL custody transfers. Twenty-nine signed transaction cases cover creation, two isolated vaults, deposits, three fills (including after membership changes), owner edits/pause/resume, partial/full withdrawals, closure and adversarial rejection/rollback. [Replayable evidence](sbf-evidence.json) labels its synthetic oracle/mint fixtures and bank-only signatures explicitly.
+- The post-CPI rollback case proves two successful SPL Token invocations, then `NoImprovement`, and unchanged vault and operator token data. Fees are still an execution cost; the test does not claim failed transactions are free.
+- A standalone Agave validator attempt stopped before transactions because this environment lacks required `io_uring` support; its admin Unix RPC socket was also unavailable. No networked-validator result is claimed.
+- Live Devnet probe: genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, slot 510299856. The configured program was absent. SOL/USD passed the policy at that observation; USDC/USD failed freshness. An unauthenticated Hermes request returned HTTP 401; Pyth documents its August 26, 2026 API-key requirement. `PYTH_API_KEY` support exists in the operator-only refresh path, but authenticated posting was not exercised without that credential.
+- The Pyth Receiver SDK imports under the supported `node --import tsx` runtime. The lockfile unifies web3.js versions to avoid the SDK's transitive Jito/websocket incompatibility. The updater is absent from the browser dependency graph.
+- No funded Devnet deployment, live cranker fills, actual browser-wallet/device journey, upgrade-authority revocation, or visual browser QA is claimed. Deployment and live acceptance steps remain in [deployment.md](deployment.md).
+
+The MVP asset set is WSOL plus synthetic Devnet Test USDC. Rebalancing requires operator inventory and fees. This branch implements a personal owner-controlled vault; it does not claim the old public ETF/LP-share/weighted-AMM or MagicBlock acceptance criteria are complete.

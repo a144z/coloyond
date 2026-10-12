@@ -1,32 +1,44 @@
 {
   "name": "coloyond",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:cli": "tsx src/main.ts",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "keeper": "node --import tsx src/keeper/main.ts",
+    "check": "npm run typecheck && npm test && npm run build",
+    "build:program": "cargo build-sbf --manifest-path programs/coloyond-vault/Cargo.toml",
+    "test:rust": "cargo test --workspace",
+    "test:sbf": "node --import tsx tests/sbf.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "litesvm": "^1.6.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
-    "vite": "^8.3.3"
+    "vite": "^8.3.3",
+    "@solana/kit": "^8.0.0"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
+    "@pythnetwork/pyth-solana-receiver": "^0.16.0",
     "@solana-mobile/wallet-adapter-mobile": "^3.0.0",
+    "@solana/spl-token": "0.4.14",
     "@solana/wallet-adapter-base": "^0.9.28",
     "@solana/wallet-adapter-react": "^0.15.40",
     "@solana/wallet-adapter-react-ui": "^0.9.40",
     "@solana/web3.js": "^1.99.0",
-    "@symmetry-hq/sdk": "^1.0.23",
     "buffer": "^6.0.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
+  },
+  "overrides": {
+    "@solana/web3.js": "$@solana/web3.js"
   }
 }
