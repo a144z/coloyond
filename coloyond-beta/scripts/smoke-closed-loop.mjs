@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Verify one configured Devnet vault from Hydra trigger through base-layer SPL settlement. */
+/** Verify configured Devnet Hydra trigger cycles through base-layer SPL settlement. */
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
@@ -29,6 +29,7 @@ const timeoutMs = Number(process.env.COLONYOND_SMOKE_TIMEOUT_MS ?? 240_000);
 if (!Number.isInteger(timeoutMs) || timeoutMs < 30_000 || timeoutMs > 900_000) {
   throw new Error('COLONYOND_SMOKE_TIMEOUT_MS must be 30000..900000.');
 }
+const cycleCount = parseCycleCount(process.env.COLONYOND_SMOKE_CYCLES ?? '1');
 const base = new Connection(baseUrl, 'confirmed');
 const router = new ConnectionMagicRouter(routerUrl, 'confirmed');
 const derive = (seeds, program = PROGRAM_ID) => PublicKey.findProgramAddressSync(seeds, program)[0];
@@ -89,14 +90,6 @@ console.log(JSON.stringify({
   intervalSlots: task.intervalSlots, vaultTokenAccounts: vaultAccounts.map((account, index) => ({ address: account.toBase58(), amount: balancesBefore[index] })),
 }));
 
-let currentSlot = await host.getSlot('confirmed');
-const dueDeadline = Date.now() + timeoutMs;
-while (currentSlot < task.nextExecSlot && Date.now() < dueDeadline) {
-  await sleep(1_000);
-  currentSlot = await host.getSlot('confirmed');
-}
-if (currentSlot < task.nextExecSlot) throw new Error(`Smoke timed out waiting for task due slot (${currentSlot}/${task.nextExecSlot}).`);
-
 const trigger = new TransactionInstruction({
   programId: HYDRA_ID,
   keys: [
@@ -106,48 +99,36 @@ const trigger = new TransactionInstruction({
   ],
   data: Buffer.from([1]),
 });
-const transaction = new Transaction();
-if (task.computeUnits > 0) transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: task.computeUnits }));
-transaction.add(trigger, task.callback);
-transaction.feePayer = operator.publicKey;
-const triggerSignature = await router.sendAndConfirmTransaction(transaction, [operator]);
-console.log(JSON.stringify({ event: 'hydra_trigger_confirmed', signature: triggerSignature, explorer: `https://explorer.solana.com/tx/${triggerSignature}?cluster=devnet`, currentSlot }));
+let nextTask = task;
+let cycleSettlements = 0;
+const allCycleResults = [];
+for (let cycle = 1; cycle <= cycleCount; cycle += 1) {
+  const currentSlot = await waitUntilDue(host, nextTask.nextExecSlot, timeoutMs);
+  const cycleState = await base.getAccountInfo(state, 'confirmed');
+  if (!cycleState?.owner.equals(PROGRAM_ID) || cycleState.data.length < 94) throw new Error(`Cycle ${cycle}: Vault State disappeared or became malformed.`);
+  const cycleNonceBefore = cycleState.data.readBigUInt64LE(86);
+  const cycleBalancesBefore = await readTokenBalances(base, vaultAccounts, authority);
+  if (cycleBalancesBefore.some((balance) => balance === null)) throw new Error(`Cycle ${cycle}: a vault SPL token account is missing.`);
 
-const settlementDeadline = Date.now() + timeoutMs;
-let settledTransaction;
-let stateAfter;
-while (Date.now() < settlementDeadline) {
-  await sleep(2_000);
-  const [latestState, signatures] = await Promise.all([
-    base.getAccountInfo(state, 'confirmed'),
-    base.getSignaturesForAddress(state, { limit: 20 }, 'confirmed'),
-  ]);
-  if (latestState?.owner.equals(PROGRAM_ID) && latestState.data.length >= 94) {
-    stateAfter = latestState;
-    if (latestState.data.readBigUInt64LE(86) > nonceBefore) {
-      for (const candidate of signatures) {
-        if (candidate.err) continue;
-        const tx = await base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
-        const line = tx?.meta?.logMessages?.find((message) => message.includes('Base-layer SPL rebalance settled atomically: nonce '));
-        if (line) { settledTransaction = { signature: candidate.signature, tx, line }; break; }
-      }
-      if (settledTransaction) break;
-    }
-  }
+  const cycleTransaction = new Transaction();
+  if (nextTask.computeUnits > 0) cycleTransaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: nextTask.computeUnits }));
+  cycleTransaction.add(trigger, nextTask.callback);
+  cycleTransaction.feePayer = operator.publicKey;
+  const triggerSignature = await router.sendAndConfirmTransaction(cycleTransaction, [operator]);
+  console.log(JSON.stringify({ event: 'hydra_trigger_confirmed', cycle, cycles: cycleCount, signature: triggerSignature, explorer: `https://explorer.solana.com/tx/${triggerSignature}?cluster=devnet`, currentSlot }));
+
+  const updatedTask = await waitForTaskAdvance(host, crank, nextTask, timeoutMs);
+  assertTaskAdvance(nextTask, updatedTask, 1);
+  nextTask = updatedTask;
+  const observed = await observeCycleSettlement({ base, stateAddress: state, vaultAccounts, authority, before: cycleBalancesBefore, nonceBefore: cycleNonceBefore, timeoutMs });
+  if (observed.settled) cycleSettlements += 1;
+  allCycleResults.push({ cycle, triggerSignature, dueSlot: currentSlot, nextExecSlot: nextTask.nextExecSlot, ...observed.summary });
+  console.log(JSON.stringify({ event: observed.settled ? 'cycle_settled' : 'cycle_skipped_or_unsettled', cycle, cycles: cycleCount, ...observed.summary }));
 }
-if (!settledTransaction || !stateAfter) {
-  throw new Error('No base-layer settlement was observed before timeout. The scheduled callback may have safely skipped because the minimum delay or >0.1% Pyth price-movement guard was not met, or the Magic Action/venue did not settle.');
+if (cycleSettlements === 0) {
+  throw new Error('No base-layer settlement with both nonce and SPL balance changes was observed in the requested cycles. Callbacks may safely skip when the minimum delay or Pyth movement guard is not met.');
 }
-const after = await readTokenBalances(base, vaultAccounts, authority);
-if (!after.some((balance, index) => balance !== before[index])) throw new Error('Settlement nonce advanced, but no vault SPL balance changed.');
-const nonceAfter = stateAfter.data.readBigUInt64LE(86);
-console.log(JSON.stringify({
-  event: 'closed_loop_smoke_passed', triggerSignature, settlementSignature: settledTransaction.signature,
-  settlementExplorer: `https://explorer.solana.com/tx/${settledTransaction.signature}?cluster=devnet`,
-  nonceBefore: nonceBefore.toString(), nonceAfter: nonceAfter.toString(),
-  vaultTokenAccounts: vaultAccounts.map((account, index) => ({ address: account.toBase58(), before: balancesBefore[index], after: after[index].toString() })),
-  settlementLog: settledTransaction.line,
-}, null, 2));
+console.log(JSON.stringify({ event: 'closed_loop_smoke_passed', requestedCycles: cycleCount, settledCycles: cycleSettlements, initialNonce: nonceBefore.toString(), cycles: allCycleResults }, null, 2));
 
 function requiredPublicKey(name) {
   const value = process.env[name];
@@ -191,6 +172,89 @@ function readTask(data, expected) {
     throw new Error('Hydra task callback does not target this vault and its Crank Policy.');
   }
   return { nextExecSlot, intervalSlots, callback, computeUnits: data.readUInt32LE(115) };
+}
+
+function parseCycleCount(value) {
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 1 || count > 5) throw new Error('COLONYOND_SMOKE_CYCLES must be an integer from 1 through 5.');
+  return count;
+}
+
+async function waitUntilDue(host, dueSlot, timeoutMs) {
+  let currentSlot = await host.getSlot('confirmed');
+  const deadline = Date.now() + timeoutMs;
+  while (currentSlot < dueSlot && Date.now() < deadline) {
+    await sleep(1_000);
+    currentSlot = await host.getSlot('confirmed');
+  }
+  if (currentSlot < dueSlot) throw new Error(`Smoke timed out waiting for task due slot (${currentSlot}/${dueSlot}).`);
+  return currentSlot;
+}
+
+async function waitForTaskAdvance(host, crankAddress, previousTask, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const info = await host.getAccountInfo(crankAddress, 'confirmed');
+    if (!info || !info.owner.equals(HYDRA_ID)) throw new Error('Hydra task disappeared or has an unexpected owner after trigger.');
+    const updated = readTask(info.data, {
+      state, executor, schedulerConfig, crankPolicy, expectedIntervalSlots: previousTask.intervalSlots,
+    });
+    if (updated.nextExecSlot !== previousTask.nextExecSlot) {
+      assertTaskAdvance(previousTask, updated, 1);
+      return updated;
+    }
+    await sleep(1_000);
+  }
+  throw new Error(`Timed out waiting for Hydra nextExecSlot to advance from ${previousTask.nextExecSlot}.`);
+}
+
+function assertTaskAdvance(previous, current, taskCount = 1) {
+  if (!current) throw new Error('Hydra task is missing after trigger.');
+  if (taskCount !== 1) throw new Error(`Expected one Hydra task for this vault, found ${taskCount}.`);
+  if (current.nextExecSlot <= previous.nextExecSlot) throw new Error('Hydra task schedule is stale and did not advance.');
+  const expectedNext = previous.nextExecSlot + previous.intervalSlots;
+  if (current.nextExecSlot !== expectedNext) throw new Error(`Hydra task advanced to ${current.nextExecSlot}; expected ${expectedNext}.`);
+}
+
+async function observeCycleSettlement({ base, stateAddress, vaultAccounts, authority, before, nonceBefore, timeoutMs }) {
+  const deadline = Date.now() + timeoutMs;
+  let latestState;
+  let latestBalances = before;
+  let settlement;
+  while (Date.now() < deadline) {
+    await sleep(2_000);
+    const [stateInfo, signatures, balances] = await Promise.all([
+      base.getAccountInfo(stateAddress, 'confirmed'),
+      base.getSignaturesForAddress(stateAddress, { limit: 20 }, 'confirmed'),
+      readTokenBalances(base, vaultAccounts, authority),
+    ]);
+    if (!stateInfo?.owner.equals(PROGRAM_ID) || stateInfo.data.length < 94) throw new Error('Vault State disappeared or became malformed while observing cycle.');
+    if (balances.some((balance) => balance === null)) throw new Error('A vault SPL token account disappeared while observing cycle.');
+    latestState = stateInfo;
+    latestBalances = balances;
+    const nonce = stateInfo.data.readBigUInt64LE(86);
+    if (nonce > nonceBefore) {
+      for (const candidate of signatures) {
+        if (candidate.err) continue;
+        const tx = await base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+        const line = tx?.meta?.logMessages?.find((message) => message.includes(`Base-layer SPL rebalance settled atomically: nonce ${nonce}`));
+        if (line) { settlement = { signature: candidate.signature, line }; break; }
+      }
+      if (settlement || Date.now() > deadline - 2_000) break;
+    }
+  }
+  const nonceAfter = latestState?.data.readBigUInt64LE(86) ?? nonceBefore;
+  const balanceChanged = latestBalances.some((balance, index) => balance !== before[index]);
+  if (nonceAfter > nonceBefore && balanceChanged && !settlement) throw new Error('Vault nonce and balances changed, but no successful atomic settlement transaction log was found.');
+  if (settlement && !balanceChanged) throw new Error('Settlement nonce advanced, but no vault SPL balance changed.');
+  return {
+    settled: Boolean(settlement && nonceAfter > nonceBefore && balanceChanged),
+    summary: {
+      nonceBefore: nonceBefore.toString(), nonceAfter: nonceAfter.toString(),
+      balances: vaultAccounts.map((account, index) => ({ address: account.toBase58(), before: before[index].toString(), after: latestBalances[index].toString() })),
+      ...(settlement ? { settlementSignature: settlement.signature, settlementExplorer: `https://explorer.solana.com/tx/${settlement.signature}?cluster=devnet`, settlementLog: settlement.line } : {}),
+    },
+  };
 }
 
 function decodeInstruction(region) {
@@ -244,5 +308,20 @@ function selfCheck() {
   let rejected = false;
   try { readTask(taskData, { state: Keypair.generate().publicKey, executor, schedulerConfig, crankPolicy, expectedIntervalSlots: 5_700 }); } catch { rejected = true; }
   if (!rejected) throw new Error('Foreign callback self-check failed.');
-  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected'] }));
+  assertTaskAdvance({ nextExecSlot: 5_700, intervalSlots: 5_700 }, { nextExecSlot: 11_400 }, 1);
+  assertRejects(() => assertTaskAdvance({ nextExecSlot: 5_700, intervalSlots: 5_700 }, null, 1), 'missing task accepted');
+  assertRejects(() => assertTaskAdvance({ nextExecSlot: 5_700, intervalSlots: 5_700 }, { nextExecSlot: 11_400 }, 2), 'duplicate task accepted');
+  assertRejects(() => assertTaskAdvance({ nextExecSlot: 5_700, intervalSlots: 5_700 }, { nextExecSlot: 5_700 }, 1), 'stale task accepted');
+  assertRejects(() => assertTaskAdvance({ nextExecSlot: 5_700, intervalSlots: 5_700 }, { nextExecSlot: 11_401 }, 1), 'incorrect schedule accepted');
+  assertRejects(() => parseCycleCount('0'), 'zero cycles accepted');
+  assertRejects(() => parseCycleCount('6'), 'more than five cycles accepted');
+  assertRejects(() => parseCycleCount('2.5'), 'fractional cycles accepted');
+  if (parseCycleCount('1') !== 1 || parseCycleCount('5') !== 5) throw new Error('Cycle count bounds self-check failed.');
+  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected', 'exact-schedule-advance', 'missing-task-rejected', 'duplicate-task-rejected', 'stale-task-rejected', 'cycle-count-bounds'] }));
+}
+
+function assertRejects(action, message) {
+  let rejected = false;
+  try { action(); } catch { rejected = true; }
+  if (!rejected) throw new Error(message);
 }
