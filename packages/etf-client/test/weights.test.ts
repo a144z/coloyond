@@ -30,6 +30,16 @@ test("encodeInitWeightsArgs round-trips weights and interval", () => {
   assert.equal(buf.readBigUInt64LE(28), 42n);
 });
 
+test("encodeRebalanceArgs carries the discriminator plus asset indices and amounts", () => {
+  const buf = encodeRebalanceArgs(1, 2, 1_000n, 2_000n);
+  assert.equal(buf.length, 8 + 1 + 1 + 8 + 8);
+  assert.deepEqual([...buf.subarray(0, 8)], [108, 158, 77, 9, 210, 52, 88, 62]);
+  assert.equal(buf.readUInt8(8), 1);
+  assert.equal(buf.readUInt8(9), 2);
+  assert.equal(buf.readBigUInt64LE(10), 1_000n);
+  assert.equal(buf.readBigUInt64LE(18), 2_000n);
+});
+
 test("deriveEtfWeightsPda yields a valid PDA (no off-curve errors)", () => {
   const { pda, bump } = deriveEtfWeightsPda(new PublicKey("11111111111111111111111111111112"));
   assert.equal(pda.toBytes().length, 32);
