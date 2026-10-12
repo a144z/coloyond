@@ -8,11 +8,13 @@ import { fetchPriceBook, type PriceBook } from './solana/price';
 import { fetchReserveState, type ReserveState } from './solana/reserve-read';
 import { fetchVaultBalances, type VaultBalances } from './solana/vault';
 import { assetSpec, type AssetId } from './solana/assets';
+import { fetchCoinbaseUniverse, type UniverseAsset } from './solana/coinbase';
 import { REBALANCE_INTERVAL_SEC } from './solana/config';
 import {
   cancelVaultSchedule,
   createVaultTokenAccounts,
   depositToVault,
+  fetchRecentVaultSettlements,
   initializeVault,
   readVaultState,
   redeemFromVault,
@@ -147,6 +149,7 @@ function amountList(raws: Record<string, number>): string {
 interface ColoyondState {
   // persisted
   wallet: { mnemonic: string; publicKey: string; createdAt: number } | null;
+  allVaults: Record<string, VaultConfig[]>;
   vaults: VaultConfig[];
   logs: LogEntry[];
 
@@ -157,6 +160,8 @@ interface ColoyondState {
   vaultBalances: Record<string, VaultBalances>;
   price: PriceBook | null;
   priceError: string | null;
+  universe: UniverseAsset[];
+  universeError: string | null;
   reserve: ReserveState | null;
   rpc: RpcStatus | null;
   toasts: ToastItem[];
@@ -178,6 +183,7 @@ interface ColoyondState {
 
   // refreshers
   refreshPrice: () => Promise<void>;
+  refreshUniverse: () => Promise<void>;
   refreshReserve: () => Promise<void>;
   refreshBalances: () => Promise<void>;
   refreshRpc: () => Promise<void>;
@@ -207,6 +213,7 @@ export const useStore = create<ColoyondState>()(
   persist(
     (set, get) => ({
       wallet: null,
+      allVaults: {},
       vaults: [],
       logs: [],
 
@@ -216,6 +223,8 @@ export const useStore = create<ColoyondState>()(
       vaultBalances: {},
       price: null,
       priceError: null,
+      universe: [],
+      universeError: null,
       reserve: null,
       rpc: null,
       toasts: [],
@@ -241,13 +250,15 @@ export const useStore = create<ColoyondState>()(
         const kp = keypairFromMnemonic(mnemonic);
         cachedMnemonic = mnemonic;
         cachedWalletKp = kp;
-        set({ wallet: { mnemonic, publicKey: kp.publicKey.toBase58(), createdAt: Date.now() } });
+        const publicKey = kp.publicKey.toBase58();
+        const allVaults = useStore.getState().allVaults;
+        set({ wallet: { mnemonic, publicKey, createdAt: Date.now() }, vaults: allVaults[publicKey] ?? [] });
         get().log({ vaultId: null, kind: 'owner', summary: 'Wallet created on this device' });
         get().setTab('portfolios');
       },
 
       resetApp: () => {
-        set({ wallet: null, vaults: [], logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'onboarding' }] });
+        set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'onboarding' }] });
         useStore.persist.clearStorage();
       },
 
@@ -257,6 +268,15 @@ export const useStore = create<ColoyondState>()(
           set({ price, priceError: null });
         } catch (err) {
           set({ priceError: err instanceof Error ? err.message : 'price feed failed' });
+        }
+      },
+
+      refreshUniverse: async () => {
+        try {
+          const universe = await fetchCoinbaseUniverse();
+          set({ universe, universeError: null });
+        } catch (err) {
+          set({ universeError: err instanceof Error ? err.message : 'asset list unavailable' });
         }
       },
 
@@ -300,6 +320,10 @@ export const useStore = create<ColoyondState>()(
           ]);
           const previousTradeCount = cfg.tradeCount;
           const tradeCount = Number(chain.lastSettledNonce);
+          const settlements = tradeCount > previousTradeCount
+            ? await fetchRecentVaultSettlements(new PublicKey(cfg.publicKey), tradeCount - previousTradeCount)
+            : [];
+          const latestSettlement = settlements[0];
           set((st) => ({ vaultBalances: { ...st.vaultBalances, [vaultId]: bal } }));
           get().patchVault(vaultId, {
             shareMint: chain.shareMint.toBase58(),
@@ -308,15 +332,23 @@ export const useStore = create<ColoyondState>()(
             thresholdPct: chain.thresholdBps / 100,
             status: chain.active ? 'active' : 'paused',
             tradeCount,
-            lastTradeAt: tradeCount > previousTradeCount ? Date.now() : cfg.lastTradeAt,
+            ...(latestSettlement ? {
+              lastTradeAt: latestSettlement.blockTime ? latestSettlement.blockTime * 1000 : Date.now(),
+              lastTradeSig: latestSettlement.signature,
+              lastTradeSlot: latestSettlement.slot,
+            } : {}),
             nextCheckAt: null,
           });
-          if (tradeCount > previousTradeCount) {
+          for (const settlement of settlements) {
+            if (get().logs.some((entry) => entry.sig === settlement.signature)) continue;
             get().log({
               vaultId,
               kind: 'trade',
-              summary: 'Magic Action settled a rebalance on Solana',
-              detail: `settled action nonce ${tradeCount}`,
+              summary: `Magic Action settled ${settlement.legs} rebalance leg${settlement.legs === 1 ? '' : 's'}`,
+              detail: `on-chain nonce ${settlement.nonce} · slot ${settlement.slot}`,
+              sig: settlement.signature,
+              slot: settlement.slot,
+              at: settlement.blockTime ? settlement.blockTime * 1000 : undefined,
             });
           }
         } catch {
@@ -495,7 +527,14 @@ export const useStore = create<ColoyondState>()(
           tradeCount: 0,
         };
 
-        set((st) => ({ vaults: [cfg, ...st.vaults] }));
+        set((st) => {
+          const vaults = [cfg, ...st.vaults];
+          const walletId = st.wallet?.publicKey;
+          return {
+            vaults,
+            ...(walletId ? { allVaults: { ...st.allVaults, [walletId]: vaults } } : {}),
+          };
+        });
         if (!ok) {
           get().log({
             vaultId: id,
@@ -674,15 +713,22 @@ export const useStore = create<ColoyondState>()(
       },
 
       patchVault: (vaultId, patch) =>
-        set((st) => ({ vaults: st.vaults.map((v) => (v.id === vaultId ? { ...v, ...patch } : v)) })),
+        set((st) => {
+          const vaults = st.vaults.map((v) => (v.id === vaultId ? { ...v, ...patch } : v));
+          const walletId = st.wallet?.publicKey;
+          return {
+            vaults,
+            ...(walletId ? { allVaults: { ...st.allVaults, [walletId]: vaults } } : {}),
+          };
+        }),
     }),
     {
       name: 'coloyond.v1',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
-      partialize: (st) => ({ wallet: st.wallet, vaults: st.vaults, logs: st.logs }),
+      partialize: (st) => ({ wallet: st.wallet, allVaults: st.allVaults, vaults: st.vaults, logs: st.logs }),
       migrate: (persisted, _version) => {
-        const p = persisted as { vaults?: Record<string, unknown>[] } | undefined;
+        const p = persisted as { wallet?: ColoyondState['wallet']; allVaults?: Record<string, VaultConfig[]>; vaults?: Record<string, unknown>[] } | undefined;
         if (p && Array.isArray(p.vaults)) {
           p.vaults = p.vaults.map((v) => {
             let normalized = v;
@@ -707,7 +753,10 @@ export const useStore = create<ColoyondState>()(
             };
           });
         }
-        return p as unknown as { wallet: ColoyondState['wallet']; vaults: VaultConfig[]; logs: LogEntry[] };
+        const walletId = p?.wallet?.publicKey;
+        const vaults = (p?.vaults ?? []) as unknown as VaultConfig[];
+        const allVaults = p?.allVaults ?? (walletId ? { [walletId]: vaults } : {});
+        return { ...p, allVaults, vaults: walletId ? (allVaults[walletId] ?? []) : vaults } as unknown as ColoyondState;
       },
     },
   ),

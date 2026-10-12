@@ -1,4 +1,5 @@
 import { assetList } from './assets';
+import { fetchCoinbaseStats } from './coinbase';
 
 /**
  * The price book: one live observation covering every tradable asset.
@@ -63,18 +64,24 @@ export function assetsPriced(book: PriceBook | null, assetIds: string[], maxAgeM
 export async function fetchPriceBook(): Promise<PriceBook> {
   const observedAt = Date.now();
   const specs = assetList();
+  const stats = await fetchCoinbaseStats();
   const entries = await Promise.all(
     specs.map(async (spec) => {
       if (spec.priceSymbol === null) {
         return [spec.id, { usd: 1, source: 'fixed' as const }] as const;
       }
+      const batched = stats?.[spec.priceSymbol];
+      if (batched !== undefined) return [spec.id, { usd: batched, source: 'coinbase' as const }] as const;
       const e = (await tryCoinbase(spec.priceSymbol)) ?? (spec.binanceSymbol ? await tryBinance(spec.binanceSymbol) : null);
       return [spec.id, e] as const;
     }),
   );
+  const discovered = Object.entries(stats ?? {})
+    .filter(([pair]) => pair.endsWith('-USD'))
+    .map(([pair, usd]) => [pair.slice(0, -4).toLowerCase(), { usd, source: 'coinbase' as const }] as const);
   return {
     observedAt,
-    entries: Object.fromEntries(entries),
+    entries: { ...Object.fromEntries(discovered), ...Object.fromEntries(entries) },
   };
 }
 

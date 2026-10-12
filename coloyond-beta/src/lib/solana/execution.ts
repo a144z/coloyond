@@ -86,6 +86,44 @@ export interface OnChainVaultState {
   assets: OnChainVaultAsset[];
 }
 
+export interface VaultSettlementActivity {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  nonce: number;
+  legs: number;
+}
+
+/** Read confirmed settlement transactions for this vault; UI logs never synthesize trades. */
+export async function fetchRecentVaultSettlements(
+  stateAddress: PublicKey,
+  limit = 5,
+): Promise<VaultSettlementActivity[]> {
+  const signatures = await connection.getSignaturesForAddress(stateAddress, { limit: 30 }, 'confirmed');
+  const settlements: VaultSettlementActivity[] = [];
+  for (const item of signatures) {
+    if (item.err) continue;
+    const transaction = await connection.getTransaction(item.signature, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0,
+    });
+    const message = transaction?.meta?.logMessages?.find((line) =>
+      line.includes('Base-layer SPL rebalance settled atomically: nonce '),
+    );
+    const matched = message?.match(/nonce (\d+), (\d+) legs/);
+    if (!transaction || !matched) continue;
+    settlements.push({
+      signature: item.signature,
+      slot: transaction.slot,
+      blockTime: transaction.blockTime ?? null,
+      nonce: Number(matched[1]),
+      legs: Number(matched[2]),
+    });
+    if (settlements.length >= limit) break;
+  }
+  return settlements;
+}
+
 export function deriveVaultAddresses(owner: PublicKey, id: bigint): VaultAddresses {
   const [state] = PublicKey.findProgramAddressSync([VAULT_SEED, owner.toBuffer(), u64(id)], EXECUTION_PROGRAM);
   const [authority] = PublicKey.findProgramAddressSync([VAULT_AUTHORITY_SEED, state.toBuffer()], EXECUTION_PROGRAM);

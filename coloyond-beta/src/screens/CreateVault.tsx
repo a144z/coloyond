@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../lib/store';
 import { CADENCE_OPTIONS_SEC, PRICE_MAX_AGE_MS } from '../lib/solana/config';
-import { assetList, type AssetId, type AssetSpec } from '../lib/solana/assets';
+import { assetList, isAssetId, type AssetId, type AssetSpec } from '../lib/solana/assets';
 import { bookStatus, priceOf } from '../lib/solana/price';
 import { fmtSol, fmtUsd, lamportsFromSol, parseAmountOrZero } from '../lib/format';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
@@ -11,6 +11,8 @@ import { Sheet } from '../components/ui/Sheet';
 import { Field, inputClass, selectClass } from '../components/ui/Field';
 import { KeyValue, MicroLabel, Notice } from '../components/ui/primitives';
 import { WeightSliders, normalizeShares } from '../components/ui/WeightSliders';
+import { MixBar, segmentsOf } from '../components/ui/MixBar';
+import { AssetPickerSheet } from '../components/ui/AssetPickerSheet';
 
 const cadenceLabels: Record<number, string> = {
   60: 'About every 60 seconds · 5,700 ER slots',
@@ -34,6 +36,7 @@ export function CreateVault() {
   const [investmentSol, setInvestmentSol] = useState('0.20');
   const [cadenceSec, setCadenceSec] = useState<number>(CADENCE_OPTIONS_SEC[0]);
   const [threshold, setThreshold] = useState(2);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -116,8 +119,26 @@ export function CreateVault() {
         meta={selected.length >= 2 ? selected.map((s) => (targets[s.id] ?? 0).toFixed(0)).join(' / ') : '—'}
         bodyClassName="pt-3"
       >
+        {selected.length >= 2 ? (
+          <MixBar
+            className="mb-4"
+            segments={segmentsOf(selected.map((s) => ({ assetId: s.id, pct: targets[s.id] ?? 0 })))}
+            height={20}
+            interactive
+            onChange={(segments) => setShares((previous) => {
+              const next = { ...previous };
+              for (const segment of segments) next[segment.key as AssetId] = Math.round(segment.pct);
+              return next;
+            })}
+            ariaLabel="Drag allocation handles to change target percentages"
+          />
+        ) : null}
         <WeightSliders shares={shares} onChange={setShares} />
       </LedgerPanel>
+
+      <div className="mt-3">
+        <Button variant="secondary" full onClick={() => setPickerOpen(true)}>Add an executable asset</Button>
+      </div>
 
       <div className="mt-4">
         <Notice tone="brass">
@@ -267,6 +288,15 @@ export function CreateVault() {
           </Notice>
         </div>
       </Sheet>
+      <AssetPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        exclude={selectedIds}
+        onSelect={(id) => {
+          if (!isAssetId(id)) return;
+          setShares((previous) => ({ ...previous, [id]: previous[id] || 10 }));
+        }}
+      />
     </Screen>
   );
 }

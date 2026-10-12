@@ -14,6 +14,8 @@ import { NATIVE_MINT } from '@solana/spl-token';
 
 export interface AssetSpec {
   id: AssetId;
+  /** Only assets with a program mint/oracle configuration can enter a vault. */
+  core: boolean;
   symbol: string;
   name: string;
   decimals: number;
@@ -34,6 +36,7 @@ export type AssetId = (typeof ASSET_IDS)[number];
 export const ASSETS: Record<AssetId, AssetSpec> = {
   wsol: {
     id: 'wsol',
+    core: true,
     symbol: 'WSOL',
     name: 'Wrapped SOL',
     decimals: 9,
@@ -44,6 +47,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
   },
   dusd: {
     id: 'dusd',
+    core: true,
     symbol: 'dUSD',
     name: 'Synthetic Devnet USD',
     decimals: 6,
@@ -54,6 +58,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
   },
   tbtc: {
     id: 'tbtc',
+    core: true,
     symbol: 'tBTC',
     name: 'Test BTC',
     decimals: 8,
@@ -64,6 +69,7 @@ export const ASSETS: Record<AssetId, AssetSpec> = {
   },
   teth: {
     id: 'teth',
+    core: true,
     symbol: 'tETH',
     name: 'Test ETH',
     decimals: 8,
@@ -79,8 +85,18 @@ export function isAssetId(x: string): x is AssetId {
 }
 
 export function assetSpec(id: string): AssetSpec {
-  if (!isAssetId(id)) throw new Error(`unknown asset id: ${id}`);
-  return ASSETS[id];
+  if (isAssetId(id)) return ASSETS[id];
+  return {
+    id: id as AssetId,
+    symbol: id.toUpperCase().slice(0, 8),
+    name: 'Discovered asset · unavailable on this vault program',
+    decimals: 8,
+    color: '#687782',
+    synthetic: true,
+    core: false,
+    priceSymbol: `${id.toUpperCase()}-USD`,
+    binanceSymbol: null,
+  };
 }
 
 export function assetList(): AssetSpec[] {

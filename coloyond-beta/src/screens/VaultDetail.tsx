@@ -266,7 +266,23 @@ function EditWeightsSheet({ vault, open, onClose }: { vault: VaultConfig; open: 
     try { await editWeights(vault.id, nextTargets as Record<string, number>); onClose(); } finally { setSubmitting(false); }
   }}>{cooling ? `App cooldown · ${fmtCountdown(cooldownEndsAt - Date.now())}` : 'Set new target on Solana'}</Button>}>
     <p className="mb-4 text-[12px] leading-relaxed text-iron">The target weights are configuration in Vault State; they are not token balances. The scheduled instruction reads the updated targets. This app applies a 120-second wait between owner edits.</p>
-    <LedgerPanel stripe="New target" meta={nextLabel} bodyClassName="pt-3"><WeightSliders shares={shares} onChange={setShares} assetIds={vault.assets} ariaLabel="New target weights" /></LedgerPanel>
+    <LedgerPanel stripe="New target" meta={nextLabel} bodyClassName="pt-3">
+      {vault.assets.filter((id) => (nextTargets[id] ?? 0) > 0).length >= 2 ? (
+        <MixBar
+          className="mb-4"
+          segments={segmentsOf(vault.assets.filter((id) => (nextTargets[id] ?? 0) > 0).map((assetId) => ({ assetId, pct: nextTargets[assetId] ?? 0 })))}
+          height={20}
+          interactive
+          onChange={(segments) => setShares((previous) => {
+            const next = { ...previous };
+            for (const segment of segments) next[segment.key as AssetId] = Math.round(segment.pct);
+            return next;
+          })}
+          ariaLabel="Drag allocation handles to change target percentages"
+        />
+      ) : null}
+      <WeightSliders shares={shares} onChange={setShares} assetIds={vault.assets} ariaLabel="New target weights" />
+    </LedgerPanel>
     <p className="mt-3 text-[11px] leading-relaxed text-iron">The asset set stays fixed. Set an asset's weight to zero to remove it from the target mix; its SPL account remains part of the vault.</p>
   </Sheet>;
 }

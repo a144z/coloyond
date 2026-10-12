@@ -32,6 +32,9 @@ export const MAX_TRADES_PER_CHECK = 6;
 export const PRICE_MAX_AGE_MS = 90_000;
 export const PRICE_POLL_MS = 20_000;
 
+/** Coinbase universe refresh: the listed-asset registry re-syncs on this cadence. */
+export const UNIVERSE_POLL_MS = 600_000;
+
 /** Polling. */
 export const BALANCE_POLL_MS = 10_000;
 export const RESERVE_POLL_MS = 60_000;
