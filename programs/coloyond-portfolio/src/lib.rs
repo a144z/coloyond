@@ -6,6 +6,7 @@ pub mod pda;
 pub mod state;
 
 pub(crate) use instructions::__client_accounts_close_vault;
+pub(crate) use instructions::__client_accounts_configure_rebalance;
 pub(crate) use instructions::__client_accounts_create_vault;
 pub(crate) use instructions::__client_accounts_execute_scheduled_rebalance;
 pub(crate) use instructions::__client_accounts_fund_vault;
@@ -13,8 +14,8 @@ pub(crate) use instructions::__client_accounts_tick;
 pub(crate) use instructions::__client_accounts_update_allocation;
 pub(crate) use instructions::__client_accounts_withdraw_in_kind;
 pub use instructions::{
-    CloseVault, CreateVault, ExecuteScheduledRebalance, FundVault, Tick, UpdateAllocation,
-    WithdrawInKind,
+    CloseVault, ConfigureRebalance, CreateVault, ExecuteScheduledRebalance, FundVault, Tick,
+    UpdateAllocation, WithdrawInKind,
 };
 
 declare_id!("5oHukWBWXvySZipAd6DHSq1KHN8HLFYa38yTJdvx2V7N");
@@ -79,5 +80,19 @@ pub mod coloyond_portfolio {
         amount_in: u64,
     ) -> Result<()> {
         instructions::vault::execute_scheduled_rebalance(ctx, generation, asset_in, asset_out, amount_in)
+    }
+
+    pub fn configure_rebalance<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ConfigureRebalance<'info>>,
+        owner_op_sequence: u64,
+        new_interval_seconds: u64,
+        new_min_price_delta_bps: u16,
+    ) -> Result<()> {
+        instructions::vault::configure_rebalance(
+            ctx,
+            owner_op_sequence,
+            new_interval_seconds,
+            new_min_price_delta_bps,
+        )
     }
 }

@@ -5,7 +5,7 @@ pub const REGISTRY_SPACE: usize = 300;
 pub const VAULT_SPACE: usize = 500;
 pub const AUTHORITY_SPACE: usize = 64;
 pub const CUSTODY_SPACE: usize = 96;
-pub const CONTROLLER_SPACE: usize = 96;
+pub const CONTROLLER_SPACE: usize = 300;
 pub const ADMISSION_SPACE: usize = 500;
 
 pub const VAULT_ASSETS_MIN: usize = 2;
@@ -55,6 +55,79 @@ pub struct AutomationControllerV2 {
     pub generation: u64,
     pub run_nonce: u64,
     pub interval_seconds: u64,
+    pub min_price_delta_bps: u16,
+    pub last_prices: Vec<RecordedPrice>,
+}
+
+impl AutomationControllerV2 {
+    pub fn set_params(&mut self, interval_seconds: u64, min_price_delta_bps: u16) {
+        self.interval_seconds = interval_seconds;
+        self.min_price_delta_bps = min_price_delta_bps;
+    }
+
+    /// Returns Ok(true) if at least one basket position has moved by at least
+    /// `self.min_price_delta_bps` since the previous successful rebalance.
+    /// Returns Ok(false) when the last and current vectors have the same length
+    /// but no basket position exceeded the threshold (which includes the empty
+    /// first-run case, since an empty last vector never opens the gate).
+    /// Errors when the two vectors have different lengths, which is a wiring bug
+    /// on the caller side rather than a policy failure.
+    pub fn any_price_moved_enough(&self, current: &[RecordedPrice]) -> Result<bool> {
+        require!(
+            current.len() == self.last_prices.len(),
+            PortfolioError::ControllerBasketMismatch
+        );
+        for (last, now) in self.last_prices.iter().zip(current.iter()) {
+            if let Some(delta) = price_delta_bps(last, now) {
+                if u128::from(self.min_price_delta_bps) <= delta {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RecordedPrice {
+    pub mantissa: u64,
+    pub exponent: i32,
+}
+
+const MAX_EXPONENT_SPAN: u32 = 18;
+
+fn pow_10(exponent: u32) -> Option<u128> {
+    if exponent > MAX_EXPONENT_SPAN {
+        return None;
+    }
+    let mut scale: u128 = 1;
+    let mut left = exponent;
+    while left > 0 {
+        scale = scale.checked_mul(10)?;
+        left -= 1;
+    }
+    Some(scale)
+}
+
+/// Absolute percentage move in basis points, on a shared scale. A pair whose
+/// exponents span more than 18 places is rejected with None, since that pair is
+/// unusable for a percentage comparison. A zero last price is rejected with None
+/// as well.
+pub fn price_delta_bps(last: &RecordedPrice, now: &RecordedPrice) -> Option<u128> {
+    let shared_exponent = last.exponent.min(now.exponent);
+    let last_scale = pow_10(u32::try_from(last.exponent - shared_exponent).ok()?)?;
+    let now_scale = pow_10(u32::try_from(now.exponent - shared_exponent).ok()?)?;
+    let last_value = u128::from(last.mantissa).checked_mul(last_scale)?;
+    let now_value = u128::from(now.mantissa).checked_mul(now_scale)?;
+    if last_value == 0 {
+        return None;
+    }
+    let spread = if now_value > last_value {
+        now_value - last_value
+    } else {
+        last_value - now_value
+    };
+    spread.checked_mul(WEIGHTS_SUM_BPS as u128)?.checked_div(last_value)
 }
 
 /// Program-wide admission gate: the list of mints that have a Pyth price feed and
@@ -333,6 +406,11 @@ mod tests {
             generation: 7,
             run_nonce: 42,
             interval_seconds: 75,
+            min_price_delta_bps: 10,
+            last_prices: vec![
+                RecordedPrice { mantissa: 1_000_000_000, exponent: -8 },
+                RecordedPrice { mantissa: 2_000_000_000, exponent: -8 },
+            ],
         };
         let mut bytes = vec![0u8; CONTROLLER_SPACE];
         let mut output: &mut [u8] = &mut bytes;
@@ -341,6 +419,68 @@ mod tests {
             output.len() < CONTROLLER_SPACE,
             "controller state must leave slack inside the reserved space"
         );
+    }
+
+    #[test]
+    fn price_delta_bps_ignores_exponent_difference() {
+        let last = RecordedPrice { mantissa: 1_000_000_000, exponent: -8 };
+        // Same-exponent pair, one percent higher: exactly 100 basis points.
+        let up_same = RecordedPrice { mantissa: 1_010_000_000, exponent: -8 };
+        assert_eq!(price_delta_bps(&last, &up_same), Some(100));
+        let down_same = RecordedPrice { mantissa: 990_000_000, exponent: -8 };
+        assert_eq!(price_delta_bps(&last, &down_same), Some(100));
+        // Coarser exponent, same real price delta: 100 basis points again.
+        let up_coarse = RecordedPrice { mantissa: 1_010_000, exponent: -5 };
+        assert_eq!(price_delta_bps(&last, &up_coarse), Some(100));
+        // A zero last price has no meaningful ratio and yields None.
+        let zero = RecordedPrice { mantissa: 0, exponent: -8 };
+        assert_eq!(price_delta_bps(&zero, &up_same), None);
+        // An exponent span wider than the internal 10^18 cap yields None.
+        let too_far = RecordedPrice { mantissa: 1, exponent: -100 };
+        assert!(price_delta_bps(&last, &too_far).is_none());
+    }
+
+    #[test]
+    fn any_price_moved_enough_only_opens_when_a_basket_position_passes_the_threshold() {
+        // Threshold of ten basis points against two $1.00 last prices (mantissa 100_000_000
+        // at exponent -8). A move to 100_100_000 hits the threshold exactly, so the
+        // gate opens; 100_090_000 is one basis point below, so it does not.
+        let last_prices = vec![
+            RecordedPrice { mantissa: 100_000_000, exponent: -8 },
+            RecordedPrice { mantissa: 100_000_000, exponent: -8 },
+        ];
+        let mut controller = AutomationControllerV2 {
+            bump: 255,
+            vault: Pubkey::default(),
+            generation: 0,
+            run_nonce: 0,
+            interval_seconds: 0,
+            min_price_delta_bps: 10,
+            last_prices: last_prices.clone(),
+        };
+        assert!(controller
+            .any_price_moved_enough(&vec![
+                RecordedPrice { mantissa: 100_090_000, exponent: -8 },
+                RecordedPrice { mantissa: 100_100_000, exponent: -8 },
+            ])
+            .unwrap(),
+        "one basket position at the threshold must open the gate");
+        assert!(!controller
+            .any_price_moved_enough(&vec![
+                RecordedPrice { mantissa: 100_009_000, exponent: -8 },
+                RecordedPrice { mantissa: 100_001_000, exponent: -8 },
+            ])
+            .unwrap(),
+        "two basket positions under the threshold must keep the gate closed");
+        controller.last_prices = vec![];
+        assert!(controller
+            .any_price_moved_enough(&vec![
+                RecordedPrice { mantissa: 999_999_999, exponent: -8 },
+            ])
+            .is_err(),
+        "a length mismatch is reported as an error, not as a silent gate pass");
+        controller.last_prices = last_prices.clone();
+        assert!(!controller.any_price_moved_enough(&last_prices).unwrap());
     }
 
     #[test]

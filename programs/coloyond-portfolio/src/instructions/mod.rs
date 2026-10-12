@@ -79,6 +79,20 @@ pub struct Tick<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(owner_op_sequence: u64, new_interval_seconds: u64, new_min_price_delta_bps: u16)]
+pub struct ConfigureRebalance<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    /// CHECK: identity and PDA are validated in the handler; also proves the
+    /// vault's basket size matches the controller's last_prices length.
+    #[account(mut)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: identity, PDA, generation and vault backlink are validated in the handler.
+    #[account(mut)]
+    pub controller: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(generation: u64, asset_in: u8, asset_out: u8, amount_in: u64)]
 pub struct ExecuteScheduledRebalance<'info> {
     /// CHECK: identity, PDA, nonce, generation and cadence are validated in the handler.
@@ -89,7 +103,7 @@ pub struct ExecuteScheduledRebalance<'info> {
     pub vault: UncheckedAccount<'info>,
     /// CHECK: derived token authority PDA; has no required data account.
     pub authority: UncheckedAccount<'info>,
-    /// CHECK: program-wide admission list; both asset mints must still be on it.
+    /// CHECK: program-wide admission list; every basket mint must still be on it.
     pub admission: UncheckedAccount<'info>,
     #[account(mut)]
     pub asset_in_custody: UncheckedAccount<'info>,
@@ -97,9 +111,5 @@ pub struct ExecuteScheduledRebalance<'info> {
     pub asset_out_custody: UncheckedAccount<'info>,
     pub asset_in_mint: UncheckedAccount<'info>,
     pub asset_out_mint: UncheckedAccount<'info>,
-    /// CHECK: Pyth price account for asset_in's mint; decoded+validated against the admission's feed slot.
-    pub asset_in_feed: UncheckedAccount<'info>,
-    /// CHECK: Pyth price account for asset_out's mint; decoded+validated against the admission's feed slot.
-    pub asset_out_feed: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }

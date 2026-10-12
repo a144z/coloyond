@@ -7,11 +7,11 @@ use etf_oracle::{
 use crate::errors::PortfolioError;
 use crate::pda;
 use crate::state::{
-    AutomationControllerV2, PortfolioAdmissionV2, PortfolioVaultV2, VaultLifecycleV2,
+    AutomationControllerV2, PortfolioAdmissionV2, PortfolioVaultV2, RecordedPrice, VaultLifecycleV2,
 };
 use super::{
-    CloseVault, CreateVault, ExecuteScheduledRebalance, FundVault, Tick, UpdateAllocation,
-    WithdrawInKind,
+    CloseVault, ConfigureRebalance, CreateVault, ExecuteScheduledRebalance, FundVault, Tick,
+    UpdateAllocation, WithdrawInKind,
 };
 
 pub fn create_vault<'info>(
@@ -222,13 +222,6 @@ pub fn execute_scheduled_rebalance<'info>(
         *ctx.accounts.vault.to_account_info().key,
         PortfolioError::VaultPdaMismatch
     );
-    let now = Clock::get()?.unix_timestamp;
-    require!(now >= 0, PortfolioError::WrongLifecycle);
-    let elapsed = (now.saturating_sub(vault.last_run_unix_timestamp)) as u64;
-    require!(
-        elapsed >= controller.interval_seconds,
-        PortfolioError::WrongLifecycle
-    );
     let index_in = usize::try_from(asset_in).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
     let index_out = usize::try_from(asset_out).map_err(|_| error!(PortfolioError::WeightLengthMismatch))?;
     require!(
@@ -236,41 +229,79 @@ pub fn execute_scheduled_rebalance<'info>(
         PortfolioError::WeightLengthMismatch
     );
     require!(amount_in > 0, PortfolioError::WeightsSumMismatch);
-    require!(vault.units[index_in] <= u64::MAX - amount_in, PortfolioError::WeightsSumMismatch);
+    require!(
+        vault.units[index_in] <= u64::MAX - amount_in && amount_in <= vault.units[index_out],
+        PortfolioError::WeightsSumMismatch
+    );
     let admission = load_admission(&ctx.accounts.admission.to_account_info())?;
-    let mint_in = vault.mints[index_in];
-    let mint_out = vault.mints[index_out];
-    admission.assert_admitted(&mint_in)?;
-    admission.assert_admitted(&mint_out)?;
-    let feed_in_key = admission.feed_for(&mint_in).ok_or(PortfolioError::FeedNotAdmitted)?;
-    let feed_out_key = admission.feed_for(&mint_out).ok_or(PortfolioError::FeedNotAdmitted)?;
-    require_keys_eq!(
-        feed_in_key,
-        *ctx.accounts.asset_in_feed.to_account_info().key,
-        PortfolioError::OracleRejected
+    for mint in vault.mints.iter() {
+        admission.assert_admitted(mint)?;
+    }
+    require!(
+        ctx.remaining_accounts.len() == vault.mints.len(),
+        PortfolioError::WeightLengthMismatch
     );
-    require_keys_eq!(
-        feed_out_key,
-        *ctx.accounts.asset_out_feed.to_account_info().key,
-        PortfolioError::OracleRejected
-    );
-    let _ = read_pinned_price(
-        &ctx.accounts.asset_in_feed.to_account_info(),
-        rebalance_oracle_limits(),
-    )?;
-    let _ = read_pinned_price(
-        &ctx.accounts.asset_out_feed.to_account_info(),
-        rebalance_oracle_limits(),
-    )?;
+    let mut current_prices: Vec<RecordedPrice> = Vec::new();
+    for (slot, mint_key) in vault.mints.iter().enumerate() {
+        let feed_key = admission.feed_for(mint_key).ok_or(PortfolioError::FeedNotAdmitted)?;
+        let feed_info = &ctx.remaining_accounts[slot];
+        require_keys_eq!(*feed_info.key, feed_key, PortfolioError::OracleRejected);
+        let price = read_pinned_price(feed_info, rebalance_oracle_limits())?;
+        current_prices.push(RecordedPrice {
+            mantissa: price.mantissa,
+            exponent: price.exponent,
+        });
+    }
+    let mut verified = controller.any_price_moved_enough(&current_prices)?;
+    if !verified {
+        let now = Clock::get()?.unix_timestamp;
+        require!(now >= 0, PortfolioError::WrongLifecycle);
+        let elapsed = (now.saturating_sub(vault.last_run_unix_timestamp)) as u64;
+        verified = elapsed >= controller.interval_seconds;
+    }
+    require!(verified, PortfolioError::RebalanceThresholdNotMet);
+    let now = Clock::get()?.unix_timestamp;
     vault.units[index_in] = vault.units[index_in].saturating_add(amount_in);
     vault.units[index_out] = vault.units[index_out].saturating_sub(amount_in);
     vault.last_run_unix_timestamp = now;
-    save(&ctx.accounts.vault.to_account_info(), &vault)?;
+    controller.last_prices = current_prices;
     controller.run_nonce = controller
         .run_nonce
         .checked_add(1)
         .ok_or(PortfolioError::RegistryNonceMismatch)?;
+    save(&ctx.accounts.vault.to_account_info(), &vault)?;
     save_controller(&ctx.accounts.controller.to_account_info(), &controller)
+}
+
+pub fn configure_rebalance<'info>(
+    ctx: Context<'_, '_, 'info, 'info, ConfigureRebalance<'info>>,
+    owner_op_sequence: u64,
+    new_interval_seconds: u64,
+    new_min_price_delta_bps: u16,
+) -> Result<()> {
+    let mut vault = load(&ctx.accounts.vault.to_account_info())?;
+    vault.assert_owner(ctx.accounts.owner.key)?;
+    let mut controller = load_controller(&ctx.accounts.controller.to_account_info())?;
+    require!(
+        owner_op_sequence == vault.owner_op_sequence,
+        PortfolioError::RegistryNonceMismatch
+    );
+    require_keys_eq!(
+        controller.vault,
+        *ctx.accounts.vault.to_account_info().key,
+        PortfolioError::VaultPdaMismatch
+    );
+    require!(
+        controller.last_prices.len() == vault.mints.len(),
+        PortfolioError::ControllerBasketMismatch
+    );
+    controller.set_params(new_interval_seconds, new_min_price_delta_bps);
+    vault.owner_op_sequence = vault
+        .owner_op_sequence
+        .checked_add(1)
+        .ok_or(PortfolioError::RegistryNonceMismatch)?;
+    save_controller(&ctx.accounts.controller.to_account_info(), &controller)?;
+    save(&ctx.accounts.vault.to_account_info(), &vault)
 }
 
 fn load(account: &AccountInfo) -> Result<PortfolioVaultV2> {

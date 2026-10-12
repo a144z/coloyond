@@ -22,4 +22,8 @@ pub enum PortfolioError {
     OracleRejected,
     #[msg("Rebalance direction does not match the target weights")]
     WrongDirection,
+    #[msg("Rebalance interval not elapsed and no basket price crossed the delta")]
+    RebalanceThresholdNotMet,
+    #[msg("Controller's basket size does not match its vault's basket")]
+    ControllerBasketMismatch,
 }
