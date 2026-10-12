@@ -11,15 +11,14 @@
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && cd apps/android && ./gradlew :app:clean :app:assembleDebug --console=plain",
     "test:mobile": "node scripts/mobile/capture.mjs",
-    "video:studio": "remotion studio remotion-original/index.tsx --public-dir=remotion-original/public",
-    "video:render": "remotion render remotion-original/index.tsx MobileShowcase remotion-original/out/coloyond-mobile.mp4 --public-dir=remotion-original/public --codec=h264 --crf=18 --concurrency=2",
+    "video:studio": "remotion studio remotion/index.tsx --public-dir=remotion/public",
+    "video:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2",
     "test:video-camera": "node --import tsx scripts/mobile/verify-video-camera.mjs",
     "test:proof": "node --import tsx --test src/ui/app/lib/solana/tx-core.test.ts src/ui/app/lib/solana/vault-state.test.ts src/ui/app/lib/rebalance/illustration.test.ts src/ui/app/components/ui/WeightSliders.test.ts",
     "evidence:record": "node scripts/submission/record-ui.mjs",
-    "video:rebalance:studio": "remotion studio remotion/index.tsx --public-dir=remotion/public",
-    "video:rebalance:render": "remotion render remotion/index.tsx MobileShowcase remotion/out/coloyond-mobile.mp4 --public-dir=remotion/public --codec=h264 --crf=18 --concurrency=2",
-    "video:rebalance:package": "python scripts/mobile/package-video.py",
-    "test:video-rebalance-export": "python scripts/mobile/verify-video-export.py"
+    "video:package": "python scripts/mobile/package-video.py",
+    "test:video-export": "python scripts/mobile/verify-video-export.py",
+    "test:video-motion": "node --import tsx scripts/mobile/verify-video-motion.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",

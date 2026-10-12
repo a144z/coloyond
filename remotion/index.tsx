@@ -1,12 +1,5 @@
-import { CAPTIONS } from "./narration/captions";
-import { AutoPhone, RebalanceScene } from "./rebalance-scene";
+import { RebalanceScene } from "./rebalance-scene";
 import { beat, camera } from "./camera";
-import {
-  portfolioCardSvg,
-  svgDataUrl,
-  cardFamily,
-  type PortfolioCardInput,
-} from "../src/ui/app/lib/art/portfolio-card";
 import React from "react";
 import {
   AbsoluteFill,
@@ -26,9 +19,8 @@ const P = "#efece6",
   I = "#141414",
   M = "#747069",
   LINE = "#d8d4ca";
-const C = ["#ff513b", "#1249ed", "#ffd523", "#8d25d9"];
+const C = ["#ff4d38", "#184beb", "#ffda23", "#9650cf"];
 export const TOTAL = 1860;
-
 const ease = Easing.bezier(0.65, 0, 0.25, 1);
 const t = (f: number, a: number, b: number, x = 0, y = 1) =>
   interpolate(f, [a, b], [x, y], {
@@ -318,234 +310,185 @@ function Mix({ f }: { f: number }) {
     </div>
   );
 }
-const demoCard: PortfolioCardInput = {
-  id: "demo-everyday",
-  name: "Everyday mix",
-  assets: [
-    { id: "wsol", symbol: "WSOL", color: C[0], weight: 40 },
-    { id: "teth", symbol: "tETH", color: C[3], weight: 20 },
-    { id: "dusd", symbol: "dUSD", color: C[1], weight: 40 },
-  ],
-};
-const galleryCards: PortfolioCardInput[] = [
-  demoCard,
-  {
-    id: "demo-calm",
-    name: "Quiet balance",
-    assets: [
-      { id: "wsol", symbol: "WSOL", color: C[0], weight: 20 },
-      { id: "dusd", symbol: "dUSD", color: C[1], weight: 80 },
-    ],
-  },
-  {
-    id: "demo-horizon",
-    name: "Wide horizon",
-    assets: [
-      { id: "wsol", symbol: "WSOL", color: C[0], weight: 35 },
-      { id: "dusd", symbol: "dUSD", color: C[1], weight: 15 },
-      { id: "tbtc", symbol: "tBTC", color: C[2], weight: 30 },
-      { id: "teth", symbol: "tETH", color: C[3], weight: 20 },
-    ],
-  },
-];
-// Deliberately pick three deterministic example IDs illustrating the three available families.
-galleryCards.forEach((input, j) => {
-  const family = ["Orbit", "Prism", "Stack"][j];
-  for (
-    let n = 0;
-    (cardFamily(input) !== family ||
-      (j === 0 && cardFamily({ ...input, remix: 1 }) === family)) &&
-    n < 100;
-    n++
-  )
-    input.id = `demo-${j}-${n}`;
-});
-function CardSheet({ f }: { f: number }) {
-  const p = q(f, 79, 81) * (1 - q(f, 93, 95));
-  if (p === 0) return null;
-  const remix = f >= beat(87) ? 1 : 0;
-
+function Active({ f, detail = false }: { f: number; detail?: boolean }) {
   return (
-    <>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: `rgba(20,20,20,${p * 0.16})`,
-        }}
+    <div style={{ padding: 20 }}>
+      <Title
+        kicker={detail ? "03 / PORTFOLIO DETAIL" : "01 / PORTFOLIOS"}
+        title={detail ? "Everyday mix." : "Your portfolio desk."}
+        copy={
+          detail
+            ? "Your assets, weights and scheduled task. In one clear view."
+            : "A clear view of your existing portfolios."
+        }
       />
+      <Tag>ILLUSTRATIVE DEVNET DATA</Tag>
       <div
         style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: "22px 24px",
-          background: CARD,
-          borderRadius: "24px 24px 0 0",
-          transform: `translateY(${(1 - p) * 700}px)`,
+          ...card,
+          marginTop: 18,
+          transform: `scale(${1 - 0.025 * pulse(f, 60)})`,
         }}
       >
-        <div style={{ ...label, marginBottom: 12 }}>
-          CARD PNG SHARE · LOCAL RENDER
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <b style={{ fontSize: 19 }}>Everyday mix</b>
+          <span>↗</span>
         </div>
-        <b style={{ fontSize: 25, letterSpacing: -0.8 }}>
-          Your mix, as one picture.
-        </b>
-        <div
-          style={{
-            position: "relative",
-            width: 250,
-            height: 312.5,
-            margin: "18px auto 14px",
-            border: `1px solid ${LINE}`,
-            borderRadius: 8,
-            overflow: "hidden",
-          }}
-        >
-          {[0, 1].map((v) => (
-            <Img
-              key={v}
-              src={svgDataUrl(portfolioCardSvg({ ...demoCard, remix: v }))}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: 250,
-                height: 312.5,
-                opacity: v === 0 ? 1 - q(f, 87, 88) : q(f, 87, 88),
-                transform: `translateX(${v === 0 ? -18 * q(f, 87, 88) : 18 * (1 - q(f, 87, 88))}px)`,
-              }}
-            />
-          ))}
+        <div style={{ fontSize: 40, letterSpacing: -2, margin: "22px 0 7px" }}>
+          $1,250<span style={{ fontSize: 22, color: M }}>.00</span>
         </div>
-
+        <div style={{ fontSize: 12, color: M, marginBottom: 22 }}>
+          Illustrative portfolio value
+        </div>
+        <Strip weights={[60, 30, 10]} height={26} />
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            margin: "12px 0",
+            gap: 14,
             ...mono,
             fontSize: 10,
+            marginTop: 13,
           }}
         >
-          <span>
-            {cardFamily({ ...demoCard, remix })} · Remix {remix}
-          </span>
-          <div
-            style={{
-              padding: 12,
-              border: `1px solid ${LINE}`,
-              borderRadius: 8,
-              background: P,
-              transform: `scale(${1 - 0.04 * pulse(f, 74)})`,
-            }}
-          >
-            Remix artwork
-          </div>
-        </div>
-        <Button pressed={Math.abs(f - beat(90)) < 4}>Share PNG ↗</Button>
-        <div style={{ marginTop: 12 }}>
-          <Button light>Download PNG</Button>
-        </div>
-        <div style={{ ...label, textAlign: "center", marginTop: 15 }}>
-          {f >= beat(90)
-            ? "1200 × 1500 PNG · READY TO SHARE"
-            : "TARGET WEIGHTS · NO WALLET ADDRESS"}
+          <span>WSOL 60%</span>
+          <span>dUSD 30%</span>
+          <span>tBTC 10%</span>
         </div>
       </div>
-    </>
-  );
-}
-function CardGallery({ f }: { f: number }) {
-  if (f < beat(78) || f > beat(95)) return null;
-  const enter = q(f, 78, 80),
-    out = q(f, 93, 95);
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 850,
-        top: 170,
-        width: 930,
-        opacity: enter * (1 - out),
-      }}
-    >
-      <div style={{ ...mono, color: M, fontSize: 14, marginBottom: 26 }}>
-        06 / CARD PNG SHARE
-      </div>
-      <div
-        style={{
-          fontSize: 78,
-          fontWeight: 750,
-          letterSpacing: -4,
-          lineHeight: 1.1,
-          overflow: "hidden",
-        }}
-      >
-        {["Your portfolio.", "One picture."].map((line, j) => (
-          <div
-            key={line}
-            style={{
-              transform: `translateY(${(1 - q(f, 78 + j * 0.3, 80 + j * 0.3)) * 130}%)`,
-            }}
-          >
-            {line}
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 22, lineHeight: 1.6, color: M, marginTop: 25 }}>
-        A visual composition built from your target weights.
-        <br />
-        Generate a PNG. Share it. Remix the picture.
-      </div>
-      <div style={{ display: "flex", gap: 24, marginTop: 40 }}>
-        {galleryCards.map((input, j) => {
-          const p = q(f, 81 + j, 83 + j);
-          const source =
-            j === 0 ? { ...input, remix: f >= beat(87) ? 1 : 0 } : input;
-          return (
+      {detail ? (
+        <>
+          <div style={{ ...label, margin: "26px 0 10px" }}>HOLDINGS</div>
+          {["WSOL", "dUSD", "tBTC"].map((x, j) => (
             <div
-              key={input.id}
+              key={x}
               style={{
-                width: 270,
-                opacity: p,
-                transform: `translateY(${(1 - p) * 45}px)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "16px 0",
+                borderBottom: `1px solid ${LINE}`,
               }}
             >
-              <Img
-                src={svgDataUrl(portfolioCardSvg(source))}
+              <span
                 style={{
-                  width: 270,
-                  height: 337.5,
-                  borderRadius: 9,
-                  border: `1px solid ${LINE}`,
-                  boxShadow: "0 12px 30px #1414140d",
+                  height: 12,
+                  width: 12,
+                  borderRadius: 8,
+                  background: C[j],
                 }}
               />
-              <div style={{ ...mono, color: M, fontSize: 11, marginTop: 14 }}>
-                {input.name} / {cardFamily(source)}
-              </div>
+              <b>{x}</b>
+              <span style={{ marginLeft: "auto", fontFamily: "monospace" }}>
+                {["$750.00", "$375.00", "$125.00"][j]}
+              </span>
             </div>
-          );
-        })}
-      </div>
-      <div
-        style={{
-          ...mono,
-          color: M,
-          marginTop: 25,
-          fontSize: 11,
-          opacity: q(f, 89, 91),
-        }}
-      >
-        REMIX LINK → UNSIGNED DRAFT → YOUR OWN COMPOSITION
-      </div>
+          ))}
+          <div style={{ ...card, marginTop: 22, fontSize: 13 }}>
+            Scheduled task{" "}
+            <span style={{ float: "right", color: M }}>Every 24h</span>
+          </div>
+        </>
+      ) : (
+        <div style={{ marginTop: 18 }}>
+          <Button light>+ Create portfolio</Button>
+        </div>
+      )}
     </div>
   );
 }
-function Sheet({ f, type }: { f: number; type: "asset" | "review" }) {
-  const range = type === "asset" ? [36, 38, 41, 43] : [47, 49, 53, 55];
+function Wallet({ f }: { f: number }) {
+  return (
+    <div style={{ padding: 20 }}>
+      <Title
+        kicker="04 / WALLET"
+        title="Within reach."
+        copy="Your balances and the next move, together."
+      />
+      <Tag>ILLUSTRATIVE DEVNET DATA</Tag>
+      <div style={{ ...card, marginTop: 20 }}>
+        <div style={label}>AVAILABLE BALANCE</div>
+        <div style={{ fontSize: 46, letterSpacing: -2, margin: "22px 0 8px" }}>
+          2.50 <span style={{ fontSize: 20, color: M }}>SOL</span>
+        </div>
+        <div style={{ fontSize: 11, color: M }}>Demo wallet · 8f2…K9m</div>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        <div style={{ flex: 1 }}>
+          <Button light>Receive ↓</Button>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Button pressed={Math.abs(f - beat(74)) < 4}>Wrap SOL ⇄</Button>
+        </div>
+      </div>
+      <div style={{ ...label, margin: "30px 0 10px" }}>TOKEN BALANCES</div>
+      {["SOL", "WSOL", "dUSD"].map((x, i) => (
+        <div
+          key={x}
+          style={{
+            ...card,
+            marginBottom: 10,
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 16,
+          }}
+        >
+          <b>{x}</b>
+          <span style={{ color: M, fontFamily: "monospace" }}>
+            {["2.50", "0.00", "375.00"][i]}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function System() {
+  return (
+    <div style={{ padding: 20 }}>
+      <Title
+        kicker="05 / SYSTEM"
+        title="See the working parts."
+        copy="Connectivity, asset prices and execution status."
+      />
+      <Tag>DEMONSTRATION STATUS</Tag>
+      {[
+        ["NETWORK", "Solana devnet"],
+        ["RPC", "Connection overview"],
+        ["ASSET PRICES", "Price feed overview"],
+        ["EXECUTION", "Scheduled tasks"],
+        ["WALLET", "Connection required"],
+      ].map(([x, y], i) => (
+        <div key={x} style={{ ...card, marginTop: 14, padding: 18 }}>
+          <div style={{ ...label, marginBottom: 10 }}>{x}</div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 15,
+            }}
+          >
+            <span>{y}</span>
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                background: C[i % 4],
+                borderRadius: 8,
+                marginTop: 4,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function Sheet({ f, type }: { f: number; type: "asset" | "review" | "wrap" }) {
+  const range =
+    type === "asset"
+      ? [36, 38, 41, 43]
+      : type === "review"
+        ? [47, 49, 53, 55]
+        : [74, 76, 79, 81];
   const p = q(f, range[0], range[1]) * (1 - q(f, range[2], range[3]));
   if (!p) return null;
   return (
@@ -587,14 +530,20 @@ function Sheet({ f, type }: { f: number; type: "asset" | "review" }) {
             marginBottom: 12,
           }}
         >
-          {type === "asset" ? "Find the right fit." : "Review your mix."}
+          {type === "asset"
+            ? "Find the right fit."
+            : type === "review"
+              ? "Review your mix."
+              : "Wrap SOL."}
         </div>
         <div
           style={{ color: M, fontSize: 13, lineHeight: 1.6, marginBottom: 22 }}
         >
           {type === "asset"
             ? "Choose an asset to add to your target mix."
-            : "Check the allocation before connecting your wallet and signing."}
+            : type === "review"
+              ? "Check the allocation before connecting your wallet and signing."
+              : "SOL and wrapped SOL. One simple step to review."}
         </div>
         {type === "asset" ? (
           <>
@@ -677,18 +626,18 @@ const gestures = [
   { n: 47, x: 196, y: 668 },
   { n: 50, x: 260, y: 630 },
   { n: 55, x: 260, y: 480 },
-  { n: 57, x: 280, y: 450 },
-  { n: 66, x: 280, y: 430 },
-  { n: 77, x: 195, y: 547 },
-  { n: 79, x: 195, y: 547 },
-  { n: 83, x: 270, y: 510 },
-  { n: 87, x: 310, y: 637 },
-  { n: 90, x: 195, y: 692 },
-  { n: 92, x: 230, y: 520 },
+  { n: 60, x: 240, y: 321 },
+  { n: 64, x: 300, y: 470 },
+  { n: 68, x: 197, y: 805 },
+  { n: 71, x: 270, y: 515 },
+  { n: 74, x: 282, y: 445 },
+  { n: 78, x: 230, y: 520 },
+  { n: 82, x: 325, y: 805 },
+  { n: 87, x: 280, y: 360 },
 ];
-const clicks = [14, 32, 36, 41, 47, 79, 87, 90];
+const clicks = [14, 32, 36, 41, 47, 60, 68, 74, 82];
 function Cursor({ f }: { f: number }) {
-  if (f < beat(11) || f > beat(94)) return null;
+  if (f < beat(11) || f > beat(87)) return null;
   let a = gestures[0],
     b = gestures[gestures.length - 1];
   for (let j = 0; j < gestures.length - 1; j++) {
@@ -717,7 +666,7 @@ function Cursor({ f }: { f: number }) {
         top: y,
         zIndex: 30,
         pointerEvents: "none",
-        opacity: q(f, 10, 11) * (1 - q(f, 92, 94)),
+        opacity: q(f, 10, 11) * (1 - q(f, 86, 88)),
       }}
     >
       {ring > 0 ? (
@@ -758,8 +707,10 @@ function Device({ f }: { f: number }) {
   const cam = camera(f);
   const create = q(f, 14, 17);
   const active = q(f, 54, 57);
-
-  const nav = 0;
+  const detail = q(f, 60, 63);
+  const wallet = q(f, 68, 71);
+  const system = q(f, 82, 85);
+  const nav = f < beat(68) ? 0 : f < beat(82) ? 1 : 2;
   // Device and route transform run independently: click, then response; shared chrome stays put.
   return (
     <div
@@ -771,7 +722,7 @@ function Device({ f }: { f: number }) {
         height: 844,
         transform: `scale(${cam.s})`,
         transformOrigin: "0 0",
-        opacity: q(f, 6, 10) * (1 - q(f, 95, 98)),
+        opacity: q(f, 6, 10) * (1 - q(f, 91, 94)),
         border: `9px solid ${I}`,
         borderRadius: 36,
         background: P,
@@ -860,11 +811,52 @@ function Device({ f }: { f: number }) {
             style={{
               position: "absolute",
               inset: 0,
+              transform: `translateY(${(1 - active) * 220}px) translateX(${-wallet * 390}px)`,
               opacity: active,
-              transform: `translateY(${(1 - active) * 70}px)`,
             }}
           >
-            <AutoPhone frame={f} />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 1 - detail,
+                transform: `scale(${1 + detail * 0.08})`,
+              }}
+            >
+              <Active f={f} />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: detail,
+                transform: `translateY(${(1 - detail) * 40}px) scale(${0.95 + detail * 0.05})`,
+              }}
+            >
+              <Active f={f} detail />
+            </div>
+          </div>
+        ) : null}
+        {f >= beat(68) ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              transform: `translateX(${(1 - wallet) * 390 - system * 390}px)`,
+            }}
+          >
+            <Wallet f={f} />
+          </div>
+        ) : null}
+        {f >= beat(82) ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              transform: `translateX(${(1 - system) * 390}px)`,
+            }}
+          >
+            <System />
           </div>
         ) : null}
       </div>
@@ -899,7 +891,7 @@ function Device({ f }: { f: number }) {
       </div>
       <Sheet f={f} type="asset" />
       <Sheet f={f} type="review" />
-      <CardSheet f={f} />
+      <Sheet f={f} type="wrap" />
       <Cursor f={f} />
     </div>
   );
@@ -941,12 +933,39 @@ const scenes = [
     mode: "split",
     color: 3,
   },
+  {
+    a: 56,
+    z: 66,
+    k: "05 / INSPECT",
+    lines: ["The whole picture.", "Every detail."],
+    copy: "Open a portfolio. See what is inside.",
+    mode: "rise",
+    color: 0,
+  },
+  {
+    a: 66,
+    z: 81,
+    k: "06 / WALLET",
+    lines: ["Your next move.", "Within reach."],
+    copy: "Navigate to balances. Review a wrap in place.",
+    mode: "slide",
+    color: 1,
+  },
+  {
+    a: 81,
+    z: 91,
+    k: "07 / SYSTEM",
+    lines: ["See the", "working parts."],
+    copy: "One place for connectivity and execution status.",
+    mode: "mask",
+    color: 3,
+  },
 ];
 function Editorial({ f }: { f: number }) {
   return (
     <>
       {scenes.map((s) => {
-        if (f < beat(s.a) || f > beat(s.z)) return null;
+        if (s.a === 56 || s.a === 66 || f < beat(s.a) || f > beat(s.z)) return null;
         const enter = q(f, s.a, s.a + 2);
         const out = q(f, s.z - 1, s.z);
         const progress = enter * (1 - out);
@@ -957,9 +976,9 @@ function Editorial({ f }: { f: number }) {
             key={s.a}
             style={{
               position: "absolute",
-              left: s.a === 45 ? 990 : 120,
+              left: s.a === 45 || s.a === 81 ? 990 : 120,
               top: s.a === 45 ? 260 : 220,
-              width: s.a === 45 ? 780 : 710,
+              width: s.a === 45 || s.a === 81 ? 780 : 710,
               opacity: progress,
             }}
           >
@@ -983,7 +1002,7 @@ function Editorial({ f }: { f: number }) {
                 >
                   <div
                     style={{
-                      fontSize: s.a === 45 ? 74 : 88,
+                      fontSize: s.a === 45 || s.a === 56 ? 74 : 88,
                       fontWeight: 750,
                       letterSpacing: -4.5,
                       lineHeight: 1.08,
@@ -1035,27 +1054,14 @@ function Editorial({ f }: { f: number }) {
                 }}
               >
                 <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "baseline",
-                    gap: 16,
-                    fontSize: 90,
-                    letterSpacing: -3,
-                    fontWeight: 700,
-                    fontVariantNumeric: "tabular-nums",
-                    minWidth: 195,
-                  }}
+                  style={{ fontSize: 90, letterSpacing: -6, fontWeight: 700, display: "inline-flex", alignItems: "baseline", gap: 16, fontVariantNumeric: "tabular-nums" }}
                 >
                   {Math.round(
                     q(f, 20, 23, 60, 75) -
                       q(f, 24, 27, 0, 30) +
                       q(f, 28, 30, 0, 15),
                   )}
-                  <span
-                    style={{ fontSize: 38, letterSpacing: 0, fontWeight: 500 }}
-                  >
-                    %
-                  </span>
+                  <span style={{ fontSize: 38, letterSpacing: 0 }}>%</span>
                 </span>
                 <span style={{ ...mono, color: M }}>
                   {f >= beat(32) ? "WSOL · LOCKED" : "WSOL · TARGET WEIGHT"}
@@ -1078,7 +1084,7 @@ function Editorial({ f }: { f: number }) {
 }
 function Geometry({ f }: { f: number }) {
   const opening = 1 - q(f, 6, 10);
-  const ending = q(f, 94, 99);
+  const ending = q(f, 88, 95);
   const energy = MUSIC.envelopes.bass[f] ?? 0;
   const high = MUSIC.envelopes.high[f] ?? 0;
   const power = Math.max(opening, ending);
@@ -1172,7 +1178,7 @@ function Geometry({ f }: { f: number }) {
       <div
         style={{
           position: "absolute",
-          bottom: 20,
+          bottom: 48,
           left: 120,
           right: 120,
           display: "flex",
@@ -1188,7 +1194,7 @@ function Geometry({ f }: { f: number }) {
       <div
         style={{
           position: "absolute",
-          bottom: 108,
+          bottom: 76,
           left: 120,
           right: 120,
           height: 1,
@@ -1203,8 +1209,8 @@ function Geometry({ f }: { f: number }) {
   );
 }
 function Brand({ f, end = false }: { f: number; end?: boolean }) {
-  const a = end ? 95 : 0;
-  const show = end ? q(f, 95, 99) : q(f, 0, 2) * (1 - q(f, 6, 9));
+  const a = end ? 91 : 0;
+  const show = end ? q(f, 91, 96) : q(f, 0, 2) * (1 - q(f, 6, 9));
   return (
     <div
       style={{
@@ -1263,9 +1269,7 @@ function Brand({ f, end = false }: { f: number; end?: boolean }) {
           opacity: q(f, a + 2, a + 4),
         }}
       >
-        {end
-          ? "Build your mix. Keep your rhythm."
-          : "Your portfolio as one picture."}
+        {end ? "Build your mix. Keep your rhythm." : "Your assets, in balance."}
       </div>
       {end ? (
         <div
@@ -1273,7 +1277,7 @@ function Brand({ f, end = false }: { f: number; end?: boolean }) {
             display: "flex",
             gap: 15,
             marginTop: 42,
-            opacity: q(f, 99, 101),
+            opacity: q(f, 96, 98),
           }}
         >
           <span
@@ -1315,38 +1319,6 @@ function Brand({ f, end = false }: { f: number; end?: boolean }) {
     </div>
   );
 }
-function NarrationCaptions({ frame }: { frame: number }) {
-  const cue = CAPTIONS.find((c) => frame / 30 >= c.start && frame / 30 < c.end);
-  if (!cue) return null;
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 150,
-        right: 150,
-        bottom: 35,
-        textAlign: "center",
-        pointerEvents: "none",
-      }}
-    >
-      <span
-        style={{
-          display: "inline-block",
-          padding: "12px 22px",
-          borderRadius: 10,
-          background: "rgba(20,20,20,.94)",
-          color: P,
-          fontSize: 26,
-          fontWeight: 500,
-          lineHeight: 1.35,
-          boxShadow: "0 3px 12px #0001",
-        }}
-      >
-        {cue.text}
-      </span>
-    </div>
-  );
-}
 export function Film() {
   const f = useCurrentFrame();
   return (
@@ -1360,28 +1332,18 @@ export function Film() {
     >
       <Audio
         src={staticFile("audio/coloyond-uploaded-music.m4a")}
-        volume={(frame) => {
-          const duck = Math.max(
-            0,
-            ...CAPTIONS.map(
-              (c) =>
-                t(frame, c.start * 30 - 8, c.start * 30) *
-                (1 - t(frame, c.end * 30, c.end * 30 + 12)),
-            ),
-          );
-          const base = 0.34 - 0.18 * duck;
-          return base * t(frame, 0, 12) * (1 - t(frame, TOTAL - 30, TOTAL));
-        }}
+        volume={(x) =>
+          interpolate(x, [0, 12, TOTAL - 30, TOTAL], [0, 0.9, 0.9, 0], {
+            extrapolateRight: "clamp",
+          })
+        }
       />
-      <Audio src={staticFile("audio/coloyond-narration.wav")} volume={0.94} />
       <Geometry f={f} />
       <Editorial f={f} />
-      <Device f={f} />
       <RebalanceScene frame={f} />
-      <CardGallery f={f} />
+      <Device f={f} />
       <Brand f={f} />
       <Brand f={f} end />
-      <NarrationCaptions frame={f} />
     </AbsoluteFill>
   );
 }

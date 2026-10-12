@@ -51,11 +51,11 @@ Generative geometry turns each portfolio into an Orbit, Prism or Stack compositi
   </a>
 </p>
 
-<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Original 17.2 MiB film · Component zooms, clicks, slider drags and kinetic typography · Uploaded background music</sub></p>
+<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Original motion design · Beat-synced rebalance animation · Uploaded stereo background music</sub></p>
 
-**Recovered original:** the music-driven film from commit `a1572c6`, **17.2 MiB** (18,053,642 bytes). Component zooms, visible clicks, left/right slider drags, varied typography and Coloyond geometry use the uploaded music's analyzed timing. The complete, byte-matched source and assets are in [`remotion-original/`](remotion-original/); the original MP4 is also named [`coloyond-original-17mb.mp4`](releases/coloyond-original-17mb.mp4). Its animation timeline is 62 seconds; original AAC/container padding yields 62.058667 seconds. This is the unchanged original export.
+The sole canonical film builds on the recovered music-driven original (`a1572c6`): component zooms, visible clicks, left/right slider drags, varied typography and Coloyond geometry remain. A new right-side rebalance illustration shows a complete **40% SOL / 20% ETH / 40% cash** example: prices drift, excess SOL is sold, ETH is bought and the target value mix returns. The original uploaded background music and analyzed beat timing are preserved at the original gain.
 
-The later narrated rebalance work remains in [`remotion/`](remotion/), with its matching export available at tag [`promo-narrated-rebalance-v3`](https://github.com/a144z/coloyond/tree/promo-narrated-rebalance-v3). It is a separate version.
+**Exactly 62.000 seconds**, 1,860 frames, 1080p/30fps with stereo music. Full source, assets and analysis are in [`remotion/`](remotion/). The price-shock sequence is a fee-free illustration, not a recording of a submitted trade. [Read the timed visual transcript](docs/submission/demo-transcript.md).
 
 ## The product
 
@@ -140,9 +140,12 @@ The downloadable package is a signed **debug APK** for Android 8/API 26 and newe
 ```sh
 npm run video:studio
 npm run video:render
+npm run video:package
+npm run test:video-motion
+npm run test:video-export
 ```
 
-The default video commands now render the recovered original from `remotion-original/`, with the original uploaded music. See its [render guide](remotion-original/README.md). The separate narrated rebalance version remains available through `video:rebalance:studio` / `video:rebalance:render` and its [guide](remotion/README.md).
+There is one active source folder (`remotion/`) and one published promotional MP4. Run `npm run video:package` after rendering to retain the original music gain and package exactly 62 seconds (FFmpeg, Python, NumPy and SciPy required). `npm run test:video-motion` checks the preserved original choreography and shared rebalance math. See the [render guide](remotion/README.md) for timing and reproduction.
 
 ## Built, checked, and explicit about scope
 

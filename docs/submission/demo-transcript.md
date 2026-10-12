@@ -1,31 +1,20 @@
-# Coloyond — readable demo transcript
+# Coloyond — timed visual demo transcript
 
-62-second promotion. Generic natural synthetic narration over the user-supplied music. Rebalance segment is a fee-free illustration, not a recorded on-chain transaction.
+The sole canonical 62-second promotion has the original uploaded background music. It has no spoken narration. This transcript describes the visible actions for judges; the animated price example is not a recorded settlement.
 
-**0.30–3.44s** — Your portfolio, as one picture. Meet Coloyond.
+| Approximate time | Visible action |
+| --- | --- |
+| 0–6s | Coloyond prism, rays and introductory typography |
+| 6–11s | Phone enters; cursor clicks Create portfolio |
+| 11–20s | Component zoom; slider drags 60 → 75 → 45 → 60%; lock click |
+| 20–27s | Asset drawer slides in; tBTC selection preserves the locked allocation |
+| 27–33s | Review sheet opens; wallet signing requirement is visible |
+| 34–36s | Phone stays left; right-side automatic-rebalance example enters at 40% SOL / 20% ETH / 40% cash |
+| 36–39s | SOL rises 20%, ETH falls 20%; model value grows $1,000 → $1,040 |
+| 39–42s | Current value weights drift to 46.15% SOL / 15.38% ETH / 38.46% cash |
+| 42–45.5s | Flow paths and trade cards show selling $64 SOL, buying $48 ETH and adding $16 cash |
+| 45.5–48s | Bar and numbers restore targets: $416 SOL, $208 ETH and $416 cash; 40/20/40 |
+| 49–55s | Original System navigation and connectivity/status overview |
+| 55–62s | Brand rays reform into the closing prism and project link |
 
-**6.10–8.68s** — A mobile portfolio desk, built on Solana.
-
-**11.30–13.22s** — Choose your assets. Slide the weights.
-
-**15.50–17.65s** — Lock one weight while the others adjust.
-
-**20.20–23.27s** — Add an asset. Review the complete mix before signing.
-
-**26.70–28.60s** — Your wallet approves owner actions.
-
-**29.70–32.39s** — Scheduled execution needs a funded cranker.
-
-**33.00–35.35s** — Now, a simplified rebalance example.
-
-**36.40–39.94s** — Forty percent SOL, twenty percent ETH, forty percent cash.
-
-**40.15–43.44s** — SOL rises. ETH falls. The value weights drift.
-
-**43.80–47.02s** — Sell overweight SOL. Buy ETH. Restore the value mix.
-
-**47.60–50.44s** — Turn your mix into a PNG. Share the picture.
-
-**52.00–54.92s** — Open a remix link. Make the composition your own.
-
-**56.80–60.75s** — Coloyond. Your mix. Your rhythm. Explore the demo and evidence.
+The rebalance chapter uses the same deterministic, fee-free value model as the app's explorer. ETH is synthetic devnet tETH. Actual fills need valid prices, liquidity and configured execution; the separate proof guide links observed historical devnet settlement receipts. The phone's portfolio/wallet walkthrough is a separate illustrative example.

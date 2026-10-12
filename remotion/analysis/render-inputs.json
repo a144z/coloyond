@@ -1,5 +1,5 @@
 {
-  "purpose": "Complete local render inputs; npm dependencies reproducible through package-lock.json",
+  "purpose": "All local render inputs; npm dependencies pinned by package-lock.json",
   "inputs": [
     {
       "path": "package-lock.json",
@@ -8,13 +8,18 @@
     },
     {
       "path": "package.json",
-      "bytes": 2506,
-      "sha256": "88de1f530d83115f1517344b43e9223fa2427af3ce120d2243818f56480a3e17"
+      "bytes": 2591,
+      "sha256": "7d844febbe2ccef7f6fa04bf1c5540870fe177e013254920a571e945f3593784"
     },
     {
       "path": "remotion/analysis/music-analysis.json",
       "bytes": 81423,
       "sha256": "0aec90fcb6866d175af8d4b9351e9225a1d7a4c849c1dbbec78ecb36df6b0d7d"
+    },
+    {
+      "path": "remotion/analysis/original-motion-baseline.json",
+      "bytes": 1288,
+      "sha256": "41e1fda2cda1630acee17ea8826d71aaf794634d927b5e656c38299c4c02ef10"
     },
     {
       "path": "remotion/analyze_music.py",
@@ -23,63 +28,18 @@
     },
     {
       "path": "remotion/camera.ts",
-      "bytes": 1307,
-      "sha256": "876704f4040e9ab972ee15808b1ab0ba3ec30d318836c991b7b05f47bd934ca5"
+      "bytes": 1361,
+      "sha256": "efefcbd7990ad3bfb790344188f525b733a111433ac23f17b21442c0bafcd9fe"
     },
     {
       "path": "remotion/index.tsx",
-      "bytes": 37987,
-      "sha256": "b9982bfff45f2ddef2e83120eb22c404bad66b8373ecedaebd0654139f17dd2a"
+      "bytes": 37377,
+      "sha256": "23210eeb75a4808379c6f026fe05c8ae67a2737eebf40fb6aafb3237ae8737a3"
     },
     {
       "path": "remotion/music.ts",
       "bytes": 40402,
       "sha256": "ef466cc2109dd038228fb253f081c028a968f6a767344eb6febdaf4a2f9ccc28"
-    },
-    {
-      "path": "remotion/narration/README.md",
-      "bytes": 1539,
-      "sha256": "475f489095fafb65d8990309ff7d0e6d073ac912e81a9858c0b0787909efb1a3"
-    },
-    {
-      "path": "remotion/narration/captions.srt",
-      "bytes": 1124,
-      "sha256": "36eabb835aae9cb86dbdbf828881df1b349f8027ef144cfd5f497f0d930cc5bf"
-    },
-    {
-      "path": "remotion/narration/captions.ts",
-      "bytes": 1555,
-      "sha256": "ee13e500b023aa8651b1fedf7a4000c43c56e10a07ae209b8af7ea1e1f012543"
-    },
-    {
-      "path": "remotion/narration/captions.vtt",
-      "bytes": 1099,
-      "sha256": "e549a4ad31f207bcb12bbd46013e852f864d912fba40510380bf72def181c76b"
-    },
-    {
-      "path": "remotion/narration/generate.py",
-      "bytes": 3322,
-      "sha256": "13951a791920295796184d30aa8327c28d5251bdbfc65cfec3f22ab7feb2b463"
-    },
-    {
-      "path": "remotion/narration/script.json",
-      "bytes": 1433,
-      "sha256": "1937470ca27c420023fe333fb188c949789a44738178b38f7b564f6aa4d374dc"
-    },
-    {
-      "path": "remotion/narration/transcript.md",
-      "bytes": 1201,
-      "sha256": "8d1455ec0b645c0296db55e628cd3d4a3939d8d7cad74cdb9411a0edb8d81f16"
-    },
-    {
-      "path": "remotion/narration/voice-verification.json",
-      "bytes": 1509,
-      "sha256": "317654ac06d96096b9b939fa0dfa0fd2c1d61059e7bcfd0791db885acf2c5284"
-    },
-    {
-      "path": "remotion/public/audio/coloyond-narration.wav",
-      "bytes": 2976044,
-      "sha256": "1957a1a6078c45ae08ba1236b5da6816cc17a327c499d665dcc54470c036fdfa"
     },
     {
       "path": "remotion/public/audio/coloyond-uploaded-music.m4a",
@@ -98,18 +58,18 @@
     },
     {
       "path": "remotion/public/screens/02-create.png",
-      "bytes": 103302,
-      "sha256": "8ed5bb30cbe53968ce39de09de2cacc8559b37b6cec6841c9e129bc15609adb2"
+      "bytes": 139433,
+      "sha256": "a3c1f882d9b2120768744117588c330819d64019168d041d5230325783422299"
     },
     {
       "path": "remotion/public/screens/03-mix.png",
-      "bytes": 102090,
-      "sha256": "4fc407524c4ec297db9a68009f4e61a86af1c10e395ab5502933afe54dfbaffa"
+      "bytes": 141016,
+      "sha256": "d654968ca4cad753b53f4c7e924ab4ccb7fd5ae2cef559ea8dfac677da0e6c3d"
     },
     {
       "path": "remotion/public/screens/04-assets.png",
       "bytes": 108080,
-      "sha256": "270e89c49a432f5ce8fb0a017d7f7761718403d8cdcd37070abb3257fd28392e"
+      "sha256": "e9b04d763203751f80f359341954f97bbe9f1d2561db3dfd3735626cdd7605ef"
     },
     {
       "path": "remotion/public/screens/05-system.png",
@@ -118,18 +78,18 @@
     },
     {
       "path": "remotion/public/screens/06-active.png",
-      "bytes": 185171,
-      "sha256": "aada313353bd7f0ecd4c4f07b2f4258299863c71141ef8affb0cc8c5ced5975c"
+      "bytes": 208460,
+      "sha256": "2bde827cf9f1dccebee2604a44c8a98be0a6203485fb98e7a8b64d83f42b74e8"
     },
     {
       "path": "remotion/public/screens/07-detail.png",
-      "bytes": 113634,
-      "sha256": "2242d702d9a27259a6bb0e2c669a0ace86c2050c0a877c247cd1395711310480"
+      "bytes": 151247,
+      "sha256": "84c365ee7c570b57bcab07835234a91b331d0fa9db1c7d605586fb037d2013ed"
     },
     {
       "path": "remotion/public/screens/08-edit.png",
-      "bytes": 138324,
-      "sha256": "ed907ea3eddbd8b0e645ff15dcf78be4bc8a695dd938aa3e99c726e305a39f04"
+      "bytes": 129444,
+      "sha256": "a4155cb8435f101b06a911d973291e6a44b0ffb1dfc500422e388c971c1ba104"
     },
     {
       "path": "remotion/public/screens/09-wallet.png",
@@ -137,14 +97,9 @@
       "sha256": "180967026895ea0c6a3c96ecad55ba4b16572b5666dd998243cb32101bd7a63e"
     },
     {
-      "path": "remotion/public/screens/10-share.png",
-      "bytes": 109991,
-      "sha256": "67deec56906b120b17a31534d5d265b0af80b9fcac0bb665a7c8ca4e7e6624c4"
-    },
-    {
       "path": "remotion/rebalance-scene.tsx",
-      "bytes": 9982,
-      "sha256": "514bf7ad95f1188b2ca3c2252875c2602873b6dac6dc2a6777056823a7671b10"
+      "bytes": 7084,
+      "sha256": "ea103c1c6ddb4c8e5e47226f5abe53de8a46cbaa1bf544db93d57918071a1d69"
     },
     {
       "path": "remotion.config.ts",
@@ -153,28 +108,23 @@
     },
     {
       "path": "scripts/mobile/package-video.py",
-      "bytes": 2225,
-      "sha256": "72aa23249d182653e202f2e7e3c6401ac375d3c4bdcaeb63911586e153fe70b6"
+      "bytes": 1813,
+      "sha256": "325f917fdfbea217ca3cd9f18c02786ab1704c67fed6bcecd22892bde47a1329"
     },
     {
       "path": "scripts/mobile/verify-video-camera.mjs",
-      "bytes": 922,
-      "sha256": "9c213497cbb3bc0c00f1631c981fbc66caf966b336ce98a3fc51d49746cdecc9"
+      "bytes": 804,
+      "sha256": "2a75c136ac18aba54b061e4d6cce5fe2f0910c0639ab04a7ec7af21984501c5e"
     },
     {
       "path": "scripts/mobile/verify-video-export.py",
-      "bytes": 4008,
-      "sha256": "693fe027a7b8c42ae43e744df3f57a5c25c8c034ae4734131b0880b19890e736"
+      "bytes": 3397,
+      "sha256": "c076ddaba474544da4563af9fbbc1f82f3b567abaa446791c85ff2de0e44b682"
     },
     {
-      "path": "src/ui/app/lib/art/brand-data.ts",
-      "bytes": 46125,
-      "sha256": "e547e2a9560df97d7b38f4b7468f2ba5c2861547637d9e13862751bcec9cf01e"
-    },
-    {
-      "path": "src/ui/app/lib/art/portfolio-card.ts",
-      "bytes": 7815,
-      "sha256": "d7908264b14840a4926548c7b1781df65f36ce0e7953e761b75fa01062d3ea66"
+      "path": "scripts/mobile/verify-video-motion.mjs",
+      "bytes": 2147,
+      "sha256": "f23e21f9ede6aea896c262aef1aea54f9ffee874f430132c8e5dad7b74a3393f"
     },
     {
       "path": "src/ui/app/lib/rebalance/illustration.ts",
