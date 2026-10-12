@@ -83,12 +83,13 @@ Could you give us:
 2. The `enroll:write` and `strategies:write` scopes.
 3. The `svm_b2b_api` entitlement, for Solana-rooted enrollment where the user signs with their wallet through Mobile Wallet Adapter.
 
-Two questions:
+Three questions:
 
-- Which assets can a Solana strategy hold today? We want our cards to use only assets you support.
+- Which network does the staging API use for Solana: Devnet or mainnet-beta? We want to test before we touch real funds.
+- Which assets can a Solana strategy hold today? We want our cards to use only assets you support. Is the strategy validation endpoint the right check for this?
 - Can a partner create a strategy from its own weights and enroll a user into it? Or does enrollment use only your published strategies?
 
-One design point: the app runs fully on the phone, and we don't want a partner key inside the APK. Do you have a pattern for mobile clients, such as per-user or short-lived keys? Or do partners usually call the API from a small backend?
+Following your docs, we will keep the key on a small backend, not in the app. The backend will submit the transaction that the user signs on the phone.
 
 Thanks,
 [name]
