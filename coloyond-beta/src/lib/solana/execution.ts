@@ -412,10 +412,7 @@ export async function scheduleVault(owner: Keypair, stateAddress: PublicKey): Pr
   marketSetup.feePayer = owner.publicKey;
   await signSendConfirm(marketSetup, [owner]);
 
-  const executorStatus = await router.getDelegationStatus(addresses.executor) as { isDelegated: boolean; fqdn?: string };
-  if (!executorStatus.isDelegated || !executorStatus.fqdn) {
-    throw new Error('The vault Executor is not delegated. Retry scheduling after its MagicBlock delegation completes.');
-  }
+  const executorStatus = await ensureExecutorDelegated(owner, stateAddress, addresses.executor);
   const host = new ConnectionMagicRouter(executorStatus.fqdn, 'confirmed');
   const configuredSponsor = await readSchedulerSponsor(stateAddress, addresses.schedulerConfig);
   if (configuredSponsor) {
@@ -608,6 +605,35 @@ async function waitForExecutorHost(executor: PublicKey): Promise<{ fqdn: string 
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   throw new Error('MagicBlock has not made the Executor delegation available yet. Retry scheduling in a moment.');
+}
+
+async function ensureExecutorDelegated(
+  owner: Keypair,
+  stateAddress: PublicKey,
+  executor: PublicKey,
+): Promise<{ fqdn: string }> {
+  const status = await router.getDelegationStatus(executor) as { isDelegated: boolean; fqdn?: string };
+  if (!status.isDelegated) {
+    const delegate = new TransactionInstruction({
+      programId: EXECUTION_PROGRAM,
+      keys: [
+        { pubkey: owner.publicKey, isSigner: true, isWritable: true },
+        { pubkey: stateAddress, isSigner: false, isWritable: false },
+        { pubkey: delegateBufferPdaFromDelegatedAccountAndOwnerProgram(executor, EXECUTION_PROGRAM), isSigner: false, isWritable: true },
+        { pubkey: delegationRecordPdaFromDelegatedAccount(executor), isSigner: false, isWritable: true },
+        { pubkey: delegationMetadataPdaFromDelegatedAccount(executor), isSigner: false, isWritable: true },
+        { pubkey: executor, isSigner: false, isWritable: true },
+        { pubkey: EXECUTION_PROGRAM, isSigner: false, isWritable: false },
+        { pubkey: DELEGATION_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.from(DISCRIMINATOR.delegateExecutor),
+    });
+    const tx = new Transaction().add(delegate);
+    tx.feePayer = owner.publicKey;
+    await signSendConfirm(tx, [owner]);
+  }
+  return waitForExecutorHost(executor);
 }
 
 async function readValidatorIdentity(fqdn: string): Promise<PublicKey> {
