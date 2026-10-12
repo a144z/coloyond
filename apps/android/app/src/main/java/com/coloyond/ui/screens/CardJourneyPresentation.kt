@@ -8,9 +8,11 @@ import com.coloyond.ui.cards.create.CardCreationRecords
 data class GliderReviewAllocation(
     val mint: String,
     val percent: String,
+    val symbol: String? = GliderHandoff.knownSymbol(mint),
 ) {
     val displayMint: String = mint.chunked(8).joinToString("\u200B")
-    val clipboardLine: String = "$mint — $percent"
+    val heading: String = symbol?.let { "$it · $percent" } ?: percent
+    val clipboardLine: String = "${symbol?.let { "$it · " } ?: ""}$mint — $percent"
 }
 
 /** Review data only; the UI must explicitly acknowledge the disclosure before opening Glider. */
@@ -32,7 +34,7 @@ fun makeGliderHandoffReview(strategy: ValidatedRecord): GliderHandoffReview {
     require(checked.id == strategy.id) { "Strategy identity changed" }
     val targetWeights = CardCreationRecords.targetWeights(checked)
     val allocations = targetWeights.map { weight ->
-        GliderHandoff.Allocation(weight.mint, null, weight.weightBps)
+        GliderHandoff.Allocation(weight.mint, GliderHandoff.knownSymbol(weight.mint), weight.weightBps)
     }
     // Keep the old handoff's strict supported-asset-count and exact-100% validation.
     GliderHandoff.reviewText(allocations)

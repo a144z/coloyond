@@ -5,7 +5,7 @@ Native Kotlin + Jetpack Compose app, started from Solana Mobile's `kotlin-compos
 - **Card probe** (default): the Task 1 device probe. It draws a sample card, exports it as a 1080×1350 PNG, shares the PNG and a strategy file, and shows the last import it received.
 - **Wallet**: a Mobile Wallet Adapter demo for connecting, signing a message and disconnecting on **devnet**.
 
-It also has a Symmetry V3 account decoder (`protocols/symmetry/AccountDecoder.kt`). The strategy records, the card generator, remix and the Glider handoff are not built yet.
+It also has a Symmetry V3 account decoder (`protocols/symmetry/AccountDecoder.kt`). The app opens on the card journey: create, save, share, import and remix strategy cards, and the manual Glider handoff.
 
 The application ID is `com.coloyond`. Open this directory (`apps/android`) as the project in Android Studio.
 

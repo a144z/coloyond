@@ -26,7 +26,9 @@ class CardJourneyPresentationTest {
 
         assertEquals(listOf(mintA, mintB), review.allocations.map { it.mint })
         assertEquals(listOf("67.50%", "32.50%"), review.allocations.map { it.percent })
-        assertEquals("$mintA — 67.50%\n$mintB — 32.50%", review.allocationText)
+        assertEquals(listOf(null, "SOL"), review.allocations.map { it.symbol })
+        assertEquals(listOf("67.50%", "SOL · 32.50%"), review.allocations.map { it.heading })
+        assertEquals("$mintA — 67.50%\nSOL · $mintB — 32.50%", review.allocationText)
         assertEquals(GliderHandoff.DISCLOSURE, review.disclosure)
         assertEquals("https://glider.fi", review.url)
         assertFalse(review.canOpen)

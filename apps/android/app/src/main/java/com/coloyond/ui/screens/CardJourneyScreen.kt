@@ -309,7 +309,7 @@ private fun GliderHandoffReviewDialog(
                 )
                 review.allocations.forEach { allocation ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(allocation.percent, style = MaterialTheme.typography.titleMedium)
+                        Text(allocation.heading, style = MaterialTheme.typography.titleMedium)
                         Text(allocation.displayMint, style = MaterialTheme.typography.bodySmall)
                     }
                 }
