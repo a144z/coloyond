@@ -13,7 +13,7 @@ import { SystemScreen } from './screens/SystemScreen';
 /**
  * Root: the 430px lacquerboard column. Screens render inside the scroll
  * area keyed by route so each navigation enters with the appear motion;
- * the scheduler wakes as soon as a wallet exists.
+ * ER execution-state sync starts when a wallet exists.
  */
 export default function App() {
   const stack = useStore((s) => s.stack);
@@ -21,7 +21,7 @@ export default function App() {
   const screen = stack[stack.length - 1];
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // automation + live feeds run while the app is open and a wallet exists
+  // ER status, balances and live feeds sync while the app is open.
   useEffect(() => {
     if (wallet) ensureScheduler();
   }, [wallet]);

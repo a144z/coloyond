@@ -2,21 +2,23 @@ import { assetList, type AssetId } from '../../lib/solana/assets';
 import { AssetSwatch } from './primitives';
 
 /**
- * Proportional weight editor. Renders one slider per selected asset (share
- * > 0 — a share of zero removes the asset from the portfolio); the displayed
- * weights are the shares normalized to 100, so the target mix is always
- * valid while editing. Scales from the core four to the full Coinbase list.
+ * Proportional weight editor. Each asset gets an independent share slider
+ * (0-100); the displayed weights are the shares normalized to 100, so the
+ * target mix is always valid while editing. A share of zero removes the
+ * asset from the portfolio.
  */
 export function WeightSliders({
   shares,
   onChange,
   ariaLabel = 'Target mix weights',
+  assetIds,
 }: {
   shares: Record<AssetId, number>;
   onChange: (next: Record<AssetId, number>) => void;
   ariaLabel?: string;
+  assetIds?: readonly AssetId[];
 }) {
-  const specs = assetList().filter((s) => (shares[s.id] ?? 0) > 0);
+  const specs = assetList().filter((asset) => !assetIds || assetIds.includes(asset.id));
   const total = specs.reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
   const pctOf = (id: AssetId): number => (total > 0 ? ((shares[id] ?? 0) / total) * 100 : 0);
 
@@ -51,19 +53,20 @@ export function WeightSliders({
         );
       })}
       <div className="flex items-baseline justify-between gap-3 border-t border-hairline pt-3 text-[11px] text-iron">
-        <span>{specs.length > 0 ? `Total target · ${specs.length} asset${specs.length === 1 ? '' : 's'}` : 'No assets selected'}</span>
-        <strong className="font-mono">{specs.length > 0 ? '100.0%' : '—'}</strong>
+        <span>{total > 0 ? 'Total target' : 'No assets selected'}</span>
+        <strong className="font-mono">{total > 0 ? '100.0%' : '—'}</strong>
       </div>
     </div>
   );
 }
 
 /** Normalize raw shares into target percentages that sum to 100 (empty input → empty record). */
-export function normalizeShares(shares: Record<AssetId, number>): Partial<Record<AssetId, number>> {
-  const total = assetList().reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
+export function normalizeShares(shares: Record<AssetId, number>, assetIds?: readonly AssetId[]): Partial<Record<AssetId, number>> {
+  const specs = assetList().filter((asset) => !assetIds || assetIds.includes(asset.id));
+  const total = specs.reduce((sum, s) => sum + (shares[s.id] ?? 0), 0);
   if (total <= 0) return {};
   const out: Partial<Record<AssetId, number>> = {};
-  for (const spec of assetList()) {
+  for (const spec of specs) {
     const share = shares[spec.id] ?? 0;
     if (share <= 0) continue;
     out[spec.id] = (share / total) * 100;
@@ -72,9 +75,9 @@ export function normalizeShares(shares: Record<AssetId, number>): Partial<Record
 }
 
 /** Read normalized shares back from target percentages (for editing existing targets). */
-export function sharesFromTargets(targets: Record<string, number>): Record<AssetId, number> {
+export function sharesFromTargets(targets: Record<string, number>, assetIds?: readonly AssetId[]): Record<AssetId, number> {
   const out = Object.fromEntries(assetList().map((s) => [s.id, 0])) as Record<AssetId, number>;
-  for (const spec of assetList()) {
+  for (const spec of assetList().filter((asset) => !assetIds || assetIds.includes(asset.id))) {
     out[spec.id] = Math.round(targets[spec.id] ?? 0);
   }
   return out;

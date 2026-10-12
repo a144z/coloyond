@@ -1,17 +1,14 @@
 import { useStore } from '../lib/store';
 import { bookStatus, priceEntryOf, pricesFromBook } from '../lib/solana/price';
-import { reserveKeypair, reserveDepthUsd } from '../lib/solana/reserve';
-import { ASSET_IDS, assetList } from '../lib/solana/assets';
+import { reserveOwner } from '../lib/solana/reserve-read';
+import { reserveDepthUsd } from '../lib/solana/reserve-quote';
+import { assetList } from '../lib/solana/assets';
 import {
-  CURVE_BASE_PCT,
-  CURVE_CAP_PCT,
   PRICE_MAX_AGE_MS,
-  RESERVE_SPREAD_PCT,
   RPC_URL,
 } from '../lib/solana/config';
-import { keysJson } from '../lib/solana/demo-keys';
 import { explorerAddress } from '../lib/solana/connection';
-import { fmtSol, fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
+import { fmtTimeAgo, fmtToken, fmtUsd, shortKey } from '../lib/format';
 import { useNow } from '../hooks/useNow';
 import { Screen, ScreenHeading } from '../components/ui/Screen';
 import { LedgerPanel } from '../components/ui/LedgerPanel';
@@ -29,17 +26,12 @@ export function SystemScreen() {
   const logs = useStore((s) => s.logs);
 
   const status = bookStatus(price, PRICE_MAX_AGE_MS);
-  const specs = assetList();
-  const universeCount = specs.length - ASSET_IDS.length;
-  const keysReady = Boolean(
-    keysJson.reserveSecretB58 &&
-    ['tusd', 'tbtc', 'teth'].every((id) => keysJson.mints?.[id]?.address),
-  );
-  const reserveAddress = keysReady ? reserveKeypair().publicKey.toBase58() : null;
+  const reserveAddress = reserveOwner.toBase58();
   const reserveDepth = reserve && price ? reserveDepthUsd(reserve, pricesFromBook(price)) : null;
   const active = vaults.filter((v) => v.status === 'active').length;
   const paused = vaults.filter((v) => v.status === 'paused').length;
   const closed = vaults.filter((v) => v.status === 'closed').length;
+  const legacy = vaults.filter((v) => v.legacy || v.status === 'legacy').length;
 
   return (
     <Screen>
@@ -70,26 +62,22 @@ export function SystemScreen() {
           {price ? (
             <KeyValue
               rows={[
-                // core assets always; extended assets only once priced
-                ...specs
-                  .filter((spec) => spec.core || priceEntryOf(price, spec.id) !== null)
-                  .map((spec) => {
-                    const entry = priceEntryOf(price, spec.id);
-                    return {
-                      k: (
-                        <span className="flex items-center gap-2">
-                          <AssetSwatch color={spec.color} /> {spec.symbol}
-                        </span>
-                      ),
-                      v: entry
-                        ? `${fmtUsd(entry.usd)} · ${
-                            entry.source === 'chainlink' ? 'Chainlink oracle' : entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
-                          }`
-                        : 'unavailable',
-                    };
-                  }),
-                  { k: 'Coinbase universe', v: `${universeCount} listed assets · one batched call` },
-                  { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
+                ...assetList().map((spec) => {
+                  const entry = priceEntryOf(price, spec.id);
+                  return {
+                    k: (
+                      <span className="flex items-center gap-2">
+                        <AssetSwatch color={spec.color} /> {spec.symbol}
+                      </span>
+                    ),
+                    v: entry
+                      ? `${fmtUsd(entry.usd)} · ${
+                          entry.source === 'coinbase' ? 'Coinbase spot' : entry.source === 'binance' ? 'Binance spot' : 'fixed $1'
+                        }`
+                      : 'unavailable',
+                  };
+                }),
+                { k: 'Observed', v: fmtTimeAgo(price.observedAt) },
                 { k: 'Age limit', v: `${PRICE_MAX_AGE_MS / 1000} seconds` },
                 {
                   k: 'Status',
@@ -108,16 +96,16 @@ export function SystemScreen() {
             </p>
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            One batched Coinbase call prices the whole universe; the per-asset spot endpoints and
-            Binance backfill anything missing, and tUSD is fixed $1. Stale or missing observations
-            block automation trades by design. Holdings stay withdrawable in kind.
+            This display book shows SOL, BTC and ETH mids from Coinbase (Binance fallback), with
+            synthetic dUSD fixed at $1. Execution reads MagicBlock Pyth feeds and enforces its own
+            60-second freshness limit.
           </p>
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
-        <LedgerPanel stripe="Demo reserve" meta={reserve ? 'funded' : 'reading'}>
-          {keysReady ? (
+        <LedgerPanel stripe="Program-owned test market" meta={reserve ? 'funded' : 'reading'}>
+          {reserveAddress ? (
             <>
               <KeyValue
                 rows={[
@@ -134,55 +122,46 @@ export function SystemScreen() {
                       </a>
                     ),
                   },
-                  ...specs
-                    .filter((spec) => spec.core || (reserve?.tokens[spec.id] ?? 0) > 0)
-                    .map((spec) => ({
-                      k: (
-                        <span className="flex items-center gap-2">
-                          <AssetSwatch color={spec.color} /> {spec.symbol} inventory
-                        </span>
-                      ),
-                      v: reserve ? fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2) : '…',
-                    })),
-                  { k: 'Depth at live mids', v: reserveDepth !== null ? fmtUsd(reserveDepth) : '…' },
-                  { k: 'SOL for fees', v: reserve ? `${fmtSol(reserve.solLamports, 4)} SOL` : '…' },
-                  { k: 'Spread', v: `${RESERVE_SPREAD_PCT.toFixed(2)}% flat` },
-                  {
-                    k: 'Curve fee',
-                    v: `${CURVE_BASE_PCT.toFixed(2)}% · capped ${CURVE_CAP_PCT.toFixed(2)}%`,
-                  },
+                  ...assetList().map((spec) => ({
+                    k: (
+                      <span className="flex items-center gap-2">
+                        <AssetSwatch color={spec.color} /> {spec.symbol} inventory
+                      </span>
+                    ),
+                    v: reserve ? fmtToken(reserve.tokens[spec.id] ?? 0, spec.decimals, 2) : '…',
+                  })),
+                  { k: 'Inventory at display prices', v: reserveDepth !== null ? fmtUsd(reserveDepth) : '…' },
                 ]}
               />
               <p className="mt-3 text-[11px] leading-relaxed text-iron">
-                Shared, devnet-only inventory. Synthetic inventory is minted on demand when a
-                trade needs it; WSOL inventory is finite. The reserve keypair co-signs every
-                swap; traders pay their own fees. The curve fee scales with trade size against
-                total depth across all assets.
+                The execution program controls these devnet market accounts. This is synthetic
+                inventory with no real value; portfolio custody remains in each vault's own SPL
+                accounts.
               </p>
             </>
           ) : (
-            <Notice tone="brass" title="Demo keys missing">
-              Run <code className="font-mono font-bold">npm run bootstrap:reserve</code> once to
-              generate the reserve keypair, create the Test USD mint and fund the inventory. The
-              app works right after.
+            <Notice tone="brass" title="Test market unavailable">
+              Program-owned devnet market token accounts are not initialized yet.
             </Notice>
           )}
         </LedgerPanel>
       </div>
 
       <div className="mt-4">
-        <LedgerPanel stripe="Scheduler" meta="in-app stand-in">
+        <LedgerPanel stripe="Scheduler" meta="MagicBlock Ephemeral Rollups">
           <KeyValue
             rows={[
-              { k: 'State', v: 'Running while the app is open' },
-              { k: 'Tick', v: 'every 3 seconds' },
-              { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed` },
+              { k: 'Execution', v: 'ER calculation → Magic Action → Solana vault program' },
+              { k: 'Interval', v: '5,700 ER slots · about 60 seconds' },
+              { k: 'Dashboard sync', v: 'every 10 seconds while open' },
+              { k: 'Vaults', v: `${active} active · ${paused} paused · ${closed} closed · ${legacy} legacy` },
             ]}
           />
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            The native design delegates execution to MagicBlock's engine so schedules survive a
-            closed app. This web build keeps the same decision logic (fresh price, budget floor,
-            drift threshold) in a local scheduler instead.
+            One Hydra task is registered per active portfolio. Only its Executor PDA is delegated;
+            Vault State and SPL token accounts stay on Solana. Wall-clock timing depends on an
+            active Hydra cranker. The ER task requests the Magic Action; the vault program validates
+            it before moving assets.
           </p>
         </LedgerPanel>
       </div>
@@ -198,19 +177,18 @@ export function SystemScreen() {
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="petrol" />
-              <span>Vault custody keypairs: separate per portfolio, signing authority for trades.</span>
+              <span>Vault Authority PDAs control portfolio SPL accounts; transferable shares use one SPL mint per vault.</span>
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="brass" />
               <span>
-                Demo reserve + synthetic mint authorities (tUSD, tBTC, tETH): devnet-only
-                infrastructure, shipped with this build. Replace with a backend service outside
-                devnet.
+                Synthetic dUSD is capped at its program-issued devnet supply and displays at $1;
+                it is not redeemable for real dollars. Test BTC and ETH are also devnet assets.
               </span>
             </li>
             <li className="flex gap-2">
               <StatusSwatch tone="ink" />
-              <span>No pooled capital, no LP shares, no transferable vault tokens.</span>
+              <span>Each vault has its own fungible, transferable SPL share-token mint.</span>
             </li>
           </ul>
         </LedgerPanel>
@@ -241,10 +219,7 @@ export function SystemScreen() {
           <KeyValue
             rows={[
               { k: 'Build', v: 'coloyond 0.2.0 · devnet demo' },
-              {
-                k: 'Assets',
-                v: `${ASSET_IDS.map((id) => specs.find((s) => s.id === id)?.symbol ?? id).join(' · ')} + ${universeCount} from Coinbase`,
-              },
+              { k: 'Assets', v: assetList().map((s) => s.symbol).join(' · ') },
               { k: 'Design', v: 'lacquerboard system · monumental stencil' },
               { k: 'Stack', v: 'React · Tailwind v4 · Solana web3.js' },
               { k: 'Android', v: 'Capacitor shell (see README)' },

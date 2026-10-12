@@ -1,5 +1,5 @@
 import { Connection } from '@solana/web3.js';
-import { CLUSTER, RPC_URL } from './config';
+import { CLUSTER, ER_RPC_URL, RPC_URL } from './config';
 
 /* ---------------- rate-limited fetch for Solana RPC ----------------
  * Devnet rate limits (per IP):
@@ -105,6 +105,7 @@ globalThis.fetch = async function coloyondFetch(
 /* ---------------- connection + helpers ---------------- */
 
 export const connection = new Connection(RPC_URL, 'confirmed');
+export const ephemeralConnection = new Connection(ER_RPC_URL, 'confirmed');
 
 export function explorerAddress(address: string): string {
   return `https://explorer.solana.com/address/${address}?cluster=${CLUSTER}`;

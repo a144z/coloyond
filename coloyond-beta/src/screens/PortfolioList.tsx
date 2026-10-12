@@ -44,8 +44,8 @@ export function PortfolioList() {
             <div className="py-6 text-center">
               <p className="font-display text-[19px] font-bold tracking-[-0.01em]">No portfolios yet.</p>
               <p className="mx-auto mt-2 max-w-[34ch] text-[12px] leading-relaxed text-iron">
-                Your first vault takes one wallet signature: custody keypair, fee budget and
-                deposits, all in one setup transaction.
+                Create a Vault State PDA, standard SPL asset accounts, a transferable share mint,
+                and an approximate one-minute Hydra task.
               </p>
             </div>
           </LedgerPanel>
@@ -53,8 +53,8 @@ export function PortfolioList() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-iron">
-        Closing this app pauses nothing you own — but automation checks only run while the app is
-        open. On device, delegated execution would keep the schedule unattended.
+        Hydra schedules target 5,700 ER slots (about 60 seconds). Wall-clock timing depends on an
+        active cranker; opening the app only refreshes displayed state.
       </p>
     </Screen>
   );
@@ -63,6 +63,24 @@ export function PortfolioList() {
 function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number; book: ReturnType<typeof useStore.getState>['price'] }) {
   const vaultBalances = useStore((s) => s.vaultBalances[vault.id]);
   const pushScreen = useStore((s) => s.pushScreen);
+
+  if (vault.legacy || vault.status === 'legacy') {
+    return (
+      <LedgerPanel stripe={vault.name} meta={String(number).padStart(2, '0')} bodyClassName="pt-3.5">
+        <p className="text-[11.5px] text-iron">Legacy keypair custody · read-only in this version</p>
+        <p className="mt-3 text-[12px] leading-relaxed text-iron">
+          This saved portfolio predates the on-chain Vault State and share mint. Its saved address is
+          not treated as a PDA. Keep this device data intact and use the previous app version to
+          manage or recover its assets.
+        </p>
+        <div className="mt-4">
+          <Button variant="secondary" full onClick={() => pushScreen({ id: 'vault', vaultId: vault.id })}>
+            View legacy details →
+          </Button>
+        </div>
+      </LedgerPanel>
+    );
+  }
 
   const bal = vaultBalances ?? null;
   const priced =
@@ -115,10 +133,10 @@ function VaultCard({ vault, number, book }: { vault: VaultConfig; number: number
 
       <p className="mt-1.5 text-[11px] text-iron">
         {closed
-          ? 'Automation stopped · assets returned in kind.'
+          ? 'Task stopped · review remaining on-chain balances.'
           : vault.lastTradeAt
-            ? `Last trade ${fmtTimeAgo(vault.lastTradeAt)} · ${vault.tradeCount} automated trade${vault.tradeCount === 1 ? '' : 's'}`
-            : 'No automated trades yet.'}
+            ? `Last settlement observed ${fmtTimeAgo(vault.lastTradeAt)} · ${vault.tradeCount} settled action${vault.tradeCount === 1 ? '' : 's'}`
+            : 'No settled Magic Actions observed yet.'}
       </p>
 
       {!closed ? (
@@ -147,6 +165,14 @@ export function VaultStatusLine({ vault }: { vault: VaultConfig }) {
       </>
     );
   }
+  if (vault.status === 'legacy' || vault.legacy) {
+    return (
+      <>
+        <StatusSwatch tone="iron" />
+        Legacy · read-only
+      </>
+    );
+  }
   if (vault.status === 'paused') {
     return (
       <>
@@ -158,8 +184,8 @@ export function VaultStatusLine({ vault }: { vault: VaultConfig }) {
   if (vault.blockedReason) {
     const labels = {
       price: 'Blocked · price unavailable',
-      budget: 'Blocked · automation budget exhausted',
-      reserve: 'Blocked · reserve inventory',
+      budget: 'Blocked · Executor funding',
+      reserve: 'Blocked · market inventory',
     } as const;
     return (
       <>
@@ -184,12 +210,12 @@ export function BlockedNotice({ reason }: { reason: Exclude<VaultConfig['blocked
       body: 'The required price is older than the configured limit. Automation cannot exchange tokens using that observation.',
     },
     budget: {
-      title: 'Automation budget exhausted',
-      body: 'The vault keypair holds too little SOL to pay devnet fees. Add budget to resume automated trades. Holdings stay withdrawable in kind.',
+      title: 'Executor funding is low',
+      body: 'The program-controlled Executor PDA may need more devnet SOL to run scheduled actions. Holdings remain redeemable in kind.',
     },
     reserve: {
-      title: 'Reserve inventory insufficient',
-      body: 'The funded devnet reserve cannot fill this trade right now. Automation retries on the next check. Holdings stay withdrawable in kind.',
+      title: 'Devnet market inventory is insufficient',
+      body: 'The program-owned test market cannot fill this trade right now. Holdings remain redeemable in kind.',
     },
   } as const;
   return (

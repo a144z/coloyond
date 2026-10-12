@@ -5,7 +5,6 @@ import {
   createSyncNativeInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
-import { base58 } from '@scure/base';
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { SOLANA_DERIVATION_PATH, deriveEd25519Path } from './derivation';
@@ -33,26 +32,21 @@ export function keypairFromMnemonic(phrase: string): Keypair {
   return Keypair.fromSeed(derived);
 }
 
-/** Vault custody keypairs: fresh ed25519 keys, exported as base58 for storage. */
-export function encodeSecret(keypair: Keypair): string {
-  return base58.encode(keypair.secretKey);
-}
-
-export function decodeSecret(secret: string): Keypair {
-  return Keypair.fromSecretKey(base58.decode(secret));
-}
-
 /**
  * Read SOL plus every token balance in two RPC calls: one getBalance and one
  * parsed token-account scan (mapped onto the asset registry).
  */
-export async function fetchBalances(owner: PublicKey): Promise<Balances> {
+export async function fetchBalances(
+  owner: PublicKey,
+  tokenRpc = connection,
+  solRpc = connection,
+): Promise<Balances> {
   const byMint = mintToAssetMap();
   const tokens = emptyTokens();
 
   const [solLamports, tokenAccounts] = await Promise.all([
-    connection.getBalance(owner, 'confirmed'),
-    connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
+    solRpc.getBalance(owner, 'confirmed'),
+    tokenRpc.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
   ]);
 
   for (const { account } of tokenAccounts.value) {

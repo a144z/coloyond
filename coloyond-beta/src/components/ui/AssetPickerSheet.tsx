@@ -13,9 +13,8 @@ import { AssetSwatch, Notice } from './primitives';
 const MAX_ROWS = 60;
 
 /**
- * Asset picker: the demo reserve's core assets, then the full list of assets
- * available from Coinbase (live USD markets only), filtered by search.
- * Picking an id hands it to the caller; selection state stays outside.
+ * Discover Coinbase-listed assets while only enabling mints supported by the
+ * deployed vault program.
  */
 export function AssetPickerSheet({
   open,
@@ -39,7 +38,7 @@ export function AssetPickerSheet({
   }, [open, universe.length, refreshUniverse]);
 
   const q = query.trim().toLowerCase();
-  const core = assetList().filter((s) => s.core);
+  const core = assetList();
   const results = useMemo(() => {
     return universe
       .filter((a) => !exclude.includes(a.id) && !ALIASED_COINBASE_IDS.includes(a.id))
@@ -54,7 +53,7 @@ export function AssetPickerSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} micro="Asset picker · live from Coinbase" title="Add an asset">
+    <Sheet open={open} onClose={onClose} micro="Devnet assets · executable set" title="Add an asset">
       <div className="relative">
         <MagnifyingGlass size={16} weight="bold" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-iron" aria-hidden />
         <input
@@ -68,13 +67,13 @@ export function AssetPickerSheet({
       </div>
 
       <div className="mt-4">
-        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-iron">Demo reserve assets</p>
+        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-iron">Vault-program assets</p>
         <ul className="mt-1">
           {core
             .filter((s) => !exclude.includes(s.id))
             .map((s) => (
               <li key={s.id}>
-                <PickRow id={s.id} symbol={s.symbol} name={`${s.name} · devnet stand-in`} price={priceOf(price, s.id)} onPick={pick} />
+                <PickRow id={s.id} symbol={s.symbol} name={`${s.name}${s.synthetic ? ' · Devnet test asset' : ''}`} price={priceOf(price, s.id)} onPick={pick} />
               </li>
             ))}
         </ul>
@@ -82,7 +81,7 @@ export function AssetPickerSheet({
 
       <div className="mt-4">
         <p className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-iron">
-          Coinbase universe · {results.length} with live USD markets
+          Coinbase discovery · {results.length} listed with USD markets
         </p>
         <ul className="mt-1">
           {shown.map((a) => (
@@ -93,6 +92,7 @@ export function AssetPickerSheet({
                 name={a.name}
                 price={priceOf(price, a.id)}
                 onPick={pick}
+                disabled
               />
             </li>
           ))}
@@ -108,7 +108,7 @@ export function AssetPickerSheet({
         {universeError ? (
           <div className="mt-2">
             <Notice tone="brass" title="Coinbase list unavailable">
-              {universeError} The demo reserve assets below still work; the list retries on the
+              {universeError} The executable Devnet assets above still work; the list retries on the
               next scheduler tick.
             </Notice>
           </div>
@@ -124,25 +124,30 @@ function PickRow({
   name,
   price,
   onPick,
+  disabled = false,
 }: {
   id: string;
   symbol: string;
   name: string;
   price: number | null;
   onPick: (id: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onPick(id)}
-      className="flex w-full items-center justify-between gap-3 border-b border-hairline py-2.5 text-left last:border-b-0 hover:bg-ink/5"
+      className="flex w-full items-center justify-between gap-3 border-b border-hairline py-2.5 text-left last:border-b-0 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-55"
     >
       <span className="flex min-w-0 items-center gap-2 text-[12px] font-bold">
         <AssetSwatch color={assetSpec(id).color} />
         {symbol}
         <span className="truncate font-normal text-iron">· {name}</span>
       </span>
-      <span className="shrink-0 font-mono text-[11px] text-iron">{price !== null ? fmtUsd(price) : '—'}</span>
+      <span className="shrink-0 text-right font-mono text-[11px] text-iron">
+        {price !== null ? fmtUsd(price) : '—'}{disabled ? <span className="block text-[9px] uppercase">not executable</span> : null}
+      </span>
     </button>
   );
 }

@@ -1,0 +1,27 @@
+[package]
+name = "coloyond-execution"
+version = "0.1.0"
+description = "Coloyond MagicBlock scheduled portfolio rebalancing"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "coloyond_execution"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
+anchor-spl = { version = "1.0.2", features = ["token", "associated_token"] }
+ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "0fc4604157de51df28693e02e5a1a6a4a08c8a03", features = ["anchor", "crank"] }
+hydra-api = { git = "https://github.com/magicblock-labs/hydra.git", rev = "a6846416d7ce61b846e102a4f9fb8b9828e71ab8", features = ["cpi-native", "ephemeral"] }
+pyth-solana-receiver-sdk = "2.0.0"
