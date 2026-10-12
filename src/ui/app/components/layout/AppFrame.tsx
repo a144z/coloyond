@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, FadersHorizontal, GearSix, Wallet as WalletIcon, X } from '@phosphor-icons/react';
+import { ArrowLeft, FadersHorizontal, GearSix, MagnifyingGlass, Wallet as WalletIcon, X } from '@phosphor-icons/react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore, type TabId } from '../../lib/store.js';
@@ -76,6 +76,7 @@ export function AppHeader() {
 
 const tabs: { id: TabId; label: string; icon: typeof FadersHorizontal }[] = [
   { id: 'portfolios', label: 'Portfolios', icon: FadersHorizontal },
+  { id: 'explore', label: 'Explore', icon: MagnifyingGlass },
   { id: 'wallet', label: 'Wallet', icon: WalletIcon },
   { id: 'system', label: 'System', icon: GearSix },
 ];
@@ -86,7 +87,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="grid shrink-0 grid-cols-3 gap-2 border-t border-hairline bg-pulp px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+      className="grid shrink-0 grid-cols-4 gap-1 border-t border-hairline bg-pulp px-2 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
     >
       {tabs.map(({ id, label, icon: Icon }) => {
         const active = activeTab === id;
@@ -96,7 +97,7 @@ export function BottomNav() {
             type="button"
             onClick={() => setTab(id)}
             aria-current={active ? 'page' : undefined}
-            className={`cw-nav-item flex h-[58px] flex-col items-center justify-center gap-[3px] border-t-[3px] px-2 font-display text-[12px] tracking-[-0.4px] transition-colors ${
+            className={`cw-nav-item flex h-[58px] flex-col items-center justify-center gap-[3px] border-t-[3px] px-1 font-display text-[11px] tracking-[-0.35px] transition-colors ${
               active
                 ? 'border-ink text-ink'
                 : 'border-t-transparent text-iron hover:bg-pulp-shade/60 hover:text-ink'

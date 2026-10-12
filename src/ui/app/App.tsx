@@ -5,6 +5,7 @@ import { wireAndroid } from './lib/android.js';
 import { AppFrame, AppHeader, BottomNav, ExecutionOverlay, ToastLayer } from './components/layout/AppFrame.js';
 import { Onboarding } from './screens/Onboarding.js';
 import { PortfolioList } from './screens/PortfolioList.js';
+import { ExploreScreen } from './screens/ExploreScreen.js';
 import { CreateVault } from './screens/CreateVault.js';
 import { VaultDetail } from './screens/VaultDetail.js';
 import { WalletScreen } from './screens/WalletScreen.js';
@@ -52,6 +53,7 @@ export default function App() {
         <div key={`${screen.id}:${screen.vaultId ?? ''}`} className="animate-[coloyond-appear_220ms_ease-out]">
           {screen.id === 'onboarding' ? <Onboarding /> : null}
           {screen.id === 'portfolios' ? <PortfolioList /> : null}
+          {screen.id === 'explore' ? <ExploreScreen /> : null}
           {screen.id === 'wallet' ? wallet || connectedWallet ? <WalletScreen /> : <Onboarding /> : null}
           {screen.id === 'system' ? <SystemScreen /> : null}
           {screen.id === 'create' ? <CreateVault /> : null}
