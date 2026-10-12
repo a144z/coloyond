@@ -51,12 +51,10 @@ function Stop-ExistingValidator {
 function Start-TestValidator {
     $validator = (Get-Command solana-test-validator -ErrorAction SilentlyContinue).Source
     if (-not $validator) { throw "solana-test-validator is not on PATH. Install Agave first (see docs/HANDOFF.md)." }
+    if (Test-Path -LiteralPath "test-ledger") { Remove-Item -LiteralPath "test-ledger" -Recurse -Force }
     $proc = Start-Process -FilePath $validator -ArgumentList @(
-        "--funding", "$Repo\devnet-program-keypair.json",
-        "--faucet-lamports", "$FaucetLamports",
-        "--commitment-level", "Finalized",
-        "--log", $Log
-    ) -PassThru
+        "--faucet-sol", "1000000"
+    ) -RedirectStandardOutput "$Log.out" -RedirectStandardError "$Log.err" -PassThru
     Set-Content -LiteralPath $PidFile -Value $proc.Id
     Write-Host "started validator pid $($proc.Id), log at $Log"
 }
