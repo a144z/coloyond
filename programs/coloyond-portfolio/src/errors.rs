@@ -16,4 +16,10 @@ pub enum PortfolioError {
     WrongLifecycle,
     #[msg("Vault has units still in it and cannot be closed")]
     VaultNotEmpty,
+    #[msg("Asset has no Pyth price feed and would be a rug-pull candidate")]
+    FeedNotAdmitted,
+    #[msg("Pyth on-chain price could not be decoded or validated")]
+    OracleRejected,
+    #[msg("Rebalance direction does not match the target weights")]
+    WrongDirection,
 }

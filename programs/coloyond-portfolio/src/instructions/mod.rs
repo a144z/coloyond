@@ -29,6 +29,8 @@ pub struct FundVault<'info> {
     pub vault: UncheckedAccount<'info>,
     /// CHECK: derived token authority PDA; has no required data account.
     pub authority: UncheckedAccount<'info>,
+    /// CHECK: program-wide admission list; every mint in the trailing set must be on it.
+    pub admission: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -87,11 +89,17 @@ pub struct ExecuteScheduledRebalance<'info> {
     pub vault: UncheckedAccount<'info>,
     /// CHECK: derived token authority PDA; has no required data account.
     pub authority: UncheckedAccount<'info>,
+    /// CHECK: program-wide admission list; both asset mints must still be on it.
+    pub admission: UncheckedAccount<'info>,
     #[account(mut)]
     pub asset_in_custody: UncheckedAccount<'info>,
     #[account(mut)]
     pub asset_out_custody: UncheckedAccount<'info>,
     pub asset_in_mint: UncheckedAccount<'info>,
     pub asset_out_mint: UncheckedAccount<'info>,
+    /// CHECK: Pyth price account for asset_in's mint; decoded+validated against the admission's feed slot.
+    pub asset_in_feed: UncheckedAccount<'info>,
+    /// CHECK: Pyth price account for asset_out's mint; decoded+validated against the admission's feed slot.
+    pub asset_out_feed: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }

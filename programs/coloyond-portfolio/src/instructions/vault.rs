@@ -1,10 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, TransferChecked};
+use etf_oracle::{
+    decode_fixed_feed_account, validate_fixed_feed, OracleLimits, PinnedFeed,
+};
 
 use crate::errors::PortfolioError;
 use crate::pda;
 use crate::state::{
-    AutomationControllerV2, PortfolioVaultV2, VaultLifecycleV2,
+    AutomationControllerV2, PortfolioAdmissionV2, PortfolioVaultV2, VaultLifecycleV2,
 };
 use super::{
     CloseVault, CreateVault, ExecuteScheduledRebalance, FundVault, Tick, UpdateAllocation,
@@ -49,6 +52,10 @@ pub fn fund_vault<'info>(
         amounts.len() == vault.mints.len(),
         PortfolioError::WeightLengthMismatch
     );
+    let admission = load_admission(&ctx.accounts.admission.to_account_info())?;
+    for mint in vault.mints.iter() {
+        admission.assert_admitted(mint)?;
+    }
     let assets = pair_assets(&vault.mints, ctx.remaining_accounts)?;
     let token_program = ctx.accounts.token_program.to_account_info();
     for (index, asset) in assets.iter().enumerate() {
@@ -230,6 +237,31 @@ pub fn execute_scheduled_rebalance<'info>(
     );
     require!(amount_in > 0, PortfolioError::WeightsSumMismatch);
     require!(vault.units[index_in] <= u64::MAX - amount_in, PortfolioError::WeightsSumMismatch);
+    let admission = load_admission(&ctx.accounts.admission.to_account_info())?;
+    let mint_in = vault.mints[index_in];
+    let mint_out = vault.mints[index_out];
+    admission.assert_admitted(&mint_in)?;
+    admission.assert_admitted(&mint_out)?;
+    let feed_in_key = admission.feed_for(&mint_in).ok_or(PortfolioError::FeedNotAdmitted)?;
+    let feed_out_key = admission.feed_for(&mint_out).ok_or(PortfolioError::FeedNotAdmitted)?;
+    require_keys_eq!(
+        feed_in_key,
+        *ctx.accounts.asset_in_feed.to_account_info().key,
+        PortfolioError::OracleRejected
+    );
+    require_keys_eq!(
+        feed_out_key,
+        *ctx.accounts.asset_out_feed.to_account_info().key,
+        PortfolioError::OracleRejected
+    );
+    let _ = read_pinned_price(
+        &ctx.accounts.asset_in_feed.to_account_info(),
+        rebalance_oracle_limits(),
+    )?;
+    let _ = read_pinned_price(
+        &ctx.accounts.asset_out_feed.to_account_info(),
+        rebalance_oracle_limits(),
+    )?;
     vault.units[index_in] = vault.units[index_in].saturating_add(amount_in);
     vault.units[index_out] = vault.units[index_out].saturating_sub(amount_in);
     vault.last_run_unix_timestamp = now;
@@ -261,6 +293,49 @@ fn load_controller(account: &AccountInfo) -> Result<AutomationControllerV2> {
     let data = account.try_borrow_data()?;
     let mut input: &[u8] = &data;
     AutomationControllerV2::try_deserialize(&mut input).map_err(Into::into)
+}
+
+fn load_admission(account: &AccountInfo) -> Result<PortfolioAdmissionV2> {
+    require_keys_eq!(
+        *account.owner,
+        crate::ID,
+        PortfolioError::VaultPdaMismatch
+    );
+    let data = account.try_borrow_data()?;
+    let mut input: &[u8] = &data;
+    PortfolioAdmissionV2::try_deserialize(&mut input).map_err(Into::into)
+}
+
+fn read_pinned_price(
+    account: &AccountInfo,
+    limits: OracleLimits,
+) -> Result<etf_oracle::ValidatedPrice> {
+    let feed = pinned_from_account(account.key).ok_or(PortfolioError::FeedNotAdmitted)?;
+    let data = account.try_borrow_data()?;
+    let update = decode_fixed_feed_account(feed, *account.key, *account.owner, &data)
+        .map_err(|_| error!(PortfolioError::OracleRejected))?;
+    let clock = Clock::get()?;
+    validate_fixed_feed(feed, *account.key, *account.owner, &update, &clock, limits)
+        .map_err(|_| error!(PortfolioError::OracleRejected))
+}
+
+fn pinned_from_account(account_key: &Pubkey) -> Option<PinnedFeed> {
+    let candidates = [
+        PinnedFeed::SolUsd,
+        PinnedFeed::BtcUsd,
+        PinnedFeed::EthUsd,
+        PinnedFeed::UsdcUsd,
+    ];
+    candidates.into_iter().find(| feed | feed.address() == *account_key)
+}
+
+fn rebalance_oracle_limits() -> OracleLimits {
+    OracleLimits {
+        maximum_age_seconds: 3600,
+        maximum_confidence_bps: 500,
+        minimum_exponent: -18,
+        maximum_exponent: 0,
+    }
 }
 
 fn save_controller(account: &AccountInfo, value: &AutomationControllerV2) -> Result<()> {

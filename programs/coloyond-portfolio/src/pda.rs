@@ -5,6 +5,11 @@ pub const VAULT_SEED: &[u8] = b"portfolio_vault_v2";
 pub const AUTHORITY_SEED: &[u8] = b"portfolio_authority_v2";
 pub const CUSTODY_SEED: &[u8] = b"portfolio_custody_v2";
 pub const CONTROLLER_SEED: &[u8] = b"portfolio_controller_v2";
+pub const ADMISSION_SEED: &[u8] = b"portfolio_admission_v2";
+
+pub fn admission() -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[ADMISSION_SEED], &crate::ID)
+}
 
 pub fn registry(owner: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(

@@ -6,6 +6,7 @@ pub const VAULT_SPACE: usize = 500;
 pub const AUTHORITY_SPACE: usize = 64;
 pub const CUSTODY_SPACE: usize = 96;
 pub const CONTROLLER_SPACE: usize = 96;
+pub const ADMISSION_SPACE: usize = 500;
 
 pub const VAULT_ASSETS_MIN: usize = 2;
 pub const VAULT_ASSETS_MAX: usize = 3;
@@ -54,6 +55,35 @@ pub struct AutomationControllerV2 {
     pub generation: u64,
     pub run_nonce: u64,
     pub interval_seconds: u64,
+}
+
+/// Program-wide admission gate: the list of mints that have a Pyth price feed and
+/// therefore may enter a vault. Enforced in `fund_vault`, `withdraw_in_kind` and
+/// `update_allocation`. Anything not on this list is a rug-pull candidate.
+#[account]
+pub struct PortfolioAdmissionV2 {
+    pub bump: u8,
+    pub mints: Vec<Pubkey>,
+    pub feeds: Vec<Pubkey>,
+}
+
+impl PortfolioAdmissionV2 {
+    pub fn admits(&self, mint: &Pubkey) -> bool {
+        self.mints.iter().any(| candidate | candidate == mint)
+    }
+
+    pub fn feed_for(&self, mint: &Pubkey) -> Option<Pubkey> {
+        self.mints
+            .iter()
+            .zip(self.feeds.iter())
+            .find(| ( candidate, _ ) | **candidate == *mint)
+            .map(| ( _, feed ) | *feed)
+    }
+
+    pub fn assert_admitted(&self, mint: &Pubkey) -> Result<()> {
+        require!(self.admits(mint), PortfolioError::FeedNotAdmitted);
+        Ok(())
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -310,6 +340,33 @@ mod tests {
         assert!(
             output.len() < CONTROLLER_SPACE,
             "controller state must leave slack inside the reserved space"
+        );
+    }
+
+    #[test]
+    fn admission_state_round_trips_and_admits_by_mint() {
+        let admitted = Pubkey::new_from_array([21; 32]);
+        let missing = Pubkey::new_from_array([88; 32]);
+        let admission = PortfolioAdmissionV2 {
+            bump: 255,
+            mints: vec![admitted],
+            feeds: vec![Pubkey::new_from_array([41; 32])],
+        };
+        assert!(admission.admits(&admitted));
+        assert!(!admission.admits(&missing));
+        assert!(admission.assert_admitted(&admitted).is_ok());
+        assert!(admission.assert_admitted(&missing).is_err());
+        assert_eq!(
+            admission.feed_for(&admitted),
+            Some(Pubkey::new_from_array([41; 32]))
+        );
+        assert!(admission.feed_for(&missing).is_none());
+        let mut bytes = vec![0u8; ADMISSION_SPACE];
+        let mut output: &mut [u8] = &mut bytes;
+        admission.try_serialize(&mut output).unwrap();
+        assert!(
+            output.len() < ADMISSION_SPACE,
+            "admission state must leave slack inside the reserved space"
         );
     }
 }
