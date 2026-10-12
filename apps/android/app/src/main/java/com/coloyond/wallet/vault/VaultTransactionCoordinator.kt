@@ -296,6 +296,6 @@ class VaultTransactionCoordinator(
 
     private companion object {
         val ACTION_MUTEX = Mutex()
-        const val ZERO_SIGNATURE = "1".repeat(64)
+        val ZERO_SIGNATURE = "1".repeat(64)
     }
 }

@@ -1,5 +1,6 @@
 package com.coloyond.protocols.coloyond.transactions.reader
 
+import com.coloyond.protocols.coloyond.transactions.ColoyondAddresses
 import java.math.BigInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

@@ -236,26 +236,6 @@ class AnchorIdlAccountDecoder(idlJson: String) {
         value.toByte()
     }
 
-    private fun encodeBase58(input: ByteArray): String {
-        var zeros = 0
-        while (zeros < input.size && input[zeros] == 0.toByte()) zeros++
-        if (zeros == input.size) return "1".repeat(zeros)
-        val digits = mutableListOf(0)
-        for (index in zeros until input.size) {
-            var carry = input[index].toUByte().toInt()
-            for (digitIndex in digits.indices) {
-                carry += digits[digitIndex] shl 8
-                digits[digitIndex] = carry % BASE58_RADIX
-                carry /= BASE58_RADIX
-            }
-            while (carry > 0) {
-                digits.add(carry % BASE58_RADIX)
-                carry /= BASE58_RADIX
-            }
-        }
-        return "1".repeat(zeros) + digits.asReversed().joinToString("") { BASE58_ALPHABET[it].toString() }
-    }
-
     companion object {
         private const val DISCRIMINATOR_SIZE = 8
         private const val PUBKEY_SIZE = 32
@@ -264,6 +244,26 @@ class AnchorIdlAccountDecoder(idlJson: String) {
         private const val PINNED_IDL_VERSION = "0.3.0"
         private const val PINNED_PROGRAM_ADDRESS = "FN7uGX34qyijmVX69gqEkMugWjE5Sjso8Pe7gWU6B2N6"
         private const val PINNED_IDL_SHA256 = "ca10e5608bf937033d082cf6464cd4fc6e719d1340bd0b86cd752221dee68c34"
+
+        private fun encodeBase58(input: ByteArray): String {
+            var zeros = 0
+            while (zeros < input.size && input[zeros] == 0.toByte()) zeros++
+            if (zeros == input.size) return "1".repeat(zeros)
+            val digits = mutableListOf(0)
+            for (index in zeros until input.size) {
+                var carry = input[index].toUByte().toInt()
+                for (digitIndex in digits.indices) {
+                    carry += digits[digitIndex] shl 8
+                    digits[digitIndex] = carry % BASE58_RADIX
+                    carry /= BASE58_RADIX
+                }
+                while (carry > 0) {
+                    digits.add(carry % BASE58_RADIX)
+                    carry /= BASE58_RADIX
+                }
+            }
+            return "1".repeat(zeros) + digits.asReversed().joinToString("") { BASE58_ALPHABET[it].toString() }
+        }
 
         /** Loads the canonical IDL packaged from the repository's `idl/` directory. */
         fun fromAssets(assets: AssetManager): AnchorIdlAccountDecoder =

@@ -696,7 +696,7 @@ class ColoyondChainReader(
         (this as? AccountPresence.Present<*>)?.value as? Map<String, Any?>
     private fun Map<*, *>.u64(key: String): BigInteger? = this[key]?.toString()?.toBigIntegerOrNull()
     private fun Map<*, *>.number(key: String): Int? = (this[key] as? Number)?.toInt()
-    private fun Map<String, Any?>.intValue(key: String): Int = (this[key] as? Number)?.toInt()
+    private fun Map<*, *>.intValue(key: String): Int = (this[key] as? Number)?.toInt()
         ?: throw ChainReadException("INVALID_IDL_VALUE", "Decoded on-chain field $key is not an integer")
     private fun Map<String, Any?>.booleanValue(key: String): Boolean = this[key] as? Boolean
         ?: throw ChainReadException("INVALID_IDL_VALUE", "Decoded on-chain field $key is not a boolean")

@@ -353,7 +353,7 @@ object StrategyRecords {
         decodeCanonicalPubkey(value)
     }
 
-    private fun decodeCanonicalPubkey(value: String): ByteArray {
+    internal fun decodeCanonicalPubkey(value: String): ByteArray {
         require(value.isNotEmpty() && value.all { it in BASE58 }) { "Invalid base58 public key" }
         var number = java.math.BigInteger.ZERO
         value.forEach { number = number.multiply(java.math.BigInteger.valueOf(58)).add(java.math.BigInteger.valueOf(BASE58.indexOf(it).toLong())) }
