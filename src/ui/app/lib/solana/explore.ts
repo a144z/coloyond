@@ -26,6 +26,9 @@ const MAX_ASSETS = 4;
 const VAULT_STATE_SIZE = 8 + 8 + 32 + 32 + 1 + 2 + 2 + 1 + 8 + 4 + MAX_ASSETS * 99;
 const METADATA_DISCRIMINATOR = 4; // mpl_token_metadata::state::Key::MetadataV1
 const MAX_METADATA_JSON_BYTES = 512 * 1024;
+const MAX_METADATA_NAME_BYTES = 32;
+const MAX_METADATA_SYMBOL_BYTES = 10;
+const MAX_METADATA_URI_BYTES = 200;
 
 export interface AllowedAsset {
   id: 'wsol' | 'tusd' | 'dusd' | 'tbtc' | 'teth';
@@ -176,14 +179,20 @@ export function decodeShareMetadata(
   const updateAuthority = reader.pubkey();
   const mint = reader.pubkey();
   if (mint !== expectedMint.toBase58()) throw new Error('Metaplex metadata mint does not match the share mint.');
-  const name = reader.string(64).replace(/\0+$/g, '').trim();
-  const symbol = reader.string(16).replace(/\0+$/g, '').trim();
-  const uri = reader.string(512).replace(/\0+$/g, '').trim();
-  reader.u16(); // seller fee basis points
+  const name = reader.string(MAX_METADATA_NAME_BYTES).replace(/\0+$/g, '').trim();
+  const symbol = reader.string(MAX_METADATA_SYMBOL_BYTES).replace(/\0+$/g, '').trim();
+  const uri = reader.string(MAX_METADATA_URI_BYTES).replace(/\0+$/g, '').trim();
+  const sellerFeeBps = reader.u16();
+  if (sellerFeeBps > 10_000) throw new Error('Metadata seller fee is outside the basis-point range.');
   reader.option(() => {
     const count = reader.u32();
     if (count > 100) throw new Error('Metadata creator list is too large.');
-    for (let i = 0; i < count; i += 1) { reader.pubkey(); reader.u8(); reader.u8(); }
+    for (let i = 0; i < count; i += 1) {
+      reader.pubkey();
+      const verified = reader.u8();
+      const share = reader.u8();
+      if (verified > 1 || share > 100) throw new Error('Metadata creator flags or shares are invalid.');
+    }
   });
   const primarySale = reader.u8();
   if (primarySale !== 0 && primarySale !== 1) throw new Error('Metadata sale flag is invalid.');
@@ -262,11 +271,19 @@ export async function discoverExploreVaults(rpc: Connection = connection): Promi
       const onchain = decodeShareMetadata(info.data, info.owner, metadataAddress, candidate.state.shareMint);
       try {
         const json = await fetchMetadataJson(onchain.uri);
-        const missing = [!json.description && 'description', !json.image && 'image'].filter(Boolean);
+        const missing = [!json.name && 'name', !json.symbol && 'symbol', !json.description && 'description', !json.image && 'image'].filter(Boolean);
+        const mismatched = [
+          json.name && json.name !== onchain.name && 'name',
+          json.symbol && json.symbol !== onchain.symbol && 'symbol',
+        ].filter(Boolean);
+        const issues = [
+          ...(missing.length ? [`is missing ${missing.join(', ')}`] : []),
+          ...(mismatched.length ? [`${mismatched.join(' and ')} does not match on-chain metadata`] : []),
+        ];
         return {
           ...vault,
           metadata: { ...onchain, ...(json.description ? { description: json.description } : {}), ...(json.image ? { image: resolveMetadataUri(json.image) } : {}) },
-          metadataIssue: missing.length ? `Metadata JSON is missing ${missing.join(' and ')}.` : null,
+          metadataIssue: issues.length ? `Metadata JSON ${issues.join('; ')}.` : null,
         };
       } catch (error) {
         return { ...vault, metadata: onchain, metadataIssue: `Metadata JSON unavailable: ${errorMessage(error)}` };
@@ -304,6 +321,7 @@ export async function investInExploreVault(
   const keys = [state.shareMint, ...state.assets.map((asset) => asset.mint), ...state.assets.map((asset) => getAssociatedTokenAddressSync(asset.mint, derived.authority, true))];
   const chainAccounts = await fetchAccounts(rpc, keys);
   verifyMintsAndCustody(state, derived.authority, chainAccounts);
+  verifyShareMint(state, derived.authority, chainAccounts);
   const tx = buildExploreDepositTransaction(owner.publicKey, state, derived.authority, amounts, minSharesOut);
   return signSendConfirm(tx, owner);
 }
@@ -317,19 +335,22 @@ export function buildExploreDepositTransaction(
 ): Transaction {
   if (!state.active) throw new Error('Only active Vault State accounts can accept deposits.');
   if (amounts.length !== state.assets.length || amounts.every((amount) => amount === 0n)) throw new Error('Deposit amounts do not match this vault.');
+  if (amounts.some((amount) => amount < 0n || amount > MAX_U64)) throw new Error('Deposit amount is outside the SPL u64 range.');
   if (minSharesOut <= 0n || minSharesOut > MAX_U64) throw new Error('Minimum shares out must be a positive u64 amount.');
   const derived = deriveExploreVaultAddresses(stateAddressFor(state), state);
   if (!state.shareMint.equals(derived.shareMint) || !authority.equals(derived.authority)) throw new Error('Vault authority or share mint is not canonical.');
   const tx = new Transaction();
   const wsolIndex = state.assets.findIndex((asset) => asset.mint.equals(new PublicKey(EXPLORE_ASSETS[0].mint)));
-  if (wsolIndex >= 0 && amounts[wsolIndex] > 0n) {
+  const wrappedWsol = wsolIndex >= 0 && amounts[wsolIndex] > 0n;
+  if (wrappedWsol) {
     if (amounts[wsolIndex] > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('WSOL deposit exceeds the safe wrapping limit.');
     tx.add(...wrapSolInstructions(owner, Number(amounts[wsolIndex])));
   }
   const sources = state.assets.map((asset) => getAssociatedTokenAddressSync(asset.mint, owner));
   const custody = state.assets.map((asset) => getAssociatedTokenAddressSync(asset.mint, authority, true));
   const shareAccount = getAssociatedTokenAddressSync(state.shareMint, owner);
-  for (const asset of state.assets) {
+  for (const [index, asset] of state.assets.entries()) {
+    if (wrappedWsol && index === wsolIndex) continue; // wrapSolInstructions already creates this ATA.
     const source = getAssociatedTokenAddressSync(asset.mint, owner);
     tx.add(createAssociatedTokenAccountIdempotentInstruction(owner, source, owner, asset.mint));
   }
@@ -360,6 +381,7 @@ export function buildExploreDepositTransaction(
 }
 
 export function parseTokenAmount(input: string, decimals: number): bigint | null {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return null;
   const value = input.trim();
   if (!value || !/^\d+(?:\.\d*)?$/.test(value)) return value === '' ? 0n : null;
   const [whole, fraction = ''] = value.split('.');
@@ -372,7 +394,10 @@ export function parseTokenAmount(input: string, decimals: number): bigint | null
 }
 
 export function formatRawAmount(raw: string, decimals: number, maxFraction = 6): string {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Token decimals must be an integer from 0 to 255.');
+  if (!Number.isInteger(maxFraction) || maxFraction < 0) throw new Error('Maximum fraction digits must be a nonnegative integer.');
   const value = BigInt(raw);
+  if (value < 0n) throw new Error('Token amount cannot be negative.');
   const scale = 10n ** BigInt(decimals);
   const whole = (value / scale).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fraction = (value % scale).toString().padStart(decimals, '0').slice(0, Math.min(decimals, maxFraction)).replace(/0+$/, '');
@@ -384,12 +409,7 @@ function verifyLiveVault(
   accounts: Map<string, AccountInfo<Buffer> | null>,
 ): ExploreVault {
   verifyMintsAndCustody(candidate.state, candidate.derived.authority, accounts);
-  const shareMint = accounts.get(candidate.state.shareMint.toBase58());
-  if (!shareMint) throw new Error('Share mint account is missing.');
-  const mintInfo = unpackMint(candidate.state.shareMint, shareMint, TOKEN_PROGRAM_ID);
-  if (!mintInfo.isInitialized || !mintInfo.mintAuthority?.equals(candidate.derived.authority) || mintInfo.decimals !== 9 || mintInfo.freezeAuthority !== null) {
-    throw new Error('Share mint authority, decimals, or freeze policy is invalid.');
-  }
+  const mintInfo = verifyShareMint(candidate.state, candidate.derived.authority, accounts);
   return {
     address: candidate.address.toBase58(),
     creator: candidate.state.creator.toBase58(),
@@ -437,6 +457,20 @@ function verifyMintsAndCustody(
   }
 }
 
+function verifyShareMint(
+  state: DecodedVaultState,
+  authority: PublicKey,
+  accounts: Map<string, AccountInfo<Buffer> | null>,
+) {
+  const shareMint = accounts.get(state.shareMint.toBase58());
+  if (!shareMint) throw new Error('Share mint account is missing.');
+  const mintInfo = unpackMint(state.shareMint, shareMint, TOKEN_PROGRAM_ID);
+  if (!mintInfo.isInitialized || !mintInfo.mintAuthority?.equals(authority) || mintInfo.decimals !== 9 || mintInfo.freezeAuthority !== null) {
+    throw new Error('Share mint authority, decimals, or freeze policy is invalid.');
+  }
+  return mintInfo;
+}
+
 async function fetchAccounts(rpc: Connection, addresses: PublicKey[]): Promise<Map<string, AccountInfo<Buffer> | null>> {
   const unique = [...new Map(addresses.map((address) => [address.toBase58(), address])).values()];
   const result = new Map<string, AccountInfo<Buffer> | null>();
@@ -448,7 +482,7 @@ async function fetchAccounts(rpc: Connection, addresses: PublicKey[]): Promise<M
   return result;
 }
 
-async function fetchMetadataJson(uri: string): Promise<{ description?: string; image?: string }> {
+async function fetchMetadataJson(uri: string): Promise<{ name?: string; symbol?: string; description?: string; image?: string }> {
   const url = resolveMetadataUri(uri);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 6_000);
@@ -459,12 +493,18 @@ async function fetchMetadataJson(uri: string): Promise<{ description?: string; i
     const declaredSize = Number(response.headers.get('content-length') ?? 0);
     if (declaredSize > MAX_METADATA_JSON_BYTES) throw new Error('Metadata JSON is too large.');
     const text = await readLimitedText(response, MAX_METADATA_JSON_BYTES);
-    const json = JSON.parse(text) as unknown;
+    let json: unknown;
+    try { json = JSON.parse(text) as unknown; }
+    catch { throw new Error('Metadata JSON is invalid.'); }
     if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new Error('Metadata JSON must be an object.');
-    const fields = json as { description?: unknown; image?: unknown };
+    const fields = json as { name?: unknown; symbol?: unknown; description?: unknown; image?: unknown };
+    const name = typeof fields.name === 'string' ? fields.name.trim() : '';
+    const symbol = typeof fields.symbol === 'string' ? fields.symbol.trim() : '';
     const description = typeof fields.description === 'string' ? fields.description.trim().slice(0, 2_000) : '';
     const image = typeof fields.image === 'string' ? fields.image.trim() : '';
     return {
+      ...(name ? { name } : {}),
+      ...(symbol ? { symbol } : {}),
       ...(description ? { description } : {}),
       ...(image ? { image } : {}),
     };
@@ -516,7 +556,9 @@ class BorshReader {
     const length = this.u32();
     if (length > max) throw new Error('Metadata string is too long.');
     this.require(length);
-    const value = new TextDecoder('utf-8', { fatal: true }).decode(this.data.subarray(this.offset, this.offset + length));
+    let value: string;
+    try { value = new TextDecoder('utf-8', { fatal: true }).decode(this.data.subarray(this.offset, this.offset + length)); }
+    catch { throw new Error('Metadata string is not valid UTF-8.'); }
     this.offset += length;
     return value;
   }

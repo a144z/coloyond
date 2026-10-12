@@ -612,9 +612,16 @@ export const useStore = create<ColoyondState>()(
               captured.addresses = result.addresses;
               captured.init = result.result;
               markComplete('initialize', result.result);
-              captured.metadata = result.result;
-              markComplete('metadata', result.result);
-              return { sig: result.result.sig, note: `Vault State ${result.addresses.state.toBase58().slice(0, 8)}… · metadata attached atomically` };
+              if (result.metadataAttached) {
+                captured.metadata = result.result;
+                markComplete('metadata', result.result);
+              }
+              const note = result.result.sig
+                ? `Vault State ${result.addresses.state.toBase58().slice(0, 8)}… · metadata attached atomically`
+                : result.metadataAttached
+                  ? 'Existing Vault State and matching Metaplex metadata verified on Solana.'
+                  : 'Existing Vault State verified; Metaplex metadata will be attached in the next step.';
+              return { sig: result.result.sig, note };
             },
           },
           {

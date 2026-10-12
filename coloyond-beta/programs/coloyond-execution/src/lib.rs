@@ -2224,6 +2224,23 @@ mod share_metadata_tests {
         )
         .is_err());
     }
+
+    #[test]
+    fn metadata_validation_enforces_utf8_byte_and_uri_policy_boundaries() {
+        assert!(validate_share_metadata_fields(&"n".repeat(MAX_METADATA_NAME_LEN), "ipfs://cid").is_ok());
+        assert!(validate_share_metadata_fields(&"😀".repeat(8), "ipfs://cid").is_ok());
+        assert!(validate_share_metadata_fields(&"😀".repeat(9), "ipfs://cid").is_err());
+
+        let uri_prefix = "https://x.io/";
+        let uri_at_limit = format!("{uri_prefix}{}", "a".repeat(MAX_METADATA_URI_LEN - uri_prefix.len()));
+        let uri_over_limit = format!("{uri_at_limit}a");
+        assert_eq!(uri_at_limit.len(), MAX_METADATA_URI_LEN);
+        assert!(validate_share_metadata_fields("Portfolio Shares", &uri_at_limit).is_ok());
+        assert!(validate_share_metadata_fields("Portfolio Shares", &uri_over_limit).is_err());
+        assert!(validate_share_metadata_fields("Portfolio Shares", "ipfs://bad uri").is_err());
+        assert!(validate_share_metadata_fields("Portfolio Shares", "ar://bad\nuri").is_err());
+        assert!(validate_share_metadata_fields("Portfolio Shares", "ftp://example.com/meta").is_err());
+    }
 }
 
 #[cfg(test)]
