@@ -20,7 +20,7 @@ In a fee-free illustration, start with $1,000 at SOL 40%, ETH 20%, dUSD 40%. SOL
 
 ## 5 — Evidence behind the mechanics
 
-The current vault program is executable on devnet. The proof snapshot includes retrievable successful settlement signatures and pre/post SPL balances, including multi-leg rebalances. Source contains on-chain custody/share mints, scheduled ER planning and authenticated atomic base-layer settlement. This proves more than a roadmap; it still does not establish source/binary audit parity, mainnet asset backing, continuous keeper uptime or APK-origin MWA execution. New oracle hardening is host-tested source, pending an authorized upgrade.
+The current vault program is executable on devnet. The proof snapshot includes retrievable successful settlement signatures and pre/post SPL balances, including multi-leg rebalances. Source contains on-chain custody/share mints, scheduled ER planning and authenticated atomic base-layer settlement. This proves more than a roadmap; it still does not establish source/binary audit parity, mainnet asset backing, continuous keeper uptime or APK-origin MWA execution. New oracle hardening passes host tests and an SBF build; the compiled review packet is available, pending an authorized upgrade.
 
 ## 6 — A repeatable creative loop
 
@@ -28,6 +28,8 @@ Compose → generate → export/share → open an unsigned remix draft → make 
 
 ## 7 — Try it; inspect the proof
 
-Open `/app`, install the signed debug APK, watch the 62-second narrated and captioned film, inspect the actual browser recording, and reproduce the tests/RPC snapshot. Core vault execution does not depend on Glider; no partnership, instant general wallet buy/sell or mainnet performance claim is made. Judge the demonstrated devnet product and its explicit remaining release checks.
+Open `/app`, install the signed debug APK, watch the 62-second music-driven film with its readable timed visual transcript, inspect the actual browser recording, and reproduce the tests/RPC snapshot. Core vault execution does not depend on Glider; no partnership, instant general wallet buy/sell or mainnet performance claim is made. Judge the demonstrated devnet product and its explicit remaining release checks.
 
 Links: [proof guide](README.md), [code review](code-review.md), [deployment snapshot](evidence/deployment-read.json), [browser recording](evidence/actual-mobile-flow.mp4).
+
+[Copy-ready submission description and evidence links](SUBMISSION.md) · [Readable settlement receipts](receipts.md).

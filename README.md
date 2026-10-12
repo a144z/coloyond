@@ -25,7 +25,17 @@
 
 ## Submission evidence
 
-[Start with the judge’s proof guide](docs/submission/README.md): current architecture, code paths, timestamped devnet program and successful settlement receipts, build checks, and explicit remaining limits. The shipped APK uses React/Capacitor; Kotlin/Compose and the Glider-only handoff are historical.
+[Copy-ready submission description](docs/submission/SUBMISSION.md) · [Judge’s proof guide](docs/submission/README.md) · [Readable on-chain receipts](docs/submission/receipts.md).
+
+| Review in two minutes | Proof |
+| --- | --- |
+| Understand the demo | [62-second film](releases/coloyond-mobile-showcase.mp4) + [readable visual transcript](docs/submission/demo-transcript.md) |
+| Verify the product flow | [Actual production UI recording](docs/submission/evidence/actual-mobile-flow.mp4) + [action transcript](docs/submission/evidence/actual-mobile-flow-transcript.md) |
+| Inspect Android delivery | [APK 1.1.3](releases/coloyond-android-debug.apk) + [build/signature checks](docs/submission/evidence/implementation-verification.json) |
+| Verify execution claims | [Public devnet settlement receipts](docs/submission/receipts.md) + [raw RPC snapshot](docs/submission/evidence/deployment-read.json) |
+| Review code quality | [Source review, 16 focused tests and oracle-hardening scope](docs/submission/code-review.md) |
+
+**Shipped stack:** React/TypeScript `/app`, Capacitor + Gradle Android, Solana devnet vault execution with independent scheduling/cranking. Kotlin/Compose and the Glider-only handoff are historical. PNG export/remix is demonstrated in a real browser; physical-device MWA and Android chooser acceptance remain separate checks.
 
 ## A portfolio should feel like a composition
 
@@ -157,7 +167,7 @@ There is one active source folder (`remotion/`) and one published promotional MP
 | Promotion | Rendered video, visual framing checks, stereo audio verification, and unclipped levels. |
 | Live wallet and execution | Physical-device signing and end-to-end on-chain rebalance execution still require dedicated validation. |
 
-Coloyond is a **devnet MVP**. Synthetic test assets are not backed by redeemable dollars. The build evidence establishes UI and packaging behavior; it does not establish audited contracts, mainnet readiness, or a successful live deployment. Legacy prototype routes and the promotional footage use explicitly marked presentation data.
+Coloyond is a **devnet MVP**. Synthetic test assets are not backed by redeemable dollars. The build evidence establishes UI and packaging behavior; it does not establish an independent security audit, mainnet readiness, source-to-bytecode parity, or physical-device MWA approval. A separate read-only snapshot verifies an executable devnet program and successful historical settlements. Legacy prototype routes and the promotional footage use explicitly marked presentation data.
 
 Read the [verification report](docs/mobile/verification.md), [mobile design](docs/mobile/design.md), and [program/execution evidence](docs/rebalancing/evidence/) for the precise boundaries.
 

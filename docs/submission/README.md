@@ -4,11 +4,19 @@
 
 [Code review and targeted test results](code-review.md) · [Canonical pitch copy](pitch.md) · [Actual UI recording](evidence/actual-mobile-flow.mp4) · [Recording transcript](evidence/actual-mobile-flow-transcript.md)
 
+## Judge’s two-minute route
+
+1. Read the [current submission description](SUBMISSION.md) and [timed film transcript](demo-transcript.md).
+2. Watch the [actual production UI recording](evidence/actual-mobile-flow.mp4), alongside its [action transcript](evidence/actual-mobile-flow-transcript.md): exact weights → price explorer → real PNG → remix → recipient draft.
+3. Open the [Android 1.1.3 APK](../../releases/coloyond-android-debug.apk) and [build/signature checks](evidence/implementation-verification.json).
+4. Inspect [public settlement receipts](receipts.md), then the raw snapshot and linked production source. This is observed devnet execution, not a roadmap-only protocol claim.
+5. Read the [scoped code review](code-review.md), including the oracle source upgrade and device acceptance boundaries.
+
 ## Start with evidence, not roadmap prose
 
 | Claim | Concrete evidence | What this establishes / limit |
 | --- | --- | --- |
-| Mobile flow and PNG sharing | [`scripts/mobile/capture.mjs`](../../scripts/mobile/capture.mjs), [actual UI captures](../../remotion/public/screens), [card renderer](../../src/ui/app/lib/art/portfolio-card.ts), [card guide](../mobile/portfolio-cards.md) | Browser flow, actual PNG generation/download and a mocked file-share handoff. Not a physical-phone chooser test. |
+| Mobile flow and PNG sharing | [`scripts/mobile/capture.mjs`](../../scripts/mobile/capture.mjs), [actual production recording](evidence/actual-mobile-flow.mp4), [card renderer](../../src/ui/app/lib/art/portfolio-card.ts), [card guide](../mobile/portfolio-cards.md) | Browser flow, actual PNG generation/download and a mocked file-share handoff. Not a physical-phone chooser test. |
 | Installable Android | [APK](../../releases/coloyond-android-debug.apk), [Gradle configuration](../../apps/android/app/build.gradle.kts), [verification](../mobile/verification.md) | Compiled, lint-checked and signature-verified debug APK. Physical wallet association/signing remains a device acceptance item. |
 | Wallet integration | [MWA adapter](../../src/ui/wallet/SolanaWalletProvider.tsx), [wallet bridge](../../src/ui/app/MobileApp.tsx), [sign/send/confirm](../../src/ui/app/lib/solana/tx.ts) | Real SDK integration and transaction path in code. An SDK import or mocked signer is not a live MWA approval video. |
 | A deployed devnet program exists | [timestamped RPC evidence](evidence/deployment-read.json), [read-only reproduction script](../../scripts/submission/probe-deployment.py) | Verified devnet genesis, executable Upgradeable Loader program, ProgramData address, deployment slot and upgrade authority. Source-to-binary correspondence is not independently established. |
