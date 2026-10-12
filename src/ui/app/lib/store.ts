@@ -7,7 +7,7 @@ import { fetchRpcStatus, type RpcStatus } from './solana/connection.js';
 import { fetchPriceBook, type PriceBook } from './solana/price.js';
 import { fetchReserveState, type ReserveState } from './solana/reserve-read.js';
 import { fetchVaultBalances, type VaultBalances } from './solana/vault.js';
-import { assetSpec, type AssetId } from './solana/assets.js';
+import { assetSpec, emptyTokens, type AssetId } from './solana/assets.js';
 import { fetchCoinbaseUniverse, type UniverseAsset } from './solana/coinbase.js';
 import { REBALANCE_INTERVAL_SEC } from './solana/config.js';
 import {
@@ -159,6 +159,18 @@ function activeWalletId(state: Pick<ColoyondState, 'wallet' | 'connectedWallet'>
   return state.connectedWallet?.publicKey.toBase58() ?? state.wallet?.publicKey ?? null;
 }
 
+let balanceGeneration = 0;
+let balanceSolRevision = 0;
+let latestObservedSol: { owner: string; lamports: number; revision: number } | null = null;
+let balanceFetch: { owner: string; generation: number; promise: Promise<void> } | null = null;
+
+function invalidateBalanceFetch(): void {
+  balanceGeneration += 1;
+  balanceSolRevision += 1;
+  latestObservedSol = null;
+  balanceFetch = null;
+}
+
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -192,6 +204,9 @@ interface ColoyondState {
   activeTab: TabId;
   stack: Screen[];
   walletBalances: Awaited<ReturnType<typeof fetchBalances>> | null;
+  walletBalancesLoading: boolean;
+  walletBalancesError: string | null;
+  walletBalancesUpdatedAt: number | null;
   vaultBalances: Record<string, VaultBalances>;
   price: PriceBook | null;
   priceError: string | null;
@@ -215,6 +230,7 @@ interface ColoyondState {
   // wallet lifecycle
   createWallet: (mnemonic: string) => void;
   setConnectedWallet: (wallet: WalletSigner | null) => void;
+  updateWalletSolBalance: (owner: string, lamports: number) => void;
   resetApp: () => void;
 
   // refreshers
@@ -266,6 +282,9 @@ export const useStore = create<ColoyondState>()(
       connectedWallet: null,
       stack: [{ id: 'portfolios' }],
       walletBalances: null,
+      walletBalancesLoading: false,
+      walletBalancesError: null,
+      walletBalancesUpdatedAt: null,
       vaultBalances: {},
       price: null,
       priceError: null,
@@ -297,32 +316,56 @@ export const useStore = create<ColoyondState>()(
         cachedMnemonic = mnemonic;
         cachedWalletKp = kp;
         const publicKey = kp.publicKey.toBase58();
-        const allVaults = useStore.getState().allVaults;
-        set({ wallet: { mnemonic, publicKey, createdAt: Date.now() }, vaults: allVaults[publicKey] ?? [] });
+        const state = get();
+        const allVaults = state.allVaults;
+        const ownerChanged = activeWalletId(state) !== (state.connectedWallet?.publicKey.toBase58() ?? publicKey);
+        if (ownerChanged) invalidateBalanceFetch();
+        set({
+          wallet: { mnemonic, publicKey, createdAt: Date.now() },
+          vaults: allVaults[publicKey] ?? [],
+          ...(ownerChanged ? { walletBalances: null, walletBalancesLoading: false, walletBalancesError: null, walletBalancesUpdatedAt: null } : {}),
+        });
         get().log({ vaultId: null, kind: 'owner', summary: 'Wallet created on this device' });
         get().setTab('portfolios');
+        void get().refreshBalances();
       },
 
       setConnectedWallet: (connectedWallet) => {
         const state = get();
-        const walletId = connectedWallet?.publicKey.toBase58() ?? null;
+        const previousOwner = activeWalletId(state);
+        const walletId = connectedWallet?.publicKey.toBase58() ?? state.wallet?.publicKey ?? null;
+        const ownerChanged = previousOwner !== walletId;
+        if (ownerChanged) invalidateBalanceFetch();
         set({
           connectedWallet,
-          walletBalances: null,
-          vaultBalances: {},
+          ...(ownerChanged ? { walletBalances: null, walletBalancesLoading: false, walletBalancesError: null, walletBalancesUpdatedAt: null, vaultBalances: {} } : {}),
           vaults: walletId
             ? state.allVaults[walletId] ?? []
-            : state.wallet?.publicKey
-              ? state.allVaults[state.wallet.publicKey] ?? []
-              : [],
+            : [],
           stack: [{ id: 'portfolios' }],
           activeTab: 'portfolios',
         });
-        if (connectedWallet) void get().refreshBalances();
+        if (walletId) void get().refreshBalances();
+      },
+
+      updateWalletSolBalance: (owner, lamports) => {
+        if (!Number.isFinite(lamports) || !Number.isInteger(lamports) || lamports < 0) return;
+        balanceSolRevision += 1;
+        latestObservedSol = { owner, lamports, revision: balanceSolRevision };
+        set((state) => activeWalletId(state) !== owner ? {} : {
+          walletBalances: {
+            solLamports: lamports,
+            tokens: state.walletBalances?.tokens ?? emptyTokens(),
+            ...(!state.walletBalances ? { tokenError: 'Token balances are loading.' } : {}),
+          },
+          walletBalancesUpdatedAt: Date.now(),
+          walletBalancesError: null,
+        });
       },
 
       resetApp: () => {
-        set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, stack: [{ id: 'portfolios' }] });
+        invalidateBalanceFetch();
+        set({ wallet: null, vaults: [], allVaults: {}, logs: [], vaultBalances: {}, walletBalances: null, walletBalancesLoading: false, walletBalancesError: null, walletBalancesUpdatedAt: null, stack: [{ id: 'portfolios' }] });
         useStore.persist.clearStorage();
       },
 
@@ -353,15 +396,54 @@ export const useStore = create<ColoyondState>()(
         }
       },
 
-      refreshBalances: async () => {
-        const kp = activeWalletSigner();
-        if (!kp) return;
+      refreshBalances: () => {
+        let signer: OwnerSigner | null;
         try {
-          const walletBalances = await fetchBalances(kp.publicKey);
-          set({ walletBalances });
-        } catch {
-          // devnet hiccup; keep last known
+          signer = activeWalletSigner();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Wallet signer is unavailable.';
+          set({ walletBalancesLoading: false, walletBalancesError: message });
+          return Promise.resolve();
         }
+        if (!signer) {
+          set({ walletBalancesLoading: false, walletBalancesError: 'Wallet signer is unavailable.' });
+          return Promise.resolve();
+        }
+
+        const owner = signer.publicKey.toBase58();
+        if (balanceFetch?.owner === owner && balanceFetch.generation === balanceGeneration) return balanceFetch.promise;
+        const generation = balanceGeneration;
+        const observedRevision = balanceSolRevision;
+        set({ walletBalancesLoading: true, walletBalancesError: null });
+
+        const promise = (async () => {
+          try {
+            const balances = await fetchBalances(signer.publicKey, undefined, undefined, (lamports) => {
+              if (generation === balanceGeneration && activeWalletId(get()) === owner) {
+                get().updateWalletSolBalance(owner, lamports);
+              }
+            });
+            if (generation !== balanceGeneration || activeWalletId(get()) !== owner) return;
+            const observation = latestObservedSol;
+            const previousBalances = get().walletBalances;
+            const walletBalances = {
+              ...balances,
+              ...(observation?.owner === owner && observation.revision > observedRevision
+                ? { solLamports: observation.lamports }
+                : {}),
+              ...(balances.tokenError && previousBalances ? { tokens: previousBalances.tokens } : {}),
+            };
+            set({ walletBalances, walletBalancesError: null, walletBalancesUpdatedAt: Date.now() });
+          } catch (error) {
+            if (generation !== balanceGeneration || activeWalletId(get()) !== owner) return;
+            set({ walletBalancesError: error instanceof Error ? error.message : 'Could not refresh wallet balances.' });
+          } finally {
+            if (generation === balanceGeneration) set({ walletBalancesLoading: false });
+            if (balanceFetch?.owner === owner && balanceFetch.generation === generation) balanceFetch = null;
+          }
+        })();
+        balanceFetch = { owner, generation, promise };
+        return promise;
       },
 
       refreshRpc: async () => {

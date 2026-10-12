@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
 import { useStore } from '../lib/store.js';
 import { priceOf, type PriceBook } from '../lib/solana/price.js';
 import { assetList } from '../lib/solana/assets.js';
-import { explorerAddress } from '../lib/solana/connection.js';
+import { connection, explorerAddress } from '../lib/solana/connection.js';
 import {
   fmtSol,
   fmtToken,
@@ -22,14 +23,19 @@ import { AssetSwatch, KeyValue, MicroLabel, Notice, Skeleton } from '../componen
 
 /** Wallet tab: owner balances, SOL wrapping, and device-key controls. */
 export function WalletScreen() {
-  useNow(1000);
+  const now = useNow(1000);
   const { disconnect } = useWallet();
   const toast = useStore((s) => s.toast);
 
   const wallet = useStore((s) => s.wallet);
   const connectedWallet = useStore((s) => s.connectedWallet);
   const balances = useStore((s) => s.walletBalances);
+  const balancesLoading = useStore((s) => s.walletBalancesLoading);
+  const balancesError = useStore((s) => s.walletBalancesError);
+  const balancesUpdatedAt = useStore((s) => s.walletBalancesUpdatedAt);
   const price = useStore((s) => s.price);
+  const refreshBalances = useStore((s) => s.refreshBalances);
+  const updateWalletSolBalance = useStore((s) => s.updateWalletSolBalance);
   const wrap = useStore((s) => s.wrap);
   const pushScreen = useStore((s) => s.pushScreen);
 
@@ -40,17 +46,46 @@ export function WalletScreen() {
 
   const external = connectedWallet !== null;
   const address = connectedWallet?.publicKey.toBase58() ?? wallet?.publicKey;
+
+  useEffect(() => {
+    if (!address) return;
+    void refreshBalances();
+
+    let subscription: number | null = null;
+    try {
+      subscription = connection.onAccountChange(new PublicKey(address), ({ lamports }) => {
+        updateWalletSolBalance(address, lamports);
+        void refreshBalances();
+      }, 'confirmed');
+    } catch {
+      // The periodic and foreground refreshes remain available if WS setup fails.
+    }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshBalances();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      if (subscription !== null) void connection.removeAccountChangeListener(subscription).catch(() => {});
+    };
+  }, [address, refreshBalances, updateWalletSolBalance]);
+
   if (!address) return null;
 
   const prices = price ? Object.fromEntries(assetList().map((spec) => [spec.id, priceOf(price, spec.id) ?? 0])) : null;
 
   const solValue =
-    balances && prices
+    balances && prices && !balances.tokenError
       ? (balances.solLamports / 1e9) * (prices.wsol ?? 0) +
         assetList().reduce((sum, spec) => sum + ((balances.tokens[spec.id] ?? 0) / 10 ** spec.decimals) * (prices[spec.id] ?? 0), 0)
       : null;
 
   const bookMeta = priceBookMeta(price);
+  const balanceAge = balancesUpdatedAt === null ? null : Math.max(0, Math.floor((now - balancesUpdatedAt) / 1000));
 
   return (
     <Screen>
@@ -80,6 +115,28 @@ export function WalletScreen() {
       {external ? <div className="mt-3"><Button full variant="secondary" onClick={() => void disconnect().catch((error: unknown) => toast('error', 'Could not disconnect', String(error)))}>Disconnect wallet</Button></div> : null}
       <div className="mt-4">
         <LedgerPanel stripe="Balances" meta={bookMeta}>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <MicroLabel>
+              {balancesLoading ? 'refreshing' : balanceAge !== null ? `updated ${balanceAge}s ago` : 'not synced'}
+            </MicroLabel>
+            <Button variant="ghost" loading={balancesLoading} onClick={() => void refreshBalances()} aria-label="Refresh wallet balances">
+              Refresh
+            </Button>
+          </div>
+          {balancesError ? (
+            <div className="mb-3">
+              <Notice tone={balances ? 'brass' : 'danger'} title={balances ? 'Balance refresh failed' : 'Balance unavailable'}>
+                {balancesError}
+              </Notice>
+            </div>
+          ) : null}
+          {balances?.tokenError ? (
+            <div className="mb-3">
+              <Notice tone="brass" title="Token balances are incomplete">
+                {balances.tokenError}. SOL is shown from the latest successful read; retry to refresh token balances.
+              </Notice>
+            </div>
+          ) : null}
           {balances ? (
             <>
               <KeyValue
@@ -105,6 +162,14 @@ export function WalletScreen() {
                 SOL is wrapped into WSOL when you fund a portfolio. Scheduled tasks trade vault assets toward your chosen mix.
               </p>
             </>
+          ) : balancesLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : balancesError ? (
+            <Button full variant="secondary" onClick={() => void refreshBalances()}>Retry balance read</Button>
           ) : (
             <div className="space-y-2">
               <Skeleton className="h-4 w-3/4" />

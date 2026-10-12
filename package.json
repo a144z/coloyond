@@ -8,7 +8,7 @@
     "dev:cli": "tsx src/main.ts",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test:solana": "node --import tsx --test src/ui/app/lib/solana/explore.test.ts src/ui/app/lib/solana/share-metadata.test.ts",
+    "test:solana": "node --import tsx --test src/ui/app/lib/solana/explore.test.ts src/ui/app/lib/solana/share-metadata.test.ts src/ui/app/lib/solana/wallet.test.ts src/ui/app/lib/store.test.ts",
     "test:portfolio": "npm run typecheck && npm run test:solana && cargo test --locked --manifest-path coloyond-beta/programs/coloyond-execution/Cargo.toml",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && cd apps/android && ./gradlew :app:clean :app:assembleDebug --console=plain",

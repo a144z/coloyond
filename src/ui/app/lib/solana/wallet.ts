@@ -16,6 +16,22 @@ export interface Balances {
   solLamports: number;
   /** Raw SPL balance per asset id (WSOL included). Zero when no account exists. */
   tokens: Record<string, number>;
+  /** Present when the independent SPL-token scan could not be completed. */
+  tokenError?: string;
+}
+
+async function withRpcTimeout<T>(request: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out.`)), 12_000);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 export function generateMnemonicPhrase(): string {
@@ -40,25 +56,45 @@ export async function fetchBalances(
   owner: PublicKey,
   tokenRpc = connection,
   solRpc = connection,
+  onSolBalance?: (lamports: number) => void,
 ): Promise<Balances> {
   const byMint = mintToAssetMap();
   const tokens = emptyTokens();
 
-  const [solLamports, tokenAccounts] = await Promise.all([
-    solRpc.getBalance(owner, 'confirmed'),
-    tokenRpc.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
-  ]);
+  const tokenRequest = withRpcTimeout(
+    Promise.resolve().then(() => tokenRpc.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed')),
+    'Token balance read',
+  );
+  // A token request may finish after a failed SOL read; keep its rejection handled.
+  void tokenRequest.catch(() => {});
 
-  for (const { account } of tokenAccounts.value) {
+  let solLamports: number;
+  try {
+    solLamports = await withRpcTimeout(solRpc.getBalance(owner, 'confirmed'), 'SOL balance read');
+  } catch (error) {
+    throw new Error(`Could not read SOL balance: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  onSolBalance?.(solLamports);
+
+  let tokenAccounts: Awaited<typeof tokenRequest> | null = null;
+  let tokenError: string | undefined;
+  try {
+    tokenAccounts = await tokenRequest;
+  } catch (error) {
+    tokenError = error instanceof Error ? error.message : String(error);
+  }
+
+  for (const { account } of tokenAccounts?.value ?? []) {
     const info = (account.data as { parsed?: { info?: { mint?: string; tokenAmount?: { amount?: string } } } })
       ?.parsed?.info;
     if (!info?.mint || typeof info.tokenAmount?.amount !== 'string') continue;
     const assetId = byMint.get(info.mint);
     if (!assetId) continue;
-    tokens[assetId] = Number(info.tokenAmount.amount);
+    const amount = Number(info.tokenAmount.amount);
+    if (Number.isFinite(amount) && amount >= 0) tokens[assetId] += amount;
   }
 
-  return { solLamports, tokens };
+  return { solLamports, tokens, ...(tokenError ? { tokenError } : {}) };
 }
 
 /** Wrap SOL into the owner's own WSOL ATA within a given transaction. */
