@@ -55,6 +55,12 @@ export async function signSendConfirm(
 /** Best-effort readable message from RPC / wallet errors. */
 export function describeTxError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
+  if (/DELeGG.*Invalid account owner|Invalid account owner for delegated account/i.test(msg)) {
+    return 'MagicBlock rejected the Hydra sponsor before delegation. Retry scheduling; the sponsor is now assigned and delegated atomically.';
+  }
+  if (/InstructionFallbackNotFound|custom program error:\s*0x65\b/i.test(msg)) {
+    return 'The Devnet execution program is outdated and does not recognize the crank-policy instruction. Your completed setup steps are saved; update the program, then resume this setup.';
+  }
   if (/429|too many|rate.?limit/i.test(msg)) {
     return 'Devnet RPC rate limit reached. Wait a moment and retry.';
   }

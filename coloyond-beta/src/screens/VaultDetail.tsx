@@ -106,7 +106,7 @@ export function VaultDetail({ vaultId }: { vaultId: string }) {
             </div>
           ) : null}
           <p className="mt-3 text-[11px] leading-relaxed text-iron">
-            Hydra's interval is measured in ER slots; wall-clock timing depends on an active cranker. A run needs more than 0.1% movement in at least one Pyth-backed asset since the last successful settlement. The Solana vault program rechecks delay, price freshness, slippage and replay protection before SPL transfers.
+            Hydra's interval is measured in ER slots; wall-clock timing depends on an active cranker. A run needs more than 0.1% movement in at least one Pyth-backed asset since the last successful settlement. The Solana vault program rechecks delay, feed identity and verification, slippage and replay protection before SPL transfers; it does not enforce feed age.
           </p>
         </LedgerPanel>
       </div>

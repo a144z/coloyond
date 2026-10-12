@@ -23,6 +23,7 @@ import {
   delegateBufferPdaFromDelegatedAccountAndOwnerProgram,
   delegationMetadataPdaFromDelegatedAccount,
   delegationRecordPdaFromDelegatedAccount,
+  createDelegateInstruction,
   magicFeeVaultPdaFromValidator,
 } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { mintOf, mintToAssetMap, type AssetId } from './assets';
@@ -398,9 +399,9 @@ export function slotsForCadence(seconds: number): number {
   return Math.ceil(seconds * REBALANCE_INTERVAL_SLOTS / TARGET_REBALANCE_SECONDS);
 }
 
-async function setCrankPolicy(owner: OwnerSigner, stateAddress: PublicKey, minIntervalSeconds: number): Promise<TxResult> {
+function setCrankPolicyInstruction(owner: OwnerSigner, stateAddress: PublicKey, minIntervalSeconds: number): TransactionInstruction {
   const addresses = vaultAddressesForState(stateAddress);
-  const instruction = new TransactionInstruction({
+  return new TransactionInstruction({
     programId: EXECUTION_PROGRAM,
     keys: [
       { pubkey: stateAddress, isSigner: false, isWritable: false },
@@ -410,9 +411,6 @@ async function setCrankPolicy(owner: OwnerSigner, stateAddress: PublicKey, minIn
     ],
     data: Buffer.concat([Buffer.from(DISCRIMINATOR.setCrankPolicy), u64(BigInt(minIntervalSeconds))]),
   });
-  const tx = new Transaction().add(instruction);
-  tx.feePayer = owner.publicKey;
-  return signSendConfirm(tx, owner);
 }
 
 export async function scheduleVault(
@@ -424,14 +422,15 @@ export async function scheduleVault(
   if (!state.active) throw new Error('Resume the portfolio on Solana before scheduling it.');
   const intervalSlots = slotsForCadence(minIntervalSeconds);
   const addresses = vaultAddressesForState(stateAddress);
-  await setCrankPolicy(owner, stateAddress, minIntervalSeconds);
   const vaultTokens = vaultAssetAccounts(state, addresses.authority);
   const marketTokens = marketAssetAccounts(state, addresses.marketAuthority);
   const feeds = state.assets.filter((asset) => !asset.feedAccount.equals(PublicKey.default)).map((asset) => asset.feedAccount);
 
-  const marketSetup = new Transaction();
+  // Persist the policy and create any missing market ATAs with one wallet
+  // approval. Both operations are idempotent, so this is safe to retry.
+  const setup = new Transaction().add(setCrankPolicyInstruction(owner, stateAddress, minIntervalSeconds));
   for (let index = 0; index < state.assets.length; index += 1) {
-    marketSetup.add(new TransactionInstruction({
+    setup.add(new TransactionInstruction({
       programId: EXECUTION_PROGRAM,
       keys: [
         { pubkey: addresses.marketAuthority, isSigner: false, isWritable: false },
@@ -445,8 +444,8 @@ export async function scheduleVault(
       data: Buffer.from(DISCRIMINATOR.createMarketAssetAccount),
     }));
   }
-  marketSetup.feePayer = owner.publicKey;
-  await signSendConfirm(marketSetup, owner);
+  setup.feePayer = owner.publicKey;
+  await signSendConfirm(setup, owner);
 
   const executorStatus = await ensureExecutorDelegated(owner, stateAddress, addresses.executor);
   const host = new ConnectionMagicRouter(executorStatus.fqdn, 'confirmed');
@@ -461,41 +460,44 @@ export async function scheduleVault(
     }
   }
 
-  // Hydra's Create path must be top-level and its sponsor must be writable and
-  // delegated. Use a fresh, system-owned signer with a small owner-funded balance;
-  // only its public key is stored on-chain after registration.
+  // Hydra's Create path requires a writable sponsor delegated to this ER. Use a
+  // fresh, one-use signer and atomically fund, assign, delegate, and authorize it.
+  // Combining these instructions prevents failed delegation attempts from
+  // leaving funded sponsor accounts behind and reduces wallet approvals.
   const sponsor = Keypair.generate();
-  const fundSponsor = new Transaction().add(SystemProgram.transfer({
-    fromPubkey: owner.publicKey,
-    toPubkey: sponsor.publicKey,
-    lamports: TASK_SPONSOR_INITIAL_LAMPORTS,
-  }));
-  fundSponsor.feePayer = owner.publicKey;
-  await signSendConfirm(fundSponsor, owner);
-
   const validator = await readValidatorIdentity(executorStatus.fqdn);
-  const delegationBuffer = delegateBufferPdaFromDelegatedAccountAndOwnerProgram(sponsor.publicKey, SystemProgram.programId);
-  const delegationRecord = delegationRecordPdaFromDelegatedAccount(sponsor.publicKey);
-  const delegationMetadata = delegationMetadataPdaFromDelegatedAccount(sponsor.publicKey);
-  const delegateData = Buffer.alloc(49);
-  delegateData.writeUInt32LE(0xffff_ffff, 8);
-  delegateData.writeUInt32LE(0, 12);
-  delegateData[16] = 1;
-  validator.toBuffer().copy(delegateData, 17);
-  const delegateSponsor = new TransactionInstruction({
-    programId: DELEGATION_PROGRAM_ID,
+  const delegateSponsor = createDelegateInstruction({
+    payer: owner.publicKey,
+    delegatedAccount: sponsor.publicKey,
+    ownerProgram: SystemProgram.programId,
+    validator,
+  }, {
+    commitFrequencyMs: 0xffff_ffff,
+  });
+  const setSponsor = new TransactionInstruction({
+    programId: EXECUTION_PROGRAM,
     keys: [
+      { pubkey: stateAddress, isSigner: false, isWritable: false },
+      { pubkey: addresses.schedulerConfig, isSigner: false, isWritable: true },
       { pubkey: owner.publicKey, isSigner: true, isWritable: true },
-      { pubkey: sponsor.publicKey, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: delegationBuffer, isSigner: false, isWritable: true },
-      { pubkey: delegationRecord, isSigner: false, isWritable: true },
-      { pubkey: delegationMetadata, isSigner: false, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
-    data: delegateData,
+    data: Buffer.concat([Buffer.from(DISCRIMINATOR.setSchedulerSponsor), sponsor.publicKey.toBuffer()]),
   });
-  const delegationTx = new Transaction().add(delegateSponsor);
+  const delegationTx = new Transaction()
+    .add(SystemProgram.transfer({
+      fromPubkey: owner.publicKey,
+      toPubkey: sponsor.publicKey,
+      lamports: TASK_SPONSOR_INITIAL_LAMPORTS,
+    }))
+    // DLP's delegate instruction requires the target account to already be
+    // owned by DLP. The signer can authorize this System Program assignment.
+    .add(SystemProgram.assign({
+      accountPubkey: sponsor.publicKey,
+      programId: DELEGATION_PROGRAM_ID,
+    }))
+    .add(delegateSponsor)
+    .add(setSponsor);
   delegationTx.feePayer = owner.publicKey;
   await signSendConfirm(delegationTx, owner, [sponsor]);
   let sponsorStatus: { isDelegated: boolean; fqdn?: string } | null = null;
@@ -507,20 +509,6 @@ export async function scheduleVault(
   if (!sponsorStatus?.isDelegated || !sponsorStatus.fqdn || sponsorStatus.fqdn !== executorStatus.fqdn) {
     throw new Error("MagicBlock did not delegate the one-use Hydra sponsor to the vault Executor's ER.");
   }
-
-  const setSponsor = new TransactionInstruction({
-    programId: EXECUTION_PROGRAM,
-    keys: [
-      { pubkey: stateAddress, isSigner: false, isWritable: false },
-      { pubkey: addresses.schedulerConfig, isSigner: false, isWritable: true },
-      { pubkey: owner.publicKey, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data: Buffer.concat([Buffer.from(DISCRIMINATOR.setSchedulerSponsor), sponsor.publicKey.toBuffer()]),
-  });
-  const configTx = new Transaction().add(setSponsor);
-  configTx.feePayer = owner.publicKey;
-  await signSendConfirm(configTx, owner);
 
   const crank = crankAddress(sponsor.publicKey, stateAddress);
   const scheduledMetas = [
