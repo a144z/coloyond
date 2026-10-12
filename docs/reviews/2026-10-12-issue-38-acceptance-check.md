@@ -8,6 +8,7 @@ Follows the [gap report](2026-10-12-issue-38-gap-report.md). Records what the v2
 - `programs/coloyond-etf` defects 1 & 2 fixed on `705cd84` (weights bound to their pool; init_weights requires governance).
 - Android default destination flipped to `portfolio` on `9fd24d6` (per the plan's V0 slice), reversing PR #42's Cards default.
 - `scripts/dev_run.ps1` passes `--ledger test-ledger` to Agave 4.3's `solana-test-validator`.
+- Kotlin `PortfolioAddresses.kt` on `41fdceb` (with the program ID, five seed constants, and PDA helpers) plus a five-case test — mirrors `ColoyondAddresses` for the v0.3.0 side. Not yet verified with `gradlew test` because no JDK is on PATH on this Windows env and `winget install Microsoft.OpenJDK.17` fails with exit 1618.
 
 ## What is NOT yet on `main`
 
@@ -42,13 +43,14 @@ Same rows as the spec's Acceptance evidence table.
 In order of dependency:
 
 1. ~~**Wire real token CPIs**~~ done on `ba98407`.
-2. **Deploy the v2 program to Devnet** (needs a funded Devnet keypair and a working test-validator on whatever machine runs the deploy, or a real Devnet run).
-3. **Kotlin v2 instruction builders + PDA helpers (N3)** so the Android app can compose `create_vault` / `fund_vault` / etc.
-4. **Android Compose Portfolio UI (B1)** with a list/create/detail/review flow using the existing MWA sign-only gateway.
-5. **MagicBlock adapter (V3, F1 gate)** — a real ER tick and a program-owned post-commit action that calls the v2 handler, with an authenticated escrow.
-6. **27-cycle hosted Devnet observation** on a dedicated vault with the phone process stopped.
+2. **Install a JDK** on this Windows box so `gradlew.bat testDebugUnitTest` becomes runnable, then verify `PortfolioAddresses.kt` and its test on `41fdceb`. The winget exit code is 1618 (Windows Installer busy) — resolve that or install a JDK another way.
+3. **Add Kotlin v2 instruction builders (still open, N3)** that compose the seven ix byte encodings plus their account metas, mirroring `ColoyondTransactionBuilder`. This is 300–400 lines.
+4. **Deploy the v2 program to Devnet** (needs a funded Devnet keypair and a working test-validator on whatever machine runs the deploy, or a real Devnet run).
+5. **Android Compose Portfolio v2 UI (B1)** with a list/create/detail/review flow using the existing MWA sign-only gateway. The current `PortfolioRoute.kt` is a read-only v0.3.0 status screen and needs a rewrite for the v2 data shape.
+6. **MagicBlock adapter (V3, F1 gate)** — a real ER tick and a program-owned post-commit action that calls the v2 handler, with an authenticated escrow.
+7. **27-cycle hosted Devnet observation** on a dedicated vault with the phone process stopped.
 
-None of steps 2 through 6 are code blockers; they are hours to days of implementation plus Devnet observation. On the code side, the shape now matches what the design and plan describe and the fund/withdraw handlers do move real tokens. What is left is the CRANK, the Kotlin builders, the Compose screens, and a real Devnet run.
+None of steps 2 through 7 are code blockers on the Rust side; they are hours to days of Kotlin implementation plus Devnet observation. On the Rust side, the seven-instruction program shape plus the token CPIs are all in and cargo-green. What is left is to unblock the JDK to verify the Kotlin scaffolding already in the tree, add the Kotlin instruction builders, rewrite the Compose Portfolio v2 screens, and run a real Devnet pass.
 
 ## Notes on the v1 extension path
 
