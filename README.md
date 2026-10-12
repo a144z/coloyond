@@ -51,7 +51,9 @@ Generative geometry turns each portfolio into an Orbit, Prism or Stack compositi
   </a>
 </p>
 
-<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Steady component close-ups, PNG sharing and artwork remixes · Uploaded stereo music with frequency-based timing</sub></p>
+<p align="center"><a href="https://github.com/a144z/coloyond/raw/refs/heads/main/releases/coloyond-mobile-showcase.mp4"><strong>Watch the 62-second promotion →</strong></a><br/><sub>1080p · Component zooms, clicks and slider drags · Rebalance animation · Narration and captions · Uploaded music with analyzed beat timing</sub></p>
+
+[Read the timed demo transcript](docs/submission/demo-transcript.md) or download [SRT captions](releases/coloyond-mobile-showcase.srt). The final MP4 is exactly **62.000 seconds**. Natural synthetic narration is layered over the original uploaded music.
 
 The film uses a frame-controlled UI demonstration and the same portfolio-art renderer as `/app`. Portfolio balances in presentation scenes are clearly labeled **illustrative devnet data**.
 
@@ -138,9 +140,10 @@ The downloadable package is a signed **debug APK** for Android 8/API 26 and newe
 ```sh
 npm run video:studio
 npm run video:render
+npm run video:package # FFmpeg + Python/NumPy/SciPy; final exact-duration MP4
 ```
 
-The film uses the uploaded stereo soundtrack, with spectral analysis driving its beat grid and subtle frequency response. It animates real component values, cursor gestures, sheets and navigation in a deterministic UI presentation. See the [Remotion guide](remotion/README.md) for the storyboard, research, audio analysis and reproduction steps.
+The film retains the uploaded stereo soundtrack, with spectral analysis driving its beat grid and subtle frequency response. Narration, captions and the fee-free rebalance illustration are layered into the existing motion design. It animates real component values, cursor gestures, sheets and navigation in a deterministic UI presentation. See the [Remotion guide](remotion/README.md) for the storyboard, research, audio analysis and reproduction steps.
 
 ## Built, checked, and explicit about scope
 

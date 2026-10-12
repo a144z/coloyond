@@ -1,0 +1,39 @@
+{
+  "status": "Built for review; NOT DEPLOYED",
+  "cluster": "devnet",
+  "expectedGenesis": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+  "existingProgramId": "HT7c9346N1o1TRzttWEHTg6mf7gyB1qNeV6K9VBKdN2d",
+  "observedUpgradeAuthority": "J4mwp7H8AyQJjtk8eQbEesYwT34dWdrLMxGq3kBGpD8q",
+  "observedProgramData": "7evdoXjEKC8YHK9rPPQo3niJWEvwEncyVE5xnYThWKyX",
+  "sourceCommit": "8626e2a",
+  "sourcePath": "coloyond-beta/programs/coloyond-execution/src/lib.rs",
+  "sourceSha256": "3eafc2808cde00b3ca447c3651f66c5e2e074c9586400942a73fdd6b6747776e",
+  "cargoLockSha256": "713eaeabf19d90ffee23e4e601616b5590fc597885dc62d44a3674b37e4fade9",
+  "artifact": {
+    "path": "releases/pending-upgrade/coloyond_execution.so",
+    "sha256": "0c996d0d6ec8fca3693af6ba86b8cd0ad3b55cc012a5456b9a665ed27518bd24",
+    "bytes": 604600,
+    "format": "ELF64 little endian, Solana SBF v0 (e_machine 0x107)"
+  },
+  "build": {
+    "agave": "4.3.0",
+    "platformTools": "v1.57",
+    "command": "cargo-build-sbf --manifest-path coloyond-beta/programs/coloyond-execution/Cargo.toml --sbf-out-dir out -- --locked",
+    "result": "passed"
+  },
+  "hostTests": 4,
+  "newOraclePolicy": {
+    "maxAgeSeconds": 90,
+    "futureToleranceSeconds": 5,
+    "maxConfidenceBps": 100,
+    "verification": "Full"
+  },
+  "requiredBeforeCallingThisDeployed": [
+    "Recheck devnet genesis, current program/ProgramData and upgrade authority",
+    "Authorized authority reviews source, artifact, costs and signs upgrade",
+    "Re-read deployed bytecode and match the built artifact, accounting for loader padding",
+    "Run real fresh/stale/confidence and settlement readbacks",
+    "Record real MWA/device approval separately"
+  ],
+  "privateKeysIncluded": false
+}

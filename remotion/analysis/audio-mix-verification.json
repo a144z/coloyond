@@ -1,0 +1,22 @@
+{
+  "musicQuietWindowCorrelationBeforePackaging": 0.998914,
+  "codecDelayCompensatedMilliseconds": 42.3125,
+  "targetIntegratedLufs": -18,
+  "targetTruePeakDb": -1.5,
+  "inputLoudness": {
+    "input_i": "-21.00",
+    "input_tp": "-4.66",
+    "input_lra": "4.70",
+    "input_thresh": "-31.39",
+    "output_i": "-17.83",
+    "output_tp": "-1.63",
+    "output_lra": "4.30",
+    "output_thresh": "-28.18",
+    "normalization_type": "dynamic",
+    "target_offset": "-0.17"
+  },
+  "musicSource": "user upload, retained as a separate stem",
+  "voiceSource": "coloyond-narration.wav, generic natural synthetic narrator",
+  "videoFrames": 1860,
+  "fps": 30
+}

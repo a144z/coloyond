@@ -28,7 +28,7 @@
 
 ## Review finding that must remain visible
 
-The execution source at the beginning of this review checked Pyth owner, feed identity and Full verification but used `get_price_unchecked`, without enforcing observation age/confidence. An executable program and successful transactions are not a security audit. Hardening source requires host tests, a fresh SBF build, authorized upgrade and post-upgrade readback before new source protections can be called deployed. Keep these scopes separate. The program has an upgrade authority; it is not immutable.
+The execution source at the beginning of this review checked Pyth owner, feed identity and Full verification but used `get_price_unchecked`, without enforcing observation age/confidence. An executable program and successful transactions are not a security audit. The new hardening passed host tests and an SBF build; its [compiled artifact and review packet](../../releases/pending-upgrade/review-packet.json) are available. It still requires an authorized upgrade and post-upgrade readback before new source protections can be called deployed. Keep these scopes separate. The program has an upgrade authority; it is not immutable.
 
 ## Product loop and retention hypothesis
 
