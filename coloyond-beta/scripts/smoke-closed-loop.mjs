@@ -14,9 +14,13 @@ const EXECUTOR_SEED = Buffer.from('executor');
 const CONFIG_SEED = Buffer.from('scheduler-config');
 const POLICY_SEED = Buffer.from('crank-policy');
 const CRANK_SEED = Buffer.from('crank');
+const RPC_RETRY_ATTEMPTS = 7;
+const RPC_RETRY_BASE_DELAY_MS = 500;
+const RPC_RETRY_MAX_DELAY_MS = 5_000;
+const RPC_ATTEMPT_TIMEOUT_MS = 15_000;
 
 if (process.argv.includes('--self-check')) {
-  selfCheck();
+  await selfCheck();
   process.exit(0);
 }
 
@@ -36,7 +40,8 @@ const derive = (seeds, program = PROGRAM_ID) => PublicKey.findProgramAddressSync
 const executor = derive([EXECUTOR_SEED, state.toBuffer()]);
 const schedulerConfig = derive([CONFIG_SEED, state.toBuffer()]);
 const crankPolicy = derive([POLICY_SEED, state.toBuffer()]);
-const stateInfo = await base.getAccountInfo(state, 'confirmed');
+const readDeadline = Date.now() + timeoutMs;
+const stateInfo = await withRpcRetry(() => base.getAccountInfo(state, 'confirmed'), 'read Vault State', { deadline: readDeadline });
 if (!stateInfo || !stateInfo.owner.equals(PROGRAM_ID) || stateInfo.data.length < 98) {
   throw new Error('Configured Vault State is missing, malformed, or owned by another program.');
 }
@@ -50,12 +55,12 @@ const assets = Array.from({ length: count }, (_, index) => ({
 }));
 const authority = derive([Buffer.from('vault-authority'), state.toBuffer()]);
 const vaultAccounts = assets.map(({ mint }) => deriveAssociatedAddress(mint, authority));
-const before = await readTokenBalances(base, vaultAccounts, authority);
+const before = await readTokenBalances(base, vaultAccounts, authority, readDeadline);
 if (before.some((balance) => balance === null)) throw new Error('One or more vault SPL token accounts are missing.');
 
 const [configInfo, policyInfo] = await Promise.all([
-  base.getAccountInfo(schedulerConfig, 'confirmed'),
-  base.getAccountInfo(crankPolicy, 'confirmed'),
+  withRpcRetry(() => base.getAccountInfo(schedulerConfig, 'confirmed'), 'read Scheduler Config', { deadline: readDeadline }),
+  withRpcRetry(() => base.getAccountInfo(crankPolicy, 'confirmed'), 'read Crank Policy', { deadline: readDeadline }),
 ]);
 if (!configInfo || !configInfo.owner.equals(PROGRAM_ID) || configInfo.data.length < 104 ||
     !configInfo.data.subarray(8, 40).equals(state.toBuffer()) || !configInfo.data.subarray(40, 72).equals(owner.toBuffer())) {
@@ -104,10 +109,11 @@ let cycleSettlements = 0;
 const allCycleResults = [];
 for (let cycle = 1; cycle <= cycleCount; cycle += 1) {
   const currentSlot = await waitUntilDue(host, nextTask.nextExecSlot, timeoutMs);
-  const cycleState = await base.getAccountInfo(state, 'confirmed');
+  const cycleReadDeadline = Date.now() + timeoutMs;
+  const cycleState = await withRpcRetry(() => base.getAccountInfo(state, 'confirmed'), `cycle ${cycle} read Vault State`, { deadline: cycleReadDeadline });
   if (!cycleState?.owner.equals(PROGRAM_ID) || cycleState.data.length < 94) throw new Error(`Cycle ${cycle}: Vault State disappeared or became malformed.`);
   const cycleNonceBefore = cycleState.data.readBigUInt64LE(86);
-  const cycleBalancesBefore = await readTokenBalances(base, vaultAccounts, authority);
+  const cycleBalancesBefore = await readTokenBalances(base, vaultAccounts, authority, cycleReadDeadline);
   if (cycleBalancesBefore.some((balance) => balance === null)) throw new Error(`Cycle ${cycle}: a vault SPL token account is missing.`);
 
   const cycleTransaction = new Transaction();
@@ -142,11 +148,11 @@ function deriveAssociatedAddress(mint, authority) {
   return PublicKey.findProgramAddressSync([authority.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()], associatedProgram)[0];
 }
 
-async function readTokenBalances(connection, accounts, authority) {
+async function readTokenBalances(connection, accounts, authority, deadline = Date.now() + 15_000) {
   const values = [];
   for (const accountAddress of accounts) {
     try {
-      const account = await getAccount(connection, accountAddress, 'confirmed');
+      const account = await withRpcRetry(() => getAccount(connection, accountAddress, 'confirmed'), `read SPL account ${accountAddress}`, { deadline });
       if (!account.owner.equals(authority)) throw new Error(`SPL account ${accountAddress} is not controlled by the vault Authority PDA.`);
       values.push(account.amount);
     } catch (error) {
@@ -224,9 +230,9 @@ async function observeCycleSettlement({ base, stateAddress, vaultAccounts, autho
   while (Date.now() < deadline) {
     await sleep(2_000);
     const [stateInfo, signatures, balances] = await Promise.all([
-      base.getAccountInfo(stateAddress, 'confirmed'),
-      base.getSignaturesForAddress(stateAddress, { limit: 20 }, 'confirmed'),
-      readTokenBalances(base, vaultAccounts, authority),
+      withRpcRetry(() => base.getAccountInfo(stateAddress, 'confirmed'), 'observe Vault State', { deadline }),
+      withRpcRetry(() => base.getSignaturesForAddress(stateAddress, { limit: 20 }, 'confirmed'), 'read settlement signatures', { deadline }),
+      readTokenBalances(base, vaultAccounts, authority, deadline),
     ]);
     if (!stateInfo?.owner.equals(PROGRAM_ID) || stateInfo.data.length < 94) throw new Error('Vault State disappeared or became malformed while observing cycle.');
     if (balances.some((balance) => balance === null)) throw new Error('A vault SPL token account disappeared while observing cycle.');
@@ -236,7 +242,7 @@ async function observeCycleSettlement({ base, stateAddress, vaultAccounts, autho
     if (nonce > nonceBefore) {
       for (const candidate of signatures) {
         if (candidate.err) continue;
-        const tx = await base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+        const tx = await withRpcRetry(() => base.getTransaction(candidate.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }), `read settlement transaction ${candidate.signature}`, { deadline });
         const line = tx?.meta?.logMessages?.find((message) => message.includes(`Base-layer SPL rebalance settled atomically: nonce ${nonce}`));
         if (line) { settlement = { signature: candidate.signature, line }; break; }
       }
@@ -280,7 +286,65 @@ function safeNumber(value, label) {
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-function selfCheck() {
+async function withRpcRetry(operation, label, {
+  deadline = Date.now() + 15_000,
+  maxAttempts = RPC_RETRY_ATTEMPTS,
+  baseDelayMs = RPC_RETRY_BASE_DELAY_MS,
+  maxDelayMs = RPC_RETRY_MAX_DELAY_MS,
+} = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (Date.now() >= deadline) throw rpcRetryDeadlineError(label, attempt - 1, lastError);
+    try {
+      return await runRpcAttempt(operation, Math.min(RPC_ATTEMPT_TIMEOUT_MS, deadline - Date.now()), label);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientRpcError(error)) throw error;
+      if (attempt >= maxAttempts) {
+        throw new Error(`${label} failed after ${attempt} attempt${attempt === 1 ? '' : 's'}: ${errorMessage(error)}`, { cause: error });
+      }
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) throw rpcRetryDeadlineError(label, attempt, error);
+      const backoffMs = Math.min(baseDelayMs * (2 ** (attempt - 1)), maxDelayMs, remainingMs);
+      if (backoffMs > 0) await sleep(backoffMs);
+    }
+  }
+  throw rpcRetryDeadlineError(label, maxAttempts, lastError);
+}
+
+async function runRpcAttempt(operation, timeoutMs, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error(`${label} RPC attempt timed out.`), { code: 'ETIMEDOUT' })), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isTransientRpcError(error) {
+  const messages = [];
+  for (let current = error; current && messages.length < 4; current = current.cause) {
+    if (typeof current.message === 'string') messages.push(current.message);
+    const status = current.status ?? current.statusCode ?? current.response?.status;
+    if (status === 429 || (Number.isInteger(status) && status >= 500 && status <= 599)) return true;
+    const code = String(current.code ?? '').toLowerCase();
+    if (/^(econnreset|econnrefused|etimedout|esockettimedout|enotfound|eai_again|ehostunreach|enetunreach|epipe|abort_err)$/.test(code)) return true;
+  }
+  return /\b429\b|\b5\d\d\b|too many requests|rate.?limit|fetch failed|network error|timed? ?out|socket hang up|connection reset|connection refused|temporarily unavailable|gateway timeout|request aborted/i.test(messages.join(' '));
+}
+
+function errorMessage(error) { return error instanceof Error ? error.message : String(error); }
+
+function rpcRetryDeadlineError(label, attempts, cause) {
+  return new Error(`${label} exhausted its bounded retry deadline after ${attempts} attempt${attempts === 1 ? '' : 's'}${cause ? `: ${errorMessage(cause)}` : '.'}`, cause ? { cause } : undefined);
+}
+
+async function selfCheck() {
   const state = Keypair.generate().publicKey;
   const executor = Keypair.generate().publicKey;
   const schedulerConfig = Keypair.generate().publicKey;
@@ -317,11 +381,36 @@ function selfCheck() {
   assertRejects(() => parseCycleCount('6'), 'more than five cycles accepted');
   assertRejects(() => parseCycleCount('2.5'), 'fractional cycles accepted');
   if (parseCycleCount('1') !== 1 || parseCycleCount('5') !== 5) throw new Error('Cycle count bounds self-check failed.');
-  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected', 'exact-schedule-advance', 'missing-task-rejected', 'duplicate-task-rejected', 'stale-task-rejected', 'cycle-count-bounds'] }));
+  let attempts = 0;
+  const recovered = await withRpcRetry(async () => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('Too Many Requests'), { status: 429 });
+    return 'ok';
+  }, 'self-check retry success', { deadline: Date.now() + 5_000, baseDelayMs: 0 });
+  if (recovered !== 'ok' || attempts !== 2) throw new Error('Transient RPC retry recovery self-check failed.');
+  let cappedAttempts = 0;
+  await assertRejectsAsync(() => withRpcRetry(async () => {
+    cappedAttempts += 1;
+    throw Object.assign(new Error('HTTP 503 Service Unavailable'), { status: 503 });
+  }, 'self-check retry cap', { deadline: Date.now() + 5_000, maxAttempts: 3, baseDelayMs: 0 }), 'retry cap accepted persistent errors');
+  if (cappedAttempts !== 3) throw new Error(`RPC retry attempt cap self-check failed (${cappedAttempts}).`);
+  let terminalAttempts = 0;
+  await assertRejectsAsync(() => withRpcRetry(async () => {
+    terminalAttempts += 1;
+    throw Object.assign(new Error('Invalid request'), { status: 400 });
+  }, 'self-check terminal error', { deadline: Date.now() + 5_000, baseDelayMs: 0 }), 'permanent RPC error was retried or accepted');
+  if (terminalAttempts !== 1) throw new Error(`Permanent RPC error was retried ${terminalAttempts} times.`);
+  console.log(JSON.stringify({ event: 'self_check_passed', checks: ['callback-decode', 'policy-and-state-binding', 'interval-check', 'foreign-vault-rejected', 'exact-schedule-advance', 'missing-task-rejected', 'duplicate-task-rejected', 'stale-task-rejected', 'cycle-count-bounds', 'transient-rpc-retry-recovers', 'rpc-retry-attempt-cap', 'permanent-rpc-error-terminal'] }));
 }
 
 function assertRejects(action, message) {
   let rejected = false;
   try { action(); } catch { rejected = true; }
+  if (!rejected) throw new Error(message);
+}
+
+async function assertRejectsAsync(action, message) {
+  let rejected = false;
+  try { await action(); } catch { rejected = true; }
   if (!rejected) throw new Error(message);
 }
