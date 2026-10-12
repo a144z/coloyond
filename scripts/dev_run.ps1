@@ -53,6 +53,7 @@ function Start-TestValidator {
     if (-not $validator) { throw "solana-test-validator is not on PATH. Install Agave first (see docs/HANDOFF.md)." }
     if (Test-Path -LiteralPath "test-ledger") { Remove-Item -LiteralPath "test-ledger" -Recurse -Force }
     $proc = Start-Process -FilePath $validator -ArgumentList @(
+        "--ledger", "test-ledger",
         "--faucet-sol", "1000000"
     ) -RedirectStandardOutput "$Log.out" -RedirectStandardError "$Log.err" -PassThru
     Set-Content -LiteralPath $PidFile -Value $proc.Id

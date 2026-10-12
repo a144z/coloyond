@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel: MainViewModel = viewModel { MainViewModel(container) }
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-                var destination by rememberSaveable { mutableStateOf("cards") }
+                var destination by rememberSaveable { mutableStateOf("portfolio") }
 
                 LaunchedEffect(destination, state.address) {
                     if (destination == "portfolio") viewModel.refreshPortfolio()
