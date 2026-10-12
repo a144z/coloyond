@@ -4,7 +4,7 @@ Compares three things: the [spec](../superpowers/specs/2026-10-11-issue-38-mobil
 
 ## Summary
 
-- `main` has no part of the spec's v2 design. No `programs/coloyond-portfolio`, no MagicBlock crank, no native create/fund/withdraw flow.
+- `main` has no part of the spec's v2 design. No `programs/coloyond-portfolio`, no MagicBlock crank, no native create/fund/withdraw flow. (Post-`9fd24d6` the Android default destination is now Portfolio rather than Cards, which addresses plan step 2 but not any of V1–V5.)
 - `c7a64a6` takes a different path. It adds target weights to the shared v1 ETF pool and a Python poller. It does not move tokens, and the poller cannot start.
 - The plan's 06:00 APK freeze has passed. None of gates F1–F3 has evidence. Under the plan's own rules, this morning's delivery is **partial**.
 
@@ -20,6 +20,8 @@ Compares three things: the [spec](../superpowers/specs/2026-10-11-issue-38-mobil
 
 ### Defects in `c7a64a6`
 
+_(Defects 1 and 2 have since been fixed by `705cd84`: `EtfWeightsV1` now stores its `pool: Pubkey` and every weights handler rejects a mismatched pool with `EtfError::WeightsPoolMismatch`, and `init_weights` now requires a governance signer matching `state.current_governance`. Defects 3, 4 and 5 remain open.)_
+
 1. **Weights are not bound to a pool.** `EtfWeightsV1` stores no pool key. `SetTargetWeights`, `Accept`, `Decline`, `Propose` and `Rebalance` take `weights` without a seeds check. A pool A governor can change pool B's weights by passing pool B's weights account.
 2. **Anyone can call `init_weights`** for any pool, with any weights and interval. The first caller wins.
 3. **Anyone can call `propose_target_weights`.** One open proposal blocks all others (`ProposalAlreadyExists`) until governance declines it.
@@ -34,18 +36,20 @@ Compares three things: the [spec](../superpowers/specs/2026-10-11-issue-38-mobil
 
 ## Acceptance rows (spec) — status
 
-| Row | Status |
-|---|---|
-| Mobile setup | Not met. No create/fund transaction path. |
-| Isolation | Not met. No per-owner vault. |
-| Unattended execution | Not met. No MagicBlock integration; rebalance moves no tokens. |
-| Long-run funded scheduling (27 cycles) | Not met. |
-| Convergence | Not met. |
-| Edit and replay | Partly. Weight edit exists on v1, with defect 1. No cadence generation or replay guard. |
-| Exit | v1 withdraw paths only; no v2 close. |
-| Failure | Not met for v2. |
-| Recovery | Partly. Existing pending-intent store; not proven for v2. |
-| Build/demo | Not frozen. No manifest or hashes for v2. |
+As of `9fd24d6`, following defects 1 & 2 (see below) and the Android default flip:
+
+| Row | Status | Evidence / remaining work |
+|---|---|---|
+| Mobile setup | Not met | v1 has no create/fund path; the Portfolio route still shows read-only status. Needs V1 of the plan. |
+| Isolation | Not met | One shared pool per config_hash; no per-owner vault. Needs V1 (v2 personal-vault design). |
+| Unattended execution | Not met | `rebalance` still moves no tokens; MagicBlock exists only as the `spikes/magicblock-smoke` crate. Needs V2 (real swap CPI) plus V3 (MagicBlock). |
+| Long-run funded scheduling (27 cycles) | Not met | Needs V3 + real Devnet MagicBlock. |
+| Convergence | Not met | Needs V3 + the planner from the design's B7. |
+| Edit and replay | Partly | Weight edit is now pool-bound (defect 1 fixed in `705cd84`) and gated on governance (defect 2 fixed in the same commit); no cadence generation, no replay guard. |
+| Exit | Not met for v2 | v1 withdraw paths only; no v2 close. |
+| Failure | Partly | v1 error variants exist; no escrow/counterparty coverage. |
+| Recovery | Partly | Pending-intent store exists; untested for a v2 owner sequence. |
+| Build/demo | Partly | Program + IDL hashes exist for v1; no v2 manifest; Android default is now Portfolio (per V0, `9fd24d6`), reversing the Cards default PR #42 had set. |
 
 ## What is possible this morning
 
