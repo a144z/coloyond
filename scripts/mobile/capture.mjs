@@ -1,22 +1,35 @@
 import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], { stdio: 'ignore' });
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+
+const probe = createServer();
+const port = await new Promise((resolve, reject) => {
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => {
+    const address = probe.address();
+    if (!address || typeof address === 'string') return reject(new Error('Could not reserve a local test port.'));
+    probe.close((error) => error ? reject(error) : resolve(address.port));
+  });
+});
+const origin = `http://127.0.0.1:${port}`;
+const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: 'ignore' });
 process.on('exit', () => server.kill());
-for (let i=0; i<100; i++) { try { await fetch('http://127.0.0.1:5173'); break; } catch { await new Promise(r=>setTimeout(r,100)); } }
+for (let i=0; i<100; i++) { try { await fetch(origin); break; } catch { await new Promise(r=>setTimeout(r,100)); } }
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] });
-const out = new URL('../../remotion/public/screens/', import.meta.url).pathname;
+const out = process.env.MOBILE_CAPTURE_OUT ?? new URL('../../remotion/public/screens/', import.meta.url).pathname;
 await mkdir(out, { recursive: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
 const page = await context.newPage();
 const errors=[]; page.on('pageerror', e=>errors.push(e.message));
-await page.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:5173') ? route.continue() : route.abort());
-await page.goto('http://127.0.0.1:5173/app');
+await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+await page.goto(`${origin}/app`);
 await page.getByRole('heading', { name: 'A mix of your own.' }).waitFor();
-await page.screenshot({ path: out+'01-portfolios.png' });
+await page.screenshot({ path: join(out, '01-portfolios.png') });
 await page.getByRole('button', { name: '+ Create portfolio', exact: true }).click();
 await page.getByRole('heading', { name: 'Set the balance.' }).waitFor();
-await page.screenshot({ path: out+'02-create.png' });
+await page.screenshot({ path: join(out, '02-create.png') });
 const slider=page.getByRole('slider', { name: 'Target slider for WSOL' });
 await slider.fill('70');
 const locked=page.getByRole('button', { name: /Lock WSOL weight/ }); await locked.click();
@@ -24,11 +37,11 @@ if (!await slider.isDisabled()) throw Error('Weight lock does not disable slider
 const before=await page.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue();
 await page.getByRole('slider',{name:'Target slider for tBTC'}).fill('10');
 if (before!==await page.getByRole('textbox',{name:'Exact target percentage for WSOL'}).inputValue()) throw Error('Locked weight changed');
-await page.screenshot({ path: out+'03-mix.png' });
+await page.screenshot({ path: join(out, '03-mix.png') });
 await page.getByRole('button', {name:/Unlock WSOL weight/}).click();
 await page.getByRole('button',{name:'Add an executable asset'}).click();
 await page.getByRole('dialog').waitFor();
-await page.screenshot({path:out+'04-assets.png'});
+await page.screenshot({path:join(out, '04-assets.png')});
 await page.getByRole('button',{name:'Close',exact:true}).click();
 await page.getByRole('button',{name:'Back',exact:true}).click();
 await page.getByRole('button',{name:'Wallet',exact:true}).click();
@@ -38,7 +51,7 @@ await page.evaluate(() => window.dispatchEvent(new Event('coloyond:back')));
 if(await page.getByRole('dialog').count()) throw Error('Import sheet did not close');
 await page.getByRole('button',{name:'System',exact:true}).click();
 await page.getByRole('heading',{name:'The working parts.'}).waitFor();
-await page.screenshot({path:out+'05-system.png'});
+await page.screenshot({path:join(out, '05-system.png')});
 // Presentation-only data stays in this browser context. Never signs or sends transactions.
 await page.evaluate(async()=>{
  const {useStore}=await import('/src/ui/app/lib/store.ts');
@@ -50,20 +63,20 @@ await page.evaluate(async()=>{
  useStore.getState().setTab('portfolios');
 });
 await page.getByRole('button',{name:'Open portfolio →'}).waitFor();
-await page.screenshot({path:out+'06-active.png'});
+await page.screenshot({path:join(out, '06-active.png')});
 await page.getByRole('button',{name:'Open portfolio →'}).click();
 await page.getByRole('heading',{name:'Everyday mix',exact:true}).waitFor();
-await page.screenshot({path:out+'07-detail.png'});
+await page.screenshot({path:join(out, '07-detail.png')});
 await page.getByRole('button',{name:'Edit target weights'}).click();
 await page.getByRole('dialog').waitFor();
-await page.screenshot({path:out+'08-edit.png'});
+await page.screenshot({path:join(out, '08-edit.png')});
 await page.keyboard.press('Escape');
 await page.getByRole('button',{name:'Deposit assets'}).click(); await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape');
 await page.getByRole('button',{name:'Redeem shares'}).click(); await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape');
 await page.getByRole('button',{name:'Back',exact:true}).click();
 await page.getByRole('button',{name:'Wallet',exact:true}).click();
 await page.getByRole('heading',{name:'The owner key.'}).waitFor();
-await page.screenshot({path:out+'09-wallet.png'});
+await page.screenshot({path:join(out, '09-wallet.png')});
 await page.getByRole('button',{name:'Wrap SOL → WSOL'}).click(); await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape');
 for(const width of [320,360,430,768,1440]) {
  await page.setViewportSize({width,height:900});
