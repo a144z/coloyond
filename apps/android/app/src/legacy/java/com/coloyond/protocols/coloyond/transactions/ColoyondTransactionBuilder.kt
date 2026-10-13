@@ -340,7 +340,7 @@ object ColoyondTransactionBuilder {
         signerName: String,
     ): List<InstructionAccountMeta> = listOf(
         meta("vault", binding.vaultAddress),
-        meta("governance", ColoyondAddresses.governance(binding.vaultAddress)),
+        meta("governance", ColoyondAddresses.governance(binding.vaultAddress), writable = false),
         meta("share_mint", binding.shareMint),
         meta("user_shares", balances.shares.address),
         meta(signerName, signer),
@@ -412,7 +412,7 @@ object ColoyondTransactionBuilder {
         return ColoyondTransactionPlan(network, feePayer, revision, accounts, data)
     }
 
-    private fun meta(name: String, address: String): InstructionAccountMeta {
+    private fun meta(name: String, address: String, writable: Boolean? = null): InstructionAccountMeta {
         val policy = when (name) {
             "vault", "governance", "share_mint", "user_shares", "seeder_shares", "seeder_asset_a", "seeder_asset_b",
             "custody_a", "custody_b", "user_asset_a", "user_asset_b" -> true to false
@@ -420,7 +420,7 @@ object ColoyondTransactionBuilder {
             "bootstrap_authority", "governance_authority", "emergency_authority", "depositor", "holder" -> false to true
             else -> false to false
         }
-        return InstructionAccountMeta(name, address, isSigner = policy.second, isWritable = policy.first)
+        return InstructionAccountMeta(name, address, isSigner = policy.second, isWritable = writable ?: policy.first)
     }
 
     private class BorshWriter {

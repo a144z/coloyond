@@ -40,7 +40,7 @@ class ClassicSplDecoderTest {
             ClassicSplDecoder.decodeMint(mintFixture().also { it[46] = 2 }, ClassicSplDecoder.TOKEN_PROGRAM_ID)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            ClassicSplDecoder.decodeMint(mintFixture().also { it[4] = 1 }, ClassicSplDecoder.TOKEN_PROGRAM_ID)
+            ClassicSplDecoder.decodeMint(mintFixture().also { it[50] = 1 }, ClassicSplDecoder.TOKEN_PROGRAM_ID)
         }
     }
 

@@ -109,9 +109,9 @@ class ColoyondTransactionBuilderTest {
         val vault = "DVZ7tQAgko19RNUXKcMU1RXtcqff2kT415C6JA49NMMQ"
         assertEquals(vault, ColoyondAddresses.vault())
         assertEquals("GwaYMa1ep89ZAz4StTkkby2MbduH3udkFUBsN9UrTfnq", ColoyondAddresses.programData())
-        assertEquals("ADjEYstZ2U6vL6hsuMCpYSPEt5xrhuoEGzctZLNGF2fA", ColoyondAddresses.associatedToken(SEEDER, SHARE_MINT))
-        assertEquals("HR48wTqamqWATkyP2hzWMMZE9XiPxU57vHGrAF5irBpE", ColoyondAddresses.associatedToken(SEEDER, ColoyondAddresses.WSOL_MINT))
-        assertEquals("2RZrbKDs62ZMyaKxnQBJs84GsAA9v4CKoabXMGmtLV6R", ColoyondAddresses.associatedToken(SEEDER, ColoyondAddresses.DEVNET_USDC_MINT))
+        assertEquals("CD1N3UBVk1juZRbrVcK9rxRkWQr1o1rbKqeAZSf2HKNs", ColoyondAddresses.associatedToken(SEEDER, SHARE_MINT))
+        assertEquals("7i4VVk55NzhtekVjPg7EZzoSGznZYixPyd5cCeDxi7rW", ColoyondAddresses.associatedToken(SEEDER, ColoyondAddresses.WSOL_MINT))
+        assertEquals("8n9SVoKx3Jtqdwm5Dx3wR3hVQPMgyNJPfJzXcntq2N7R", ColoyondAddresses.associatedToken(SEEDER, ColoyondAddresses.DEVNET_USDC_MINT))
         assertEquals(vault, ColoyondAddresses.lifecyclePdas(network).vault)
         assertEquals("HVXEcSutFXZQoJSbefeRHWwdwas7HBMWMvZYvzctddiF", ColoyondAddresses.governance(vault))
 
@@ -206,7 +206,7 @@ class ColoyondTransactionBuilderTest {
             ColoyondTransactionBuilder.initializeAndSeed(request.copy(targetWeights = TargetWeights(5_000, 4_999)))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            ColoyondTransactionBuilder.initializeAndSeed(request.copy(reserveContributions = AssetAmounts(100_001uL, 1uL)))
+            ColoyondTransactionBuilder.initializeAndSeed(request.copy(reserveContributions = AssetAmounts(100_000_001uL, 1uL)))
         }
         assertThrows(IllegalArgumentException::class.java) {
             ColoyondTransactionBuilder.initializeAndSeed(request.copy(seedAmounts = AssetAmounts(0uL, 1uL)))

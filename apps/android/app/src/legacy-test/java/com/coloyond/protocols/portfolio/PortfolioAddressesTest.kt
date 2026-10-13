@@ -35,7 +35,7 @@ class PortfolioAddressesTest {
 
     @Test
     fun vaultPdaChangesWithGeneration() {
-        val owner = "Sysvar11111111111111111111111111111111"
+        val owner = PortfolioAddresses.SYSTEM_PROGRAM_ID
         val first = PortfolioAddresses.vault(owner, 0uL)
         val second = PortfolioAddresses.vault(owner, 1uL)
         assertNotEquals(first, second)
@@ -45,7 +45,7 @@ class PortfolioAddressesTest {
 
     @Test
     fun controllerPdaDerivesFromVaultNotOwner() {
-        val owner = "Sysvar11111111111111111111111111111111"
+        val owner = PortfolioAddresses.SYSTEM_PROGRAM_ID
         val vaultAddress = PortfolioAddresses.vault(owner, 0uL)
         val controller = PortfolioAddresses.controller(vaultAddress, 0uL)
         assertNotEquals(controller, vaultAddress)
