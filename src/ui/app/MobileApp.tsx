@@ -7,6 +7,7 @@ import { useEffect, useMemo } from "react";
 import { ConnectionProvider, useWallet } from "@solana/wallet-adapter-react";
 import { useStore } from "./lib/store.js";
 import { RPC_URL } from "./lib/solana/config.js";
+import { RPC_CONNECTION_CONFIG } from "./lib/solana/connection.js";
 import type { WalletSigner } from "./lib/solana/tx.js";
 import App from "./App.js";
 import "./styles/app-theme.css";
@@ -33,7 +34,7 @@ function WalletStateBridge() {
 
 export function MobileApp() {
   return (
-    <ConnectionProvider endpoint={RPC_URL}>
+    <ConnectionProvider endpoint={RPC_URL} config={RPC_CONNECTION_CONFIG}>
       <WalletStateBridge />
     </ConnectionProvider>
   );

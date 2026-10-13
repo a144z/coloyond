@@ -29,7 +29,7 @@ import {
 } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { ASSETS, mintOf, mintToAssetMap, type AssetId } from './assets.js';
 import { EXECUTION_PROGRAM_ID, REBALANCE_INTERVAL_SEC, ROUTER_RPC_URL } from './config.js';
-import { connection } from './connection.js';
+import { connection, RPC_CONNECTION_CONFIG } from './connection.js';
 import { wrapSolInstructions } from './wallet.js';
 import { signSendConfirm, type OwnerSigner, type TxResult } from './tx.js';
 import { decodeShareMetadata, metadataAddressForMint, resolveMetadataUri, type ShareTokenMetadata } from './explore.js';
@@ -57,7 +57,7 @@ const MAX_SHARE_SYMBOL_SEQUENCE = 99_999_999n;
 const MAX_SHARE_METADATA_JSON_BYTES = 512 * 1024;
 const TASK_SPONSOR_INITIAL_LAMPORTS = 5_000_000;
 const INSTRUCTIONS_SYSVAR_ID = new PublicKey('Sysvar1nstructions1111111111111111111111111');
-const router = new ConnectionMagicRouter(ROUTER_RPC_URL, 'confirmed');
+const router = new ConnectionMagicRouter(ROUTER_RPC_URL, RPC_CONNECTION_CONFIG);
 
 const DISCRIMINATOR: Record<string, number[]> = {
   initializeVault: [0x30, 0xbf, 0xa3, 0x2c, 0x47, 0x81, 0x3f, 0xa4],

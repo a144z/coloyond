@@ -9,6 +9,7 @@ import {
   createDefaultWalletNotFoundHandler,
 } from "@solana-mobile/wallet-adapter-mobile";
 import { DEFAULT_NETWORK, NETWORK_RPC } from "../../symmetry/config.js";
+import { RPC_CONNECTION_CONFIG } from "../app/lib/solana/connection.js";
 
 const APP_ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://coloyond.app";
 
@@ -33,7 +34,7 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={RPC_CONNECTION_CONFIG}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
