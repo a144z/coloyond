@@ -1,19 +1,9 @@
-/** Brand lockup: the mix mark (petrol/brass split square) + "coloyond ✳︎". */
+/** Brand lockup: the portfolio artwork + "coloyond ✳︎". */
+
+import { ReferenceArt } from '../../../ReferenceArt.js';
 
 /** U+2733 with the text-presentation selector so iOS renders ink, not emoji. */
 const ASTERISK = '\u2733\uFE0E';
-
-export function MixMark({ size = 22, className = '' }: { size?: number; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={`inline-flex shrink-0 gap-[2px] rounded-[5px] bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-500 p-[6px] ${className}`}
-      style={{ width: size, height: size }}
-    >
-      <span className="w-full rounded-[1px] bg-white/90" />
-    </span>
-  );
-}
 
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
@@ -31,7 +21,9 @@ export function Wordmark({ className = '' }: { className?: string }) {
 export function BrandLockup({ wordmarkSize = 'text-[19px]' }: { wordmarkSize?: string }) {
   return (
     <span className="flex items-center gap-2">
-      <MixMark size={22} />
+      <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-[5px]">
+        <ReferenceArt variant="planes" className="h-full w-full" title="Coloyond portfolio artwork" />
+      </span>
       <Wordmark className={wordmarkSize} />
     </span>
   );
